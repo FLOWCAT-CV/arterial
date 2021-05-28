@@ -6,7 +6,7 @@ Arterial is conceived to be deployed as an operation planning and decision suppo
 
 In this repository we will be posting the development of Arterial, which is the core project of the Pere Canals' doctoral thesis.
 
-# Table of Contents
+## Table of Contents
 - [Description](#description)
 - [Installation](#installation)
   * [nnU-Net](#nnU-Net)
@@ -16,7 +16,6 @@ In this repository we will be posting the development of Arterial, which is the 
 - [Usage](#usage)
     * [FullAnalysis](#FullAnalysis)
     * [SegmentationOnly](#SegmentationOnly)
-    * []
 
 <!-- # Table of Contents
 - [Installation](#installation)
@@ -40,7 +39,7 @@ In this repository we will be posting the development of Arterial, which is the 
 
 ecotrust-canada.github.io/markdown-toc/ -->
 
-# Description of the process
+## Description of the process
 
 Arterial is composed by several external packages for the different tasks that have to be implemented in order to run the complete analysis. As the first step, Isensee's et al. nnU-Net [1] has been implemented and optimized for the segmentation of the arterial anatomy of the patient from the CTA images. This deep learning network inputs a CTA volume (nifti format) and outputs the corresponding binary mask with a background (not vessel) as zeros and a foreground (vessel) as ones, also in nifti format. 
 
@@ -54,26 +53,24 @@ The centerline model is used to generate a graph used for vessel labeling. We ha
     [1] Fabian Isensee, Paul F. Jäger, Simon A. A. Kohl, Jens Petersen, Klaus H. Maier-Hein "Automated Design of Deep Learning Methods for Biomedical Image Segmentation" arXiv preprint arXiv:1904.08128 (2020).
     [2] Fedorov A., Beichel R., Kalpathy-Cramer J., Finet J., Fillion-Robin J-C., Pujol S., Bauer C., Jennings D., Fennessy F.M., Sonka M., Buatti J., Aylward S.R., Miller J.V., Pieper S., Kikinis R. 3D Slicer as an Image Computing Platform for the Quantitative Imaging Network. Magn Reson Imaging. 2012 Nov;30(9):1323-41. PMID: 22770690. PMCID: PMC3466397.
 
-# Installation
+## Installation
 
 We strongly recommend the creation of a virtual environment for the installation of Arterial along with the rest of external packages.
 
-## Setting up environment paths
+### Setting up environment paths
 
 Defining a series of environment paths
 
-## nnU-Net
+### nnU-Net
 
 For installation of the nnU-Net framework please refer to the [nnU-Net GitHub site](https://github.com/MIC-DKFZ/nnUNet), and follow the steps for installation for running inference with pre-trained models. You have to first install [PyTorch](https://pytorch.org/) (> 1.6), then `pip install nnunet` and finally set up the 
 
 After the out-of-the-box nnU-Net setup is completed
 
-## Slicer
+### Slicer
 
 SlicerPython path should be set as an environmental variable or sth?
 
-## VMTK
+### VMTK
 
-## GraphNets
-
-# 
+### GraphNets
