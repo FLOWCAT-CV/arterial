@@ -161,6 +161,6 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
         ax.legend(range(len(finalSegmentsArray)))
         plt.show()
     
-    np.save(os.path.join(caseDir, "segmentsArray.npy"), segmentsArray)
+    np.save(os.path.join(caseDir, "segmentsArray.npy"), finalSegmentsArray)
 
     return finalSegmentsArray

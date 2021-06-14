@@ -1,5 +1,6 @@
 import os
 import shutil
+import json
 import vtk
 import numpy as np
 import networkx as nx
@@ -9,82 +10,77 @@ from vtk.util.numpy_support import vtk_to_numpy
 
 def graphBranchModelLink(caseDir):
 
-    graphLabel = nx.read_gpickle(os.path.join(caseDir, "graph_label.pickle"))
+    # Load predicted graph, segmentsArray and branchModel
+    labeledGraph = nx.read_gpickle(os.path.join(caseDir, "graph_pred.pickle"))
     segmentsArray = np.load(os.path.join(caseDir, "segmentsArray.npy"), allow_pickle=True)
     branchModelPath = os.path.join(caseDir, "branchModel.vtk")
 
+    # Get cellID and predicted nodetype for all edges of predicted graph
     edgeTypes, _ = makeDicts()
-
-    nodeTypesGraph = {}
     edgeTypesGraph = {}
-
-    for node in graphLabel.nodes:
-        nodeType = int(graphLabel.nodes(data=True)[node]["nodetype"])
-        nodeTypesGraph[node] = nodeType
-
-    for n0, n1 in graphLabel.edges:
-        cellId = int(graphLabel[n0][n1]["CellID"])
-        edgeType = int(graphLabel[n0][n1]["edgetype"])
+    for n0, n1 in labeledGraph.edges:
+        cellId = int(labeledGraph[n0][n1]["CellID"])
+        edgeType = int(labeledGraph[n0][n1]["edgetype"])
         edgeTypesGraph[cellId] = edgeType
 
     # Load branch model
     vtkPolyDataReader = vtk.vtkPolyDataReader()
     vtkPolyDataReader.SetFileName(branchModelPath)
     vtkPolyDataReader.Update()
-
     branchModel = vtkPolyDataReader.GetOutput()
-
+    # Get cell data (blanking and groupId)
     cellData = branchModel.GetCellData()
     cellDataArray = np.ndarray([2, branchModel.GetNumberOfCells()], dtype=np.int64)
-    cellDataArray[0] = vtk_to_numpy(cellData.GetArray(2)) # blanking -> transition to a new branch
-    cellDataArray[1] = vtk_to_numpy(cellData.GetArray(3)) # groupId -> indicates is the centerline is inside of the tract
+    cellDataArray[0] = vtk_to_numpy(cellData.GetArray(2)) # blanking -> indicates if the centerline is inside of clipped surface tract 
+    cellDataArray[1] = vtk_to_numpy(cellData.GetArray(3)) # groupId -> clipped surface tractId
 
+    # Define empty arrays to store centerline cells
     branchModelSegments = np.ndarray([branchModel.GetNumberOfCells()], dtype=object)
     branchModelSegmentsIds = np.arange(branchModel.GetNumberOfCells())
 
+    # Store point positions of the centerline cells
     for idx in range(branchModel.GetNumberOfCells()):
         cell = branchModel.GetCell(idx)
         branchModelSegments[idx] = np.ndarray([cell.GetNumberOfPoints(), 3])
-        
         for idx2 in range(cell.GetNumberOfPoints()):
             branchModelSegments[idx][idx2] = cell.GetPoints().GetPoint(idx2)
 
+    # Remove ovelapping segments
     removeRepeats = []
-
     for idx in range(branchModel.GetNumberOfCells())[1:]:    
         for idx2 in range(idx):
             if len(branchModelSegments[idx]) == len(branchModelSegments[idx2]):
-                # 0.5 is hard coded, but it is essentially a measure of similarity
+                # 0.5 is hard coded, but it is essentially a measure of similarity. Sometimes overlapping segments from different cells slightly vary in one or several points
                 if np.sum(np.abs(branchModelSegments[idx] - branchModelSegments[idx2])) < 0.5 and idx not in removeRepeats:
                     removeRepeats.append(idx)
                     break
-            
     uniqueBranchModelSegments = np.delete(branchModelSegments, removeRepeats)
     uniqueBranchModelSegmentsIds = np.delete(branchModelSegmentsIds, removeRepeats)
 
-    # Primer hem de trobar les bifurcacions
+    # Search for centerline segments containing bifurcations. We want to divide these cells into parent/children separate cells
     containsBifurcations = []
-
     for idx in range(len(uniqueBranchModelSegments))[1:]:
         for idx2 in range(idx):
             if np.sum(np.abs(uniqueBranchModelSegments[idx][0] - uniqueBranchModelSegments[idx2][0])) < 0.1:
                 containsBifurcations.append([uniqueBranchModelSegmentsIds[idx2], uniqueBranchModelSegmentsIds[idx]])
 
-    # For each bifurcation, we generate 3 new cells with non-over overlapping segments (parent and childs)
+    # For each bifurcation, we generate 3 new cells with non-over overlapping segments (parent and children)
     branchModelSegmentsWithBifurcations = np.ndarray([branchModel.GetNumberOfCells() + 3 * len(containsBifurcations)], dtype=object)
     branchModelSegmentsWithBifurcations[:branchModel.GetNumberOfCells()] = branchModelSegments
     branchModelSegmentsIdsWithBifurcations = branchModelSegmentsIds
     cellDataArrayWithBifurcations = cellDataArray
-
+    # We initialize a list to remove possible segments that do not continue after the bifurcation point. This is rare but it happens
+    removeNones = []
     for idxAux, pairId in enumerate(containsBifurcations):
         for idx in range(len(branchModelSegments[pairId[0]])):
+            # We can find the bifurcation point (first point where the pair differs)
             if not (branchModelSegments[pairId[0]][idx] == branchModelSegments[pairId[1]][idx]).all():
                 branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
                 branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
                 branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 2] = branchModelSegments[pairId[1]][idx:]
                 branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[0], pairId[0], pairId[1]])
                 cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]], cellDataArray[:, pairId[1]]])), axis=1)
-                # Blanking for child cells set to 1 (unless no overlapping). If no overlapping, len(parent) = 0 and only child vessels have blanking = 0
+                # Blanking for child cells set to 1 (unless no overlapping). If no overlapping (len(parent) = 0), only child vessels have blanking = 0
                 if len(branchModelSegments[pairId[0]][:idx]) == 0:
                     cellDataArrayWithBifurcations[0, -3] = 1 
                     cellDataArrayWithBifurcations[0, -2] = 0
@@ -94,36 +90,54 @@ def graphBranchModelLink(caseDir):
                     cellDataArrayWithBifurcations[0, -2] = 1 
                     cellDataArrayWithBifurcations[0, -1] = 1
                 break
+        # We can't find the bifurcation point (these segments overlap all the way, and one of the two ends at the bifurcation while the other one continues)
+        if branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] is None:
+            if len(branchModelSegments[pairId[0]]) > len(branchModelSegments[pairId[1]]):
+                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
+                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
+                branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[0], pairId[0], pairId[0]]) # Third doesn't matter, will be removed (but has to be there)
+                cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]]])), axis=1)
+            else:
+                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[1]][:idx]
+                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[1]][idx:]
+                branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[1], pairId[1], pairId[1]])
+                cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[1]], cellDataArray[:, pairId[1]], cellDataArray[:, pairId[1]]])), axis=1)
+            # In this case, we directly set blanking as the parent. Other cases would not enter this loop (either len(parent) = 0 [this would enter the previous if] 
+            # or segments are equal [these would be removed in the first removeRepeats])
+            cellDataArrayWithBifurcations[0, -3] = 1 
+            cellDataArrayWithBifurcations[0, -2] = 0
+            # Add third slot to removeNones
+            removeNones.append(branchModel.GetNumberOfCells() + 3 * idxAux + 2)
+
                 
-    removeRepeats2 = []
-                
+    # After adding individual segments from those cells containing bifurcations, we have to remove the repeated segments again. We also add the ones from removeNones
+    removeRepeats2 = removeNones
     for idx in range(branchModel.GetNumberOfCells() + 3 * len(containsBifurcations))[1:]:    
         for idx2 in range(idx):
-            if len(branchModelSegmentsWithBifurcations[idx]) == len(branchModelSegmentsWithBifurcations[idx2]):
+            if idx not in removeNones and idx2 not in removeNones and len(branchModelSegmentsWithBifurcations[idx]) == len(branchModelSegmentsWithBifurcations[idx2]):
                 # 0.5 is hard coded, but it is essentially a measure of similarity
                 if np.sum(np.abs(branchModelSegmentsWithBifurcations[idx] - branchModelSegmentsWithBifurcations[idx2])) < 0.5 and idx not in removeRepeats2:
                     removeRepeats2.append(idx)
                     break
-
+    
     # We delete the repeated segments as well as the original ones containing the bifurcations (these get subbed for the three new ones generated in the previous step)
     uniqueBranchModelSegmentsWithBifurcations = np.delete(branchModelSegmentsWithBifurcations, np.append(removeRepeats2, np.array(containsBifurcations).flatten()))
     uniqueCellDataArrayWithBifurcations = np.delete(cellDataArrayWithBifurcations, np.append(removeRepeats2, np.array(containsBifurcations).flatten()), axis=1)
 
-    # segmentsArray segments are converted through the affine matric to a unified coordinate system (not in mm, but in voxels)
+    # segmentsArray segments are converted through the affine matrix to a unified coordinate system (not in mm, but in voxel coordinates)
     # We repeat the transformation for the branchModel cells to compare both families of cells
     aff = np.linalg.inv(nib.load(os.path.join(caseDir, os.path.basename(caseDir) + ".nii.gz")).affine)
-
     uniqueBranchModelSegmentsWithBifurcationsAff = np.empty_like(uniqueBranchModelSegmentsWithBifurcations)
-
     for idx in range(len(uniqueBranchModelSegmentsWithBifurcationsAff)):
         uniqueBranchModelSegmentsWithBifurcationsAff[idx] = np.empty_like(uniqueBranchModelSegmentsWithBifurcations[idx])
         for idx2 in range(len(uniqueBranchModelSegmentsWithBifurcations[idx])):
             uniqueBranchModelSegmentsWithBifurcationsAff[idx][idx2] = np.matmul(aff, np.append(uniqueBranchModelSegmentsWithBifurcations[idx][idx2], 1.0))[:3]
 
+    # We search for overlapping between the branchModel cells and the segmentsArray cells, which contain centerline segments joining two bifurcations
+    # segmentsArray cells are those labeled by the GNN
     linkedPairsList = []
-
     for idx, branchCell in enumerate(uniqueBranchModelSegmentsWithBifurcationsAff):
-        if uniqueCellDataArrayWithBifurcations[2, idx] == 0: # Blanking equal to 0
+        if uniqueCellDataArrayWithBifurcations[0, idx] == 0: # Blanking equal to 0
             if searchSequence(segmentsArray, branchCell) is not None:
                 linkedPairsList.append([idx, searchSequence(segmentsArray, branchCell)])
 
@@ -168,7 +182,19 @@ def graphBranchModelLink(caseDir):
                     identifier += 1
 
     for idx, filename in enumerate(filenames):
-        shutil.copyfile(os.path.join(caseDir, "surfaceSegments", f"segment{finalGroupIds[idx]}.vtk"), os.path.join(caseDir, "labeledSegments", f"{filename}.vtk"))
+        if os.path.isfile(os.path.join(caseDir, "surfaceSegments", f"segment{finalGroupIds[idx]}.vtk")):
+            shutil.copyfile(os.path.join(caseDir, "surfaceSegments", f"segment{finalGroupIds[idx]}.vtk"), os.path.join(caseDir, "labeledSegments", f"{filename}.vtk"))
+
+    groupIdsToVesselTypesDict = {}
+    groupIdsToVesselTypesDict["groupIdsToVesselTypes"] = {}
+    groupIdsToVesselTypesDict["groupIdsToVesselFilenames"] = {}
+    for idx, _ in enumerate(finalGroupIds):
+         groupIdsToVesselTypesDict["groupIdsToVesselTypes"][f"{finalGroupIds[idx]}"] = int(finalVesselTypes[idx])
+         groupIdsToVesselTypesDict["groupIdsToVesselFilenames"][f"{finalGroupIds[idx]}"] = filenames[idx]
+
+    with open(os.path.join(caseDir, "groupIdsToVesselTypesDict.json"), "w") as outfile:
+        json.dump(groupIdsToVesselTypesDict, outfile, indent=4)
+
 
 def searchSequence(segmentsArray, branchCell):
     ''' Find a given sequence in a larger array.
@@ -215,8 +241,9 @@ def makeDicts():
         10: "LICA",
         11: "RECA",
         12: "LECA",
-        13: "BA"
-        
+        13: "BA",
+        14: "AA+BT",
+        15: "RVA+LVA"
     }
 
     nodeTypes = {
