@@ -4,17 +4,20 @@ import slicer
 import numpy as np
 
 def centerlineExtraction(caseDir, segmentationNode):
-    ''' Exracts centerline using Slicer's VMTK module. Uses auto-endpoint detection.
-    Stores radius information corresponding to the model with grown margins. This has to be
-    recalculated later on for feature extraction.
+    ''' Extracts centerline using Slicer's VMTK module. Processes all segments in the input segmentationNode 
+    individually to generate independent centerline models for each segmentation. 
 
-    Writes centerlines.vtk containing the vtkPolyData object of the centerline model.
+    Uses VMTK's auto-endpoint detection optimized for improved robustness.
+    
+    Writes centerlines{idx}.vtk containing the vtkPolyData object of the centerline models, for the
+    number of present segments, as well as a decimated surface model, (decimatedSegmnetation{idx}.vtk) reduced 
+    by 70% from the original amount of triangles.
 
     Arguments:
         - caseDir <str>: path to the directory containing the binary mask. All 
         segmentations will be saved in this dir.
-        - segmentationNode2 <slicer segmentationNode>: segmentation node containing the 
-        extruded segmentation (with grown margins). This will be piped to centerline extraction.
+        - segmentationNode <slicer segmentationNode>: segmentation node containing separate segments
+        resulting from `performSegmentationFromBinaryMask.py`.
 
     Returns:
         
@@ -148,61 +151,6 @@ def centerlineExtraction(caseDir, segmentationNode):
         writer.SetInputData(centerlineModelNode.GetPolyData())
         writer.SetFileName(os.path.join(caseDir, "centerlines", f"centerlines{segmentId}.vtk"))
         writer.Write()
-        
-    # print("Uniting all centerline models...")
-    # # Initialize the vtkPoints and the vtkCellArray objects
-    # cellArray = vtk.vtkCellArray()
-    # points = vtk.vtkPoints()
-    # finalRadiusArray = np.array([])
-
-    # # Accumulate number of points for all models to define point ids
-    # pointsFromPreviousModels = 0
-
-    # # Iterate over all models to store cells, points and radius array as point data
-    # for centerlineId in centerlineIds:
-    #     # Get vtkPolyData
-    #     centerlinePolyData = slicer.mrmlScene.GetNodeByID(centerlineId).GetPolyData()
-    #     # Get radius numpy array
-    #     radiusArray = vtk.util.numpy_support.vtk_to_numpy(centerlinePolyData.GetPointData().GetArray(0))
-        
-    #     # Iterate over all cells for each model
-    #     for idx in range(centerlinePolyData.GetNumberOfCells()):
-    #         polyLine = centerlinePolyData.GetCell(idx)
-        
-    #         # Iterate over all points in each cell to define new point ids and get corresponding radius array
-    #         for idx in range(polyLine.GetNumberOfPoints()):
-    #             # Insert point in vtkPoints
-    #             points.InsertNextPoint(polyLine.GetPoints().GetPoint(idx))
-    #             # Get radius data for each point
-    #             finalRadiusArray = np.append(finalRadiusArray, radiusArray[polyLine.GetPointId(idx)])
-    #             # Change point id for each point in the cell, taking into account accumulated number of points
-    #             polyLine.GetPointIds().SetId(idx, polyLine.GetPointId(idx) + pointsFromPreviousModels)
-                
-    #         # Insert cell in vtkCellArray
-    #         cellArray.InsertNextCell(polyLine)
-        
-    #     # Update total number of points from previous models
-    #     pointsFromPreviousModels += centerlinePolyData.GetNumberOfPoints()
-                                    
-    # # Store all data in new vtkPolyData
-    # finalCenterlinePolyData = vtk.vtkPolyData()
-    # finalCenterlinePolyData.SetPoints(points)
-    # finalCenterlinePolyData.SetLines(cellArray)
-    # finalCenterlinePolyData.GetPointData().AddArray(vtk.util.numpy_support.numpy_to_vtk(finalRadiusArray))
-    # finalCenterlinePolyData.GetPointData().GetArray(0).SetName("Radius")
-
-    # print("done")
-    # print("    ")
-
-    # # Write vtkPolyData to a .vtk file
-    # print("Saving vtkPolyData centerline file...")
-    # writer = vtk.vtkPolyDataWriter()
-    # writer.SetInputData(centerlineModelNode.GetPolyData())
-    # writer.SetFileName(os.path.join(caseDir, "centerlines.vtk"))
-    # writer.Write()
-
-    # print("done")
-    # print("    ")
 
 
 def robustEndPointDetection(endpoint, segmentation, aff, n=10):

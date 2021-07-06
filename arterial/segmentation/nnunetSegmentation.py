@@ -14,7 +14,6 @@
 
 import os
 import shutil
-import numpy as np
 import argparse
 
 from time import time
@@ -26,14 +25,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-mode", "--mode", type=str, required=True, 
     help="choose between `inference` or `ensemble`. Required.")
 
-parser.add_argument("-input", "--inputImage", type=str, required=True,
+parser.add_argument("-casePath", "--casePath", type=str, required=True,
     help="absolute path to the input image (has to be a nifti). Required")
 
 
 args = parser.parse_args()
 
-mode       = args.mode
-inputImage = args.inputImage
+mode     = args.mode
+casePath = args.casePath
     
 ##############################################################################################
 #--------------------------------------------------------------------------------------------#    
@@ -46,74 +45,62 @@ print("                                                                         
 #--------------------------------------------------------------------------------------------#    
 ##############################################################################################
 
-if mode == "inference":
-    inference(inputImage)
-elif mode == "ensemble":
-    ensemble(inputImage)
-else:
-    ValueError("Please introduce one of the possible modes. See main.py -h for more information.")
-
-
-def inference(inputImage):
-    ''' Performs inference of inputImage (nifti, CTA) with the best performing model
+def inference(casePath):
+    ''' Performs inference of casePath (nifti, CTA) with the best performing model
     to output a binary mask in a nifti format. The resulting nifti will be placed in
     outputPath.
 
     Arguments:
-        - inputImage <str>: path to nifti image (a CTA) that we want to segment.
+        - casePath <str>: path to nifti image (a CTA) that we want to segment.
 
     Returns:
 
     '''
-    arterialSegmentationDir = os.path.join(os.environ["arterialDir"], "segmentation")
-    modelDir = os.path.join(arterialSegmentationDir, "models/nnUNet/3d_lowres/Task01_Arterial/nnUNetTrainerV2__nnUNetPlansv2.1/all")
 
-    patId = inputImage[:-7] # Name of the nifti inputImage except the .nii.gz extension
-    inputDir = os.path.dirname(inputImage)
+    patId = casePath[:-7] # Name of the nifti casePath except the .nii.gz extension
+    caseDir = os.path.dirname(casePath)
 
     # Paths used by nnUNet
-    inputPath = os.path.join(inputDir, patId, "input")
-    outputPath = os.path.join(inputDir, patId, "output")
+    inputPath = os.path.join(caseDir, "input")
+    outputPath = os.path.join(caseDir, "segmentation")
     if not os.path.isdir(inputPath): os.mkdir(inputPath)
     if not os.path.isdir(outputPath): os.mkdir(outputPath)
     
-    # The inputImage will be placed in a newly created dir with the patId as name
+    # The casePath will be placed in a newly created dir with the patId as name
     if not os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")):
-        os.rename(inputImage, os.path.join(inputPath, patId + "_0000.nii.gz"))
+        os.rename(casePath, os.path.join(inputPath, patId + "_0000.nii.gz"))
 
     # Only use if running on Colab
     if inputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
         inputPath = inputPath[:17] + "\ " + inputPath[18:]
-        outputPath = outputPath[:17] + "\ " + outputPath[18:]
 
     start = time()
 
-    os.system("nnUNet_predict -i " + inputPath + " -o " + outputPath + f" -t Task01_Arterial -m 3d_lowres -f all")
+    os.system("nnUNet_predict -i " + inputPath + " -o " + caseDir + f" -t Task01_Arterial -m 3d_lowres -f all")
+
+    shutil.copyfile(os.path.join(inputPath, patId + "_0000.nii.gz"), os.path.join(caseDir, patId + "_CTA.nii.gz"))
+    shutil.copyfile(os.path.join(outputPath, patId + ".nii.gz"), os.path.join(caseDir, patId + ".nii.gz"))
 
     print(f"Inference took {time() - start} s")
     print("                                  ")
 
 
-def ensemble(inputImage):
-    ''' Performs inference of inputImage (nifti, CTA) by ensembling all folds of 
+def ensemble(casePath):
+    ''' Performs inference of casePath (nifti, CTA) by ensembling all folds of 
     the best performing model to output a binary mask in a nifti format. The resulting 
     nifti will be placed in outputDir.
 
     Arguments:
-        - inputImage <str>: path to nifti image (a CTA) that we want to segment.
+        - casePath <str>: path to nifti image (a CTA) that we want to segment.
 
     Returns:
 
     '''
 
-   
-    arterialSegmentationDir = os.path.join(os.environ["arterialDir"], "segmentation")
-    modelDir = os.path.join(arterialSegmentationDir, "models/nnUNet/3d_lowres/Task01_Arterial/nnUNetTrainerV2__nnUNetPlansv2.1")
+    patId = casePath[:-7]
+    caseDir = os.path.dirname(casePath)
 
-    patId = inputImage[:-7]
-    inputDir = os.path.dirname(inputImage)
-
-    inputPath = os.path.join(inputDir, patId, "input")
+    inputPath = os.path.join(caseDir, "input")
     if not os.path.isdir(inputPath): os.mkdir(inputPath)
 
     # Only use if running on Colab. Make sure inputPath and outputPath do not contain spaces
@@ -121,7 +108,7 @@ def ensemble(inputImage):
         inputPath = inputPath[:17] + "\ " + inputPath[18:]
     
     if not os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")):
-        os.rename(inputImage, os.path.join(inputPath, patId + "_0000.nii.gz"))
+        os.rename(casePath, os.path.join(inputPath, patId + "_0000.nii.gz"))
 
     npzDirs = []
 
@@ -131,10 +118,8 @@ def ensemble(inputImage):
         print(f"Predicting {patId} fold {fold}")
         print("                               ")
 
-        outputPath = os.path.join(inputDir, patId, f"fold_{fold}")
+        outputPath = os.path.join(caseDir, "ensemble", f"fold_{fold}")
         if not os.path.isdir(outputPath): os.mkdir(outputPath)
-
-        foldDir = os.path.join(modelDir, f"fold_{fold}")
 
         # Only use if running on Colab. Make sure inputPath and outputPath do not contain spaces
         if outputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
@@ -149,7 +134,7 @@ def ensemble(inputImage):
         print(f"Fold {fold} completed")
         print("                      ")
 
-    outputDir = os.path.join(inputDir, patId, "output")
+    outputDir = os.path.join(caseDir, "ensemble", "output")
     if not os.path.isdir(outputDir): os.mkdir(outputDir)
 
     if outputDir[:8] == "/content":
@@ -159,5 +144,17 @@ def ensemble(inputImage):
 
     os.system(f"nnUNet_ensemble -f {npzDirs[0]} {npzDirs[1]} {npzDirs[2]} {npzDirs[3]} {npzDirs[4]} -o {outputDir}")
 
+    shutil.copyfile(os.path.join(inputPath, patId + "_0000.nii.gz"), os.path.join(caseDir, patId + "_CTA.nii.gz"))
+    shutil.copyfile(os.path.join(outputDir, patId + ".nii.gz"), os.path.join(caseDir, patId + ".nii.gz"))
+
     print(f"Ensembling took {time() - start} s")
     print("                                   ")
+
+##############################################################################################
+
+if mode == "inference":
+    inference(casePath)
+elif mode == "ensemble":
+    ensemble(casePath)
+else:
+    ValueError("Please introduce one of the possible modes. See main.py -h for more information.")

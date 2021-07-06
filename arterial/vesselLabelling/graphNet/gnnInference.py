@@ -86,7 +86,6 @@ def inference(caseDir):
     # Save predicted graph
     nx.write_gpickle(output, os.path.join(caseDir, "graph_pred.pickle"))
 
-    return output
 
 def createFeedDictSingle(graphPath, graph=None):
     """Creates placeholders for the model training and evaluation.
@@ -116,6 +115,7 @@ def createFeedDictSingle(graphPath, graph=None):
     feedDict = {inputPH: inputGraph}
 
     return feedDict, inputPH, graph
+    
 
 def featuresToType(predGraph, inputGraph):
     # Define new graph with same nodes and edges and information from the input graph

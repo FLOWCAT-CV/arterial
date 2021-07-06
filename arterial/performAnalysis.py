@@ -28,24 +28,18 @@ print("                                                          ")
 
 caseDir = os.path.abspath(os.path.dirname(casePath))
 
-# import shutil
-
-# # for element in os.listdir(caseDir):
-# #     if not element.endswith(".nii.gz"):
-# #         if os.path.isdir(os.path.join(caseDir, element)):
-# #             shutil.rmtree(os.path.join(caseDir, element))
-# #         if os.path.isfile(os.path.join(caseDir, element)):
-# #             os.remove(os.path.join(caseDir, element))
-
-# segmentationAndCenterlineCode = os.path.join(os.path.abspath(""), "centerlineExtraction/performSegmentationAndCenterlineExtraction.py")
-segmentationAndCenterlineCode = os.path.join("/Users/pere/GitHub/arterial/v2/arterial", "centerlineExtraction/performSegmentationAndCenterlineExtraction.py")
+segmentationAndCenterlineCode = os.path.join(os.path.abspath(""), "centerlineExtraction/performSegmentationAndCenterlineExtraction.py")
 
 start0 = time.time()
 
 print("Starting segmentation and centerline extraction...")
 
+###############################################################
+# Code for nnUNet segmentation should be written here
+###############################################################
+
 # Perform segmentation and centerline extraction. This generates segmentation.vtk, decimatedSegmentation.vtk and centerlines.vtk in caseDir
-os.system(f"/Applications/Slicer.app/Contents/MacOS/Slicer --disable-terminal-outputs --no-main-window --python-script {segmentationAndCenterlineCode} -pth {casePath} --exit-after-startup")
+os.system(f"/Applications/Slicer.app/Contents/MacOS/Slicer --disable-terminal-outputs --no-main-window --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
 
 start1 = time.time()
 
@@ -115,8 +109,7 @@ print("                                    ")
 print("Generating graph...")
 
 # Generate segmentsArray
-segmentsArray = centerlineSegmentsArray(caseDir, make_plot=False)
-        
+segmentsArray = centerlineSegmentsArray(caseDir, make_plot=False)   
 # Generate centerline graph
 G = generateCenterlineGraph(segmentsArray, caseDir, make_plot=True)
 
@@ -131,11 +124,11 @@ print("                                    ")
 
 # Linked labeled graph with branchModel and clipped model segments (assumes graph_label.pickle exists in caseDir)
 # Output could be the relation between graph labels and groupIds in branchModel and clippedModel
-# graphBranchModelLink(caseDir)
+graphBranchModelLink(caseDir)
 
-# start6 = time.time()
+start6 = time.time()
 
-# print("Branch model linkage to labeled graph completed")
-# print(f"Time (parcial): {start6 - start5} s           ")
-# print(f"Time (total): {start6 - start0} s             ")
-# print("                                               ")
+print("Branch model linkage to labeled graph completed")
+print(f"Time (parcial): {start6 - start5} s           ")
+print(f"Time (total): {start6 - start0} s             ")
+print("                                               ")

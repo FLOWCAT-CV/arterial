@@ -137,7 +137,7 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
 
         for idx in range(len(uniqueSegmentsPositionArray)):
             if uniqueSegmentsPositionArray[idx, 2] == -1:
-                # We have to make a distinction for the cases that
+                # We have to make a distinction for the cases that end at an endpoint, rather than at a bifurcation
                 segmentsArray[idx, 0] = cellsCoordinateArray[uniqueSegmentsPositionArray[idx, 0]][uniqueSegmentsPositionArray[idx, 1]:]
                 segmentsArray[idx, 1] = cellsRadiusArray[uniqueSegmentsPositionArray[idx, 0]][uniqueSegmentsPositionArray[idx, 1]:]
             else:    

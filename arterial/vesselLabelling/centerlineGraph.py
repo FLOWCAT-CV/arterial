@@ -119,7 +119,7 @@ def generateCenterlineGraph(segmentsArray, caseDir, make_plot=False):
         plt.close()
         # plt.show()
 
-    return G
+    # return G
 
 
 def directionalEmbeddings(G, node):

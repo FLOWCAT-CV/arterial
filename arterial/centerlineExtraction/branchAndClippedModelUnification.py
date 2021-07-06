@@ -163,7 +163,6 @@ def branchAndClippedModelUnification(caseDir):
                 
                 # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
                 numberOfIds = clippedModel.GetCell(idx).GetPointIds().GetNumberOfIds()
-                
                 # Insert the cells with the corresponding groupId to the new vtkCellArray
                 for idx in cellIdArray:
                     cell = vtk.vtkTriangle()

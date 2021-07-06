@@ -17,12 +17,12 @@ from centerlineExtraction import centerlineExtraction
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-pth', '--path', type=str, required=True, 
+parser.add_argument('-casePath', '--casePath', type=str, required=True, 
     help='path binary nifti to be processed. Required.')
 
 args = parser.parse_args()
 
-casePath = args.path
+casePath = args.casePath
 
 caseDir = os.path.abspath(os.path.dirname(casePath))
 

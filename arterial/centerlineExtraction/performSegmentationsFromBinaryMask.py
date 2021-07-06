@@ -4,22 +4,19 @@ import slicer
 import numpy as np
 import nibabel as nib
 
-def performSegmentationsFromBinaryMask(caseDir, masterVolumeNode):
-    ''' Performs segmentation of a binary mask using Slicer's segmentEditorWidget. Also performs
-    performs a second segmentation with grown margins to ensure robust centerline extraction.
-    Writes the original segmentation (segmentation.vtk) as well as a decimated version 
-    (to 10% of original triangles) (decimatedSegmentation.vtk). 
+def performSegmentationsFromBinaryMask(masterVolumeNode):
+    ''' Performs segmentation of a binary mask using Slicer's segmentEditorWidget. 
+    Thresholding is applied to segments the loaded masterVolumeNode (corresponding) 
+    to a binary NIfTI. Then, a Gaussian smoothing filter with a standard deviation 
+    of 0.5 mm is applied and the Islands tool is used to remove all islands smaller
+    than 10,000 voxels, as well as to split all islands left into different segments.
+    The resulting segmentation node is returned for further processing.
 
     At the moment, we disregard the voxels in the upper 20% of the image, as we are 
     focusing on the more reliably segmented region near the aortic arch, up to the 
     distal end of the ICAs (syph).
 
-    This function also creates a surface model and a decimated surface model saved in 
-    caseDir as .vtk files.
-
     Arguments:
-        - caseDir <str>: path to the directory containing the binary mask. All 
-        segmentations will be saved in this dir.
         - masterVolumeNode <slicer volumeNode>: master volume node containing the binary 
         nifti loaded onto Slicer.
 
@@ -54,8 +51,8 @@ def performSegmentationsFromBinaryMask(caseDir, masterVolumeNode):
     # Thresholding
     segmentEditorWidget.setActiveEffectByName("Threshold")
     effect = segmentEditorWidget.activeEffect()
-    effect.setParameter("MinimumThreshold","1")
-    effect.setParameter("MaximumThreshold","1")
+    effect.setParameter("MinimumThreshold", "1")
+    effect.setParameter("MaximumThreshold", "1")
     effect.self().onApply()
 
     # Smoothing
