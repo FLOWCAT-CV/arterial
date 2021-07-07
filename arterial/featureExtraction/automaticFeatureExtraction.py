@@ -1,12 +1,9 @@
-from genericpath import exists
 import os
 import json
-from pickle import NONE
 
 import numpy as np
 import networkx as nx
 import nibabel as nib
-from numpy.core.arrayprint import printoptions
 
 import vtk
 from vtk.util.numpy_support import vtk_to_numpy
@@ -77,10 +74,6 @@ class featureExtractor:
         self.caseDir = caseDir
         # Get affine matrix
         self.aff = nib.load(os.path.join(self.caseDir, os.path.basename(self.caseDir) + ".nii.gz")).affine
-        # Define presence of bovine arch
-        self.bovineArch = False
-        # Define presence of ARSA
-        self.ARSA = False
         # Load segmentsArray
         self.segmentsArray = np.load(os.path.join(caseDir, "segmentsArray.npy"), allow_pickle=True)
         self.segmentsArrayAff = np.ndarray([len(self.segmentsArray)], dtype = object)
@@ -134,13 +127,15 @@ class featureExtractor:
         self.featureExtractorExtendedDict = {}
 
     def extractFeatures(self):
-
         # Get presence of bovine AA
-        
+        self.featureExtractorDict["presence of bovine arch"] = self.getBovineArch()
+        self.featureExtractorExtendedDict["presence of bovine arch"] = self.getBovineArch()
         # Get presence of ARSA
-        self.ARSA = self.getARSA()
+        self.featureExtractorDict["presence of ARSA"] = self.getARSA()
+        self.featureExtractorExtendedDict["presence of ARSA"] = self.getARSA()
+
+        # Get proximal diameters
         for vesselName in vesselNameDict.keys():
-            # Get proximal diameters
             self.featureExtractorDict[f"{vesselName} proximal diameter"] = 2 * self.findProximalDiameter(vesselName)
             self.featureExtractorExtendedDict[f"{vesselName} proximal diameter"] = 2 * self.findProximalDiameter(vesselName)
 
@@ -164,6 +159,7 @@ class featureExtractor:
         
         # Get AA type
         self.featureExtractorDict["AA type"] = self.findAAType()
+        self.featureExtractorExtendedDict["AA type"] = self.findAAType()
 
         with open(os.path.join(self.caseDir, f"features.json"), "w") as outfile:
             json.dump(self.featureExtractorDict, outfile, indent=4)
@@ -184,8 +180,8 @@ class featureExtractor:
         '''
         # Select all those segments Ids from segmentsArray that make up the LCCA
         segmentIds = []
-        for idx in featureExtractor.cellIdToVesselType:
-            if featureExtractor.cellIdToVesselType[idx] in vesselNameDict["LCCA"]:
+        for idx in self.cellIdToVesselType:
+            if self.cellIdToVesselType[idx] in vesselNameDict["LCCA"]:
                 segmentIds.append(idx)
         # If no segments are detected, output False for self.bovineArch
         if len(segmentIds) == 0:
@@ -193,7 +189,7 @@ class featureExtractor:
         # Otherwise, perform computation
         else:
             # Get singleSegment, coordinatesArray and segmentsOrder
-            singleSegment, _ = featureExtractor.getSingleSegment("LCCA", segmentIds)
+            singleSegment, _ = self.getSingleSegment("LCCA", segmentIds)
             # We use bifurcation point to find 
             bifurcationPoint = singleSegment[0]
             closestSegmentsPoints = np.ndarray([len(self.segmentsArrayAff) - len(segmentIds), 3])
@@ -207,20 +203,18 @@ class featureExtractor:
                     idxAux += 1
             # Get segments in contact with bifurcation node
             segmentsInContactIdx = []
-            auxIdx = 0
-            for cellId in closestSegmentsCellIds:
-                if np.linalg.norm(closestSegmentsPoints[auxIdx] - bifurcationPoint) < 0.1:
-                    segmentsInContactIdx.append(auxIdx)
-                auxIdx += 1
+            for idx, point in enumerate(closestSegmentsCellIds):
+                if np.linalg.norm(point - bifurcationPoint) < 0.1:
+                    segmentsInContactIdx.append(idx)
 
             # Get cellId (position in segmentsArray), and vesselTypes
             segmentsInContactCellIds = list(closestSegmentsCellIds[segmentsInContactIdx])
             segmentsInContactVesselTypes = [self.cellIdToVesselType[cellId] for cellId in segmentsInContactCellIds]
 
-            # If LCCA is not connected to BT aor is connected to AA, no bovine arch is found
+            # If LCCA is not connected to BT and is connected to AA, no bovine arch is found
             if 2 not in segmentsInContactVesselTypes and 14 not in segmentsInContactVesselTypes or 1 in segmentsInContactVesselTypes:
                 return False
-            # Otherwise, we have to determine wether a BT transition segments is present or not
+            # Otherwise, we have to determine wether a BT transition segment is present or not
             else:
                 # THIS IS PROVISIONAL
                 return True
@@ -259,11 +253,9 @@ class featureExtractor:
                     idxAux += 1
             # Get segments in contact with bifurcation node
             segmentsInContactIdx = []
-            auxIdx = 0
-            for cellId in closestSegmentsCellIds:
-                if np.linalg.norm(closestSegmentsPoints[auxIdx] - bifurcationPoint) < 0.1:
-                    segmentsInContactIdx.append(auxIdx)
-                auxIdx += 1
+            for idx, point in enumerate(closestSegmentsCellIds):
+                if np.linalg.norm(point - bifurcationPoint) < 0.1:
+                    segmentsInContactIdx.append(idx)
 
             # Get cellId (position in segmentsArray) and vesselTypes
             segmentsInContactCellIds = list(closestSegmentsCellIds[segmentsInContactIdx])
@@ -517,11 +509,9 @@ class featureExtractor:
                     idxAux += 1
             # Get segments in contact with bifurcation node and AA segments
             potentialRelPointsIdx = []
-            auxIdx = 0
-            for cellId in closestSegmentsCellIds:
-                if np.linalg.norm(closestSegmentsPoints[auxIdx] - bifurcationPoint) < 0.1 or self.cellIdToVesselType[cellId] == 1:
-                    potentialRelPointsIdx.append(auxIdx)
-                auxIdx += 1
+            for idx, cellId in enumerate(closestSegmentsCellIds):
+                if np.linalg.norm(closestSegmentsPoints[idx] - bifurcationPoint) < 0.1 or self.cellIdToVesselType[cellId] == 1:
+                    potentialRelPointsIdx.append(idx)
 
             # Get cellId (position in segmentsArray), vesselTypes and diameters for corresponding segments
             potentialRelPointsCellIds = list(closestSegmentsCellIds[potentialRelPointsIdx])
