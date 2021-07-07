@@ -230,8 +230,8 @@ class featureExtractor:
         '''
         # Select all those segments Ids from segmentsArray that make up the RSA
         segmentIds = []
-        for idx in featureExtractor.cellIdToVesselType:
-            if featureExtractor.cellIdToVesselType[idx] in vesselNameDict["RSA"]:
+        for idx in self.cellIdToVesselType:
+            if self.cellIdToVesselType[idx] in vesselNameDict["RSA"]:
                 segmentIds.append(idx)
         # If no segments are detected, output False for self.ARSA
         if len(segmentIds) == 0:
@@ -239,7 +239,7 @@ class featureExtractor:
         # Otherwise, perform computation
         else:
             # Get singleSegment, coordinatesArray and segmentsOrder
-            singleSegment, _ = featureExtractor.getSingleSegment("RSA", segmentIds)
+            singleSegment, _ = self.getSingleSegment("RSA", segmentIds)
             # We use bifurcation point to find 
             bifurcationPoint = singleSegment[0]
             closestSegmentsPoints = np.ndarray([len(self.segmentsArrayAff) - len(segmentIds), 3])
