@@ -279,10 +279,10 @@ class featureExtractor:
             - AA type (int or math.nan).
 
         '''
-        # Pool all segments with type 1 or 14
+        # Pool all segments with type 1
         AAsegmentIds = []
         for idx in self.cellIdToVesselType: 
-            if self.cellIdToVesselType[idx] in [1, 14]:
+            if self.cellIdToVesselType[idx] == 1:
                 AAsegmentIds.append(idx)
         # If AA, BT and LCCA exist, compute AA type
         if not math.isnan(self.featureExtractorDict[f"BT origin"][0]) and not math.isnan(self.featureExtractorDict[f"LCCA proximal diameter"]) and not len(AAsegmentIds) == 0:
@@ -292,7 +292,7 @@ class featureExtractor:
             LCCADiameter = self.featureExtractorDict[f"LCCA proximal diameter"]
             # Pool all clippedModel AA points into one array (regardless of order) (corresponding groupId has to correspond to type 1)
             AAClippedModelCoordinatesArray = np.array([self.clippedModelCoordinates[idx] for idx in range(len(self.groupIdArrayClippedModel)) if self.groupIdsToVesselTypesDict[str(self.groupIdArrayClippedModel[idx])] == 1])
-            # Find AA clippedModel` point with highest S coordinate
+            # Find AA clippedModel point with highest S coordinate
             highestAAPointS = np.amax(AAClippedModelCoordinatesArray[:, 2])
             # Compute ratio
             if (highestAAPointS - BTOriginS) / float(LCCADiameter) <= 1.0:
@@ -317,11 +317,11 @@ class featureExtractor:
 
         '''
         if vesselName == "AA":
-            # For AA, just pool all segments with type 1 or 14
+            # For AA, just pool all segments with type 1
             AAsegmentIds = []
             numberOfPoints = 0
             for idx in self.cellIdToVesselType: 
-                if self.cellIdToVesselType[idx] in [1, 14]:
+                if self.cellIdToVesselType[idx]  == 1:
                     AAsegmentIds.append(idx)
                     numberOfPoints += len(self.segmentsArray[idx][0])
             # If AA not found, output nan
