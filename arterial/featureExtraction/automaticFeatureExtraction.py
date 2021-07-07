@@ -211,13 +211,16 @@ class featureExtractor:
             segmentsInContactCellIds = list(closestSegmentsCellIds[segmentsInContactIdx])
             segmentsInContactVesselTypes = [self.cellIdToVesselType[cellId] for cellId in segmentsInContactCellIds]
 
-            # If LCCA is not connected to BT and is connected to AA, no bovine arch is found
-            if 2 not in segmentsInContactVesselTypes and 14 not in segmentsInContactVesselTypes or 1 in segmentsInContactVesselTypes:
+            # If LCCA is connected to AA, no bovine arch is found
+            if 1 in segmentsInContactVesselTypes:
                 return False
-            # Otherwise, we have to determine wether a BT transition segment is present or not
-            else:
+            # If LCCA in contact with BT (2 or 14) and not with AA (1), we have to determine wether a BT transition segment is present or not
+            elif 2 in segmentsInContactVesselTypes or 14 in segmentsInContactVesselTypes:
                 # THIS IS PROVISIONAL
                 return True
+            # In all other cases, return False
+            else:
+                return False
 
     def getARSA(self):
         ''' Returns True if ARSA is detected, which is found when RSA bifurcates from AA.
