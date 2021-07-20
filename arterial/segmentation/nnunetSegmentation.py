@@ -69,6 +69,7 @@ def inference(casePath):
     # The casePath will be placed in a newly created dir with the patId as name
     print(os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")))
     if not os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")):
+        print(casePath)
         print(os.path.join(inputPath, patId + "_0000.nii.gz"))
         os.rename(casePath, os.path.join(inputPath, patId + "_0000.nii.gz"))
 
