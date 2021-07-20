@@ -57,7 +57,7 @@ def inference(casePath):
 
     '''
 
-    patId = casePath[:-7] # Name of the nifti casePath except the .nii.gz extension
+    patId = os.path.basename(casePath)[:-7] # Name of the nifti casePath except the .nii.gz extension
     caseDir = os.path.dirname(casePath)
 
     # Paths used by nnUNet
@@ -67,10 +67,7 @@ def inference(casePath):
     if not os.path.isdir(outputPath): os.mkdir(outputPath)
     
     # The casePath will be placed in a newly created dir with the patId as name
-    print(os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")))
     if not os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")):
-        print(casePath)
-        print(os.path.join(inputPath, patId + "_0000.nii.gz"))
         os.rename(casePath, os.path.join(inputPath, patId + "_0000.nii.gz"))
 
     # Only use if running on Colab
