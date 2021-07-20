@@ -97,7 +97,7 @@ def ensemble(casePath):
 
     '''
 
-    patId = casePath[:-7]
+    patId = os.path.basename(casePath)[:-7]
     caseDir = os.path.dirname(casePath)
 
     inputPath = os.path.join(caseDir, "input")
