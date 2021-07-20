@@ -102,7 +102,7 @@ def ensemble(casePath):
 
     inputPath = os.path.join(caseDir, "input")
     if not os.path.isdir(inputPath): os.mkdir(inputPath)
-    if not os.path.isfile(os.path.join(caseDir, "ensemble")): os.mkdir(os.path.join(caseDir, "ensemble"))
+    if not os.path.isdir(os.path.join(caseDir, "ensemble")): os.mkdir(os.path.join(caseDir, "ensemble"))
 
     # Only use if running on Colab. Make sure inputPath and outputPath do not contain spaces
     if inputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
@@ -128,7 +128,7 @@ def ensemble(casePath):
         else:
             outputPathAux = outputPath
             
-        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task001_Arterial -z -m 3d_lowres -f " + str(fold))
+        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task001_Arterial -z -m 3d_lowres -f " + str(fold) + "--part_id=0 --part_id=1 --part_id=2 --part_id=3 --num_parts=4")
 
         npzDirs.append(outputPath)
 
