@@ -128,7 +128,7 @@ def ensemble(casePath):
         else:
             outputPathAux = outputPath
             
-        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task001_Arterial -z -m 3d_lowres -f " + str(fold) + " --num_parts=2 --part_id=0 --part_id=1")#--part_id=2 --part_id=3")
+        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task001_Arterial -z -m 3d_lowres -f " + str(fold))
 
         npzDirs.append(outputPath)
 
