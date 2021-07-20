@@ -76,7 +76,7 @@ def inference(casePath):
 
     start = time()
 
-    os.system("nnUNet_predict -i " + inputPath + " -o " + caseDir + f" -t Task01_Arterial -m 3d_lowres -f all")
+    os.system("nnUNet_predict -i " + inputPath + " -o " + caseDir + f" -t Task001_Arterial -m 3d_lowres -f all")
 
     shutil.copyfile(os.path.join(inputPath, patId + "_0000.nii.gz"), os.path.join(caseDir, patId + "_CTA.nii.gz"))
     shutil.copyfile(os.path.join(outputPath, patId + ".nii.gz"), os.path.join(caseDir, patId + ".nii.gz"))
@@ -127,7 +127,7 @@ def ensemble(casePath):
         else:
             outputPathAux = outputPath
             
-        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task100_grid -z -m 3d_lowres -f " + str(fold))
+        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task001_Arterial -z -m 3d_lowres -f " + str(fold))
 
         npzDirs.append(outputPath)
 
