@@ -76,7 +76,7 @@ def inference(casePath):
 
     start = time()
 
-    os.system("nnUNet_predict -i " + inputPath + " -o " + caseDir + f" -t Task001_Arterial -m 3d_lowres -f all")
+    os.system("nnUNet_predict -i " + inputPath + " -o " + outputPath + f" -t Task001_Arterial -m 3d_lowres -f all")
 
     shutil.copyfile(os.path.join(inputPath, patId + "_0000.nii.gz"), os.path.join(caseDir, patId + "_CTA.nii.gz"))
     shutil.copyfile(os.path.join(outputPath, patId + ".nii.gz"), os.path.join(caseDir, patId + ".nii.gz"))
