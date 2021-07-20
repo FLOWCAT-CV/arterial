@@ -102,6 +102,7 @@ def ensemble(casePath):
 
     inputPath = os.path.join(caseDir, "input")
     if not os.path.isdir(inputPath): os.mkdir(inputPath)
+    if not os.path.isfile(os.path.join(caseDir, "ensemble")): os.mkdir(os.path.join(caseDir, "ensemble"))
 
     # Only use if running on Colab. Make sure inputPath and outputPath do not contain spaces
     if inputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
