@@ -2,12 +2,14 @@ import os
 import vtk
 import argparse
 
+from centerlineExtraction.branchAndClippedModelUnification import branchAndClippedModelUnification
+
 from vesselLabelling.segmentsArray import centerlineSegmentsArray
 from vesselLabelling.centerlineGraph import generateCenterlineGraph
 from vesselLabelling.segmentSplitting import segmentSplitting
 from vesselLabelling.graphBranchModelLink import graphBranchModelLink
 
-from centerlineExtraction.branchAndClippedModelUnification import branchAndClippedModelUnification
+from featureExtraction.automaticFeatureExtraction import featureExtractor
 
 import time
 
@@ -122,7 +124,7 @@ print("                                    ")
 
 ####### Now the GNN would continue
 
-# Linked labeled graph with branchModel and clipped model segments (assumes graph_label.pickle exists in caseDir)
+# Linked labeled graph with branchModel and clipped model segments (assumes graph_pred.pickle exists in caseDir)
 # Output could be the relation between graph labels and groupIds in branchModel and clippedModel
 graphBranchModelLink(caseDir)
 
@@ -132,3 +134,14 @@ print("Branch model linkage to labeled graph completed")
 print(f"Time (parcial): {start6 - start5} s           ")
 print(f"Time (total): {start6 - start0} s             ")
 print("                                               ")
+
+# Extract features and generate feature dicts
+# featureExtractorCase = featureExtractor(caseDir)
+# featureExtractorCase.extractFeatures()
+
+start7 = time.time()
+
+print("Automatic feature extraction process completed")
+print(f"Time (parcial): {start7 - start6} s          ")
+print(f"Time (total): {start7 - start0} s            ")
+print("                                              ")
