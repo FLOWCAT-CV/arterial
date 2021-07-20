@@ -29,7 +29,7 @@ print(f"Processing case {os.path.basename(casePath)} ({casePath})")
 print("                                                          ")
 
 caseDir = os.path.abspath(os.path.dirname(casePath))
-
+slicerPath = "/Applications/Slicer.app/Contents/MacOS/Slicer"
 segmentationAndCenterlineCode = os.path.join(os.path.abspath(""), "centerlineExtraction/performSegmentationAndCenterlineExtraction.py")
 
 start0 = time.time()
@@ -41,7 +41,7 @@ print("Starting segmentation and centerline extraction...")
 ###############################################################
 
 # Perform segmentation and centerline extraction. This generates segmentation.vtk, decimatedSegmentation.vtk and centerlines.vtk in caseDir
-os.system(f"/Applications/Slicer.app/Contents/MacOS/Slicer --disable-terminal-outputs --no-main-window --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+os.system(f"{slicerPath} --disable-terminal-outputs --no-main-window --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
 
 start1 = time.time()
 
