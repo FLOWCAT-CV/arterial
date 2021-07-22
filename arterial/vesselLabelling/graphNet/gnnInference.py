@@ -9,6 +9,8 @@ import tensorflow as tf
 from graph_nets.demos.models import EncodeProcessDecode
 from graph_nets import utils_np, utils_tf
 
+import matplotlib.pyplot as plt
+
 # Number of different bifurcation types
 BIFTYPENUM = 19
 # Number of different vessel types
@@ -88,6 +90,20 @@ def gnnInference(caseDir):
 
     # Save predicted graph
     nx.write_gpickle(output, os.path.join(caseDir, "graph_pred.pickle"))
+
+    edge_labels = nx.get_edge_attributes(output,'edgeTypeName')
+
+    # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
+    node_pos_dict_P = {}
+    for n in output.nodes():
+        node_pos_dict_P[n] = [output.nodes(data=True)[n]["pos"][0], output.nodes(data=True)[n]["pos"][2]]
+
+    nx.draw(output, node_pos_dict_P, node_size=20)
+    nx.draw_networkx_edge_labels(output, node_pos_dict_P, edge_labels = edge_labels)
+
+    plt.savefig(os.path.join(caseDir, "graph_pred.png"))
+    plt.close()
+    # plt.show()
 
 
 def createFeedDictSingle(graphPath, graph=None):
