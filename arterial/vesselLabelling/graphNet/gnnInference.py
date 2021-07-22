@@ -58,6 +58,7 @@ nodeTypes = {
 
 # Should be and environment variable
 gnnModelPath = "/Users/pere/GitHub/arterial/arterial/vesselLabelling/graphNet/model/model.ckpt"
+gnnModelMetaPath = "/Users/pere/GitHub/arterial/arterial/vesselLabelling/graphNet/model/model.ckpt.meta"
 
 def gnnInference(caseDir):
     # Define path to graph
@@ -72,7 +73,8 @@ def gnnInference(caseDir):
     outputOp = model(inputPH, numProcessingSteps)
     # Restore variables from disk
     sess = tf.Session()
-    saver = tf.train.Saver()    
+    sess.run(tf.compat.v1.global_variables_initializer())
+    saver = tf.compat.v1.train.import_meta_graph(gnnModelMetaPath)
     saver.restore(sess, gnnModelPath)
 
     # Perform inference
@@ -80,8 +82,7 @@ def gnnInference(caseDir):
                                 }, feed_dict=feedDict)
 
     # Pass graph tuple to networkx graph
-    output = utils_np.graphs_tuple_to_networkxs(inferenceValues[0])[0]
-    # output = utils_np.graphs_tuple_to_networkxs(inferenceValues["output"][0])[0]
+    output = utils_np.graphs_tuple_to_networkxs(inferenceValues["output"][0])[0]
     output = featuresToType(output, inputGraph)
     sess.close()
 
