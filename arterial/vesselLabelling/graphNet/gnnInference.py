@@ -59,7 +59,7 @@ nodeTypes = {
 # Should be and environment variable
 gnnModelPath = "/Users/pere/GitHub/arterial/arterial/vesselLabelling/graphNet/model/model.ckpt"
 
-def inference(caseDir):
+def gnnInference(caseDir):
     # Define path to graph
     graphPath = os.path.join(caseDir, "graph.pickle")
     print("Predicting graph", graphPath)
@@ -80,8 +80,10 @@ def inference(caseDir):
                                 }, feed_dict=feedDict)
 
     # Pass graph tuple to networkx graph
-    output = utils_np.graphs_tuple_to_networkxs(inferenceValues["output"][0])[0]
+    output = utils_np.graphs_tuple_to_networkxs(inferenceValues[0])[0]
+    # output = utils_np.graphs_tuple_to_networkxs(inferenceValues["output"][0])[0]
     output = featuresToType(output, inputGraph)
+    sess.close()
 
     # Save predicted graph
     nx.write_gpickle(output, os.path.join(caseDir, "graph_pred.pickle"))
@@ -108,7 +110,7 @@ def createFeedDictSingle(graphPath, graph=None):
 
     # Generate single graph and create input placeholder
     if graph == None:
-        graph = generateGraph(graphPath, randAug=None, dataAug=False)
+        graph = generateGraph(graphPath)
     inputGraph = utils_np.networkxs_to_graphs_tuple([graph])
     inputPH = utils_tf.placeholders_from_networkxs([graph])
     # Define feed dict
@@ -135,5 +137,3 @@ def featuresToType(predGraph, inputGraph):
         outputGraph[n0][n1]["features"] = predGraph[n0][n1][0]["features"]
 
     return outputGraph
-
-

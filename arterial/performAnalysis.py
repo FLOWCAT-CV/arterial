@@ -8,6 +8,7 @@ from vesselLabelling.segmentsArray import centerlineSegmentsArray
 from vesselLabelling.centerlineGraph import generateCenterlineGraph
 from vesselLabelling.segmentSplitting import segmentSplitting
 from vesselLabelling.graphBranchModelLink import graphBranchModelLink
+from vesselLabelling.graphNet.gnnInference import gnnInference
 
 from featureExtraction.automaticFeatureExtraction import featureExtractor
 
@@ -122,26 +123,36 @@ print(f"Time (parcial): {start5 - start4} s")
 print(f"Time (total): {start5 - start0} s  ")
 print("                                    ")
 
-####### Now the GNN would continue
+print("Predicting graph edges...")
+
+# Perform inference with trained GNN
+gnnInference(caseDir)
+
+start6 = time.time()
+
+print("Graph prediction with GNN completed ")
+print(f"Time (parcial): {start6 - start5} s")
+print(f"Time (total): {start6 - start0} s  ")
+print("                                    ")
 
 # Linked labeled graph with branchModel and clipped model segments (assumes graph_pred.pickle exists in caseDir)
 # Output could be the relation between graph labels and groupIds in branchModel and clippedModel
 graphBranchModelLink(caseDir)
 
-start6 = time.time()
+start7 = time.time()
 
 print("Branch model linkage to labeled graph completed")
-print(f"Time (parcial): {start6 - start5} s           ")
-print(f"Time (total): {start6 - start0} s             ")
+print(f"Time (parcial): {start7 - start6} s           ")
+print(f"Time (total): {start7 - start0} s             ")
 print("                                               ")
 
 # Extract features and generate feature dicts
-# featureExtractorCase = featureExtractor(caseDir)
-# featureExtractorCase.extractFeatures()
+featureExtractorCase = featureExtractor(caseDir)
+featureExtractorCase.extractFeatures()
 
-start7 = time.time()
+start8 = time.time()
 
 print("Automatic feature extraction process completed")
-print(f"Time (parcial): {start7 - start6} s          ")
-print(f"Time (total): {start7 - start0} s            ")
+print(f"Time (parcial): {start8 - start7} s          ")
+print(f"Time (total): {start8 - start0} s            ")
 print("                                              ")
