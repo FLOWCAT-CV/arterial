@@ -66,7 +66,7 @@ def performSegmentationsFromBinaryMask(masterVolumeNode):
     segmentEditorWidget.setActiveEffectByName("Islands")
     effect = segmentEditorWidget.activeEffect()
     effect.setParameter("Operation", "REMOVE_SMALL_ISLANDS")
-    effect.setParameter("MinimumSize", 10000)
+    effect.setParameter("MinimumSize", 1000)
     effect.self().onApply()
 
     # Split large islands into individual segments
