@@ -11,6 +11,7 @@ from vesselLabelling.graphBranchModelLink import graphBranchModelLink
 from vesselLabelling.graphNet.gnnInference import gnnInference
 
 from featureExtraction.automaticFeatureExtraction import featureExtractor
+# from featureExtraction.automaticFeatureExtractionLabel import featureExtractor
 
 import time
 
@@ -30,25 +31,34 @@ print(f"Processing case {os.path.basename(casePath)} ({casePath})")
 print("                                                          ")
 
 caseDir = os.path.abspath(os.path.dirname(casePath))
-slicerPath = "/Applications/Slicer.app/Contents/MacOS/Slicer"
-segmentationAndCenterlineCode = os.path.join(os.path.abspath(""), "centerlineExtraction/performSegmentationAndCenterlineExtraction.py")
+slicerPath = os.environ["slicerPath"]
+segmentationCode = os.path.join(os.environ["arterialDir"], "segmentation/nnunetSegmentation.py")
+segmentationAndCenterlineCode = os.path.join(os.environ["arterialDir"], "centerlineExtraction/performSegmentationAndCenterlineExtraction.py")
 
 start0 = time.time()
 
-print("Starting segmentation and centerline extraction...")
+print("Performing segmentation from CTA volume...")
 
-###############################################################
-# Code for nnUNet segmentation should be written here
-###############################################################
-
-# Perform segmentation and centerline extraction. This generates segmentation.vtk, decimatedSegmentation.vtk and centerlines.vtk in caseDir
-os.system(f"{slicerPath} --disable-terminal-outputs --no-main-window --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+# Performs inference with trained nnU-Net. Changes name of original CTA NIfTI (adds _CTA to caseId) and generates predicted binary map at casePath
+# os.system(f"python {segmentationCode} -mode inference -casePath {casePath}")
 
 start1 = time.time()
 
+print("Segmentation completed              ")
+print(f"Time (parcial): {start1 - start0} s")
+print(f"Time (total): {start1 - start0} s  ")
+print("                                    ")
+
+print("Starting segmentation and centerline extraction...")
+
+# Perform segmentation and centerline extraction. This generates decimatedSegmentations and centerlines in caseDir
+# os.system(f"{slicerPath} --disable-terminal-outputs --no-main-window --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+
+start2 = time.time()
+
 print("Segmentation and centerline extraction completed")
-print(f"Time (parcial): {start1 - start0} s            ")
-print(f"Time (total): {start1 - start0} s              ")
+print(f"Time (parcial): {start2 - start1} s            ")
+print(f"Time (total): {start2 - start0} s              ")
 print("                                                ")
 
 centerlineList = [centerlineFile for centerlineFile in os.listdir(os.path.join(caseDir, "centerlines")) if centerlineFile.endswith(".vtk")]
@@ -67,7 +77,7 @@ for idx, _ in enumerate(centerlineList):
     clippedModel = os.path.join(caseDir, "clippedModels", f"clippedModel{idx}.vtk")
     radiusArrayName = "Radius"
 
-    os.system(f"vmtkbranchextractor -ifile {centerlineModel} -ofile {branchModel} -radiusarray {radiusArrayName}")
+    # os.system(f"vmtkbranchextractor -ifile {centerlineModel} -ofile {branchModel} -radiusarray {radiusArrayName}")
 
     start21 = time.time()
 
@@ -78,7 +88,7 @@ for idx, _ in enumerate(centerlineList):
 
     print("Clipping branch of decimated segmentation surface model...")
 
-    os.system(f"vmtkbranchclipper -ifile {surfaceModel} -centerlinesfile {branchModel} -ofile {clippedModel} -radiusarray {radiusArrayName}")
+    # os.system(f"vmtkbranchclipper -ifile {surfaceModel} -centerlinesfile {branchModel} -ofile {clippedModel} -radiusarray {radiusArrayName}")
 
     start22 = time.time()
 
@@ -89,7 +99,7 @@ for idx, _ in enumerate(centerlineList):
 
 print("Unifying branch and clipped models...")
 
-branchAndClippedModelUnification(caseDir)
+# branchAndClippedModelUnification(caseDir)
 
 start3 = time.time()
 
@@ -100,7 +110,7 @@ print("                                               ")
 
 print("Splitting clipped model into individual segments...")
 
-segmentSplitting(caseDir)
+# segmentSplitting(caseDir)
 
 start4 = time.time()
 
@@ -112,9 +122,9 @@ print("                                    ")
 print("Generating graph...")
 
 # Generate segmentsArray
-segmentsArray = centerlineSegmentsArray(caseDir, make_plot=False)   
+# segmentsArray = centerlineSegmentsArray(caseDir, make_plot=False)   
 # Generate centerline graph
-G = generateCenterlineGraph(segmentsArray, caseDir, make_plot=True)
+# G = generateCenterlineGraph(segmentsArray, caseDir, make_plot=True)
 
 start5 = time.time()
 
@@ -126,7 +136,7 @@ print("                                    ")
 print("Predicting graph edges...")
 
 # Perform inference with trained GNN
-gnnInference(caseDir)
+# gnnInference(caseDir)
 
 start6 = time.time()
 
@@ -137,7 +147,7 @@ print("                                    ")
 
 # Linked labeled graph with branchModel and clipped model segments (assumes graph_pred.pickle exists in caseDir)
 # Output could be the relation between graph labels and groupIds in branchModel and clippedModel
-graphBranchModelLink(caseDir)
+# graphBranchModelLink(caseDir)
 
 start7 = time.time()
 
