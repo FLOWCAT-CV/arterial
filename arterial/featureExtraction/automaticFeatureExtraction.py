@@ -136,24 +136,25 @@ class featureExtractor:
 
         # Get proximal diameters
         for vesselName in vesselNameDict.keys():
-            self.featureExtractorDict[f"{vesselName} proximal diameter"] = 2 * self.findProximalDiameter(vesselName)
-            self.featureExtractorExtendedDict[f"{vesselName} proximal diameter"] = 2 * self.findProximalDiameter(vesselName)
+            if vesselName not in ["other", "RICA", "RECA", "LICA", "LECA", "BA", "AA+BT", "RVA+LVA"]:
+                self.featureExtractorDict[f"{vesselName} proximal diameter"] = self.findProximalDiameter(vesselName)
+                self.featureExtractorExtendedDict[f"{vesselName} proximal diameter"] = self.findProximalDiameter(vesselName)
 
         for vesselName in vesselNameDict.keys():
-            if vesselName != "AA":
+            if vesselName not in ["AA", "other", "RICA", "RECA", "LICA", "LECA", "BA", "AA+BT", "RVA+LVA"]:
             # Get relative lenghts
                 self.featureExtractorDict[f"{vesselName} relative length"] = self.computeRelativeLength(vesselName)
                 self.featureExtractorExtendedDict[f"{vesselName} relative length"] = self.computeRelativeLength(vesselName)
                 # Get absolute departure angles
                 polar, azimuth = self.computeAbsoluteAngle(vesselName)
                 self.featureExtractorDict[f"{vesselName} abs polar angle"] = polar
-                self.featureExtractorDict[f"{vesselName} abs azmiuth angle"] = azimuth
+                self.featureExtractorDict[f"{vesselName} abs azimuth angle"] = azimuth
                 self.featureExtractorExtendedDict[f"{vesselName} abs polar angle"] = polar
                 self.featureExtractorExtendedDict[f"{vesselName} abs azimuth angle"] = azimuth
                 # Get relative departure angles
                 polarRel, azimuthRel = self.computeRelativeAngle(vesselName)
                 self.featureExtractorDict[f"{vesselName} rel polar angle"] = polarRel
-                self.featureExtractorDict[f"{vesselName} rel azmiuth angle"] = azimuthRel
+                self.featureExtractorDict[f"{vesselName} rel azimuth angle"] = azimuthRel
                 self.featureExtractorExtendedDict[f"{vesselName} rel polar angle"] = polarRel
                 self.featureExtractorExtendedDict[f"{vesselName} rel azimuth angle"] = azimuthRel
         
@@ -175,7 +176,7 @@ class featureExtractor:
         Arguments:
 
         Returns:
-            self.bovineArch <bool>: True if bovine arch if found. False otherwise.
+            bovineArch <bool>: True if bovine arch if found. False otherwise.
 
         '''
         # Select all those segments Ids from segmentsArray that make up the LCCA
@@ -203,7 +204,7 @@ class featureExtractor:
                     idxAux += 1
             # Get segments in contact with bifurcation node
             segmentsInContactIdx = []
-            for idx, point in enumerate(closestSegmentsCellIds):
+            for idx, point in enumerate(closestSegmentsPoints):
                 if np.linalg.norm(point - bifurcationPoint) < 0.1:
                     segmentsInContactIdx.append(idx)
 
@@ -211,10 +212,19 @@ class featureExtractor:
             segmentsInContactCellIds = list(closestSegmentsCellIds[segmentsInContactIdx])
             segmentsInContactVesselTypes = [self.cellIdToVesselType[cellId] for cellId in segmentsInContactCellIds]
             
-            # If LCCA in contact with BT (2 or 14) and not with AA (1), we have to determine wether a BT transition segment is present or not
-            if 2 in segmentsInContactVesselTypes or 14 in segmentsInContactVesselTypes and 1 not in segmentsInContactVesselTypes:
-                # THIS IS PROVISIONAL
-                return True
+            # If LCCA in contact with BT (2 or 14), we have to determine wether a BT transition segment is present or not
+            if 2 in segmentsInContactVesselTypes or 14 in segmentsInContactVesselTypes:
+                # A first version will only check the existance of multiple BT/AA+BT with different groupIds
+                numberOfBTSegments = len([vesselType for vesselType in self.groupIdsToVesselTypesDict.values() if vesselType in [2, 14]])
+                # If there are muiltiple groupIds with the BT vesselType, consider that it is a bovine arch
+                # This is because, if the LCCA parts from the BT, a BT transition segment will be present, and it should be identified as a separate BT segment
+                # Otherwise, there should only be one BT segment in all cases. In the future, we should include the possibility that the LCCA could part from the BT
+                # without the need for there to be an explicit BT transition segment. Idea: check all triangles in contact with the proximal end of the clipped model.
+                # If there is no AA, only BT/AA+BT, consider bovine arch
+                if numberOfBTSegments > 1:
+                    return True
+                else:
+                    return False
             # In all other cases, return False
             else:
                 return False
@@ -225,7 +235,7 @@ class featureExtractor:
         Arguments:
 
         Returns:
-            self.ARSA <bool>: True if ARSA if found. False otherwise.
+            - ARSA <bool>: True if ARSA if found. False otherwise.
 
         '''
         # Select all those segments Ids from segmentsArray that make up the RSA
@@ -285,14 +295,16 @@ class featureExtractor:
             if self.cellIdToVesselType[idx] == 1:
                 AAsegmentIds.append(idx)
         # If AA, BT and LCCA exist, compute AA type
-        if not math.isnan(self.featureExtractorDict[f"BT origin"][0]) and not math.isnan(self.featureExtractorDict[f"LCCA proximal diameter"]) and not len(AAsegmentIds) == 0:
+        if not isinstance(self.featureExtractorDict[f"BT origin"], float) and not math.isnan(self.featureExtractorDict[f"LCCA proximal diameter"]) and not len(AAsegmentIds) == 0:
             # Get BT origin S coordinate
             BTOriginS = self.featureExtractorDict[f"BT origin"][2]
             # Get LCCA proximal diameter
             LCCADiameter = self.featureExtractorDict[f"LCCA proximal diameter"]
             # Pool all clippedModel AA points into one array (regardless of order) (corresponding groupId has to correspond to type 1)
-            AAClippedModelCoordinatesArray = np.array([self.clippedModelCoordinates[idx] for idx in range(len(self.groupIdArrayClippedModel)) if self.groupIdsToVesselTypesDict[str(self.groupIdArrayClippedModel[idx])] == 1])
+            AAClippedModelCoordinatesArray = np.array([self.clippedModelCoordinates[idx] for idx in range(len(self.groupIdArrayClippedModel)) if str(self.groupIdArrayClippedModel[idx]) in list(self.groupIdsToVesselTypesDict.keys()) and self.groupIdsToVesselTypesDict[str(self.groupIdArrayClippedModel[idx])] == 1])
             # Find AA clippedModel point with highest S coordinate
+            self.featureExtractorDict[f"AA type (A)"] = list(AAClippedModelCoordinatesArray[np.argmax(AAClippedModelCoordinatesArray[:, 2])])
+            self.featureExtractorExtendedDict[f"AA type (A)"] = list(AAClippedModelCoordinatesArray[np.argmax(AAClippedModelCoordinatesArray[:, 2])])
             highestAAPointS = np.amax(AAClippedModelCoordinatesArray[:, 2])
             # Compute ratio
             if (highestAAPointS - BTOriginS) / float(LCCADiameter) <= 1.0:
@@ -321,7 +333,7 @@ class featureExtractor:
             AAsegmentIds = []
             numberOfPoints = 0
             for idx in self.cellIdToVesselType: 
-                if self.cellIdToVesselType[idx]  == 1:
+                if self.cellIdToVesselType[idx] == 1:
                     AAsegmentIds.append(idx)
                     numberOfPoints += len(self.segmentsArray[idx][0])
             # If AA not found, output nan
@@ -331,16 +343,16 @@ class featureExtractor:
             # Otherwise, find point with highest S coordinate (vertical/axial axis) and record associates dimateter   
             else:
                 # Pool all AA coordinates into one array (regardless of order)
-                AACoordinatesArray = np.ndarray([numberOfPoints, 3], dtype=float)
+                AACoordinatesArray = np.zeros([numberOfPoints, 3], dtype=float)
                 auxIdx = 0
                 for idx, AAsegmentId in enumerate(AAsegmentIds):
-                    for idx2 in range(len(self.segmentsArray[AAsegmentId][0])):
-                        AACoordinatesArray[idx2 + auxIdx] = np.matmul(self.aff, np.append(self.segmentsArray[AAsegmentId][0][idx2], 1.0))[:3]
-                    auxIdx += idx2
+                    for idx2 in range(len(self.segmentsArrayAff[AAsegmentId])):
+                        AACoordinatesArray[idx2 + auxIdx] = self.segmentsArrayAff[AAsegmentId][idx2]
+                    auxIdx += idx2 + 1
                 # Find point with highest S coordinate
                 highestAAPointId = findPointId(AACoordinatesArray[np.argmax(AACoordinatesArray[:, 2])], self.branchModelCoordinates)
                 # Return radius of that point
-                return self.radius[highestAAPointId]
+                return 2 * self.radius[highestAAPointId]
         else:
             # Select all those segments Ids from segmentsArray that make up the vessel
             segmentIds = []
@@ -356,20 +368,19 @@ class featureExtractor:
             else:
                 # Get singleSegment
                 singleSegment, _ = self.getSingleSegment(vesselName, segmentIds)
-                # Start interating from the most proximal point until a point is found where:
-                    # 1) Point is in branchModel
-                    # 2) Point has blanking 0
-                    # 3) vesselName exists for this case
-                    # 4) groupId in branch model is the same as found by graphBranchModelLink
+                # Start iterating from the most proximal point until a point is found where:
+                    # 1) Point has blanking 0
+                    # 2) vesselName exists for this case
+                    # 3) groupId in branch model is the same as found by graphBranchModelLink
                 for idx in range(len(singleSegment)):
                     proximalEndId = findPointId(singleSegment[idx], self.branchModelCoordinates)
-                    if self.blanking[proximalEndId] == 0 and str(self.groupIdBranchModel[proximalEndId]) in self.groupIdsToVesselTypesDict.keys() and self.groupIdsToVesselTypesDict[str(self.groupIdBranchModel[proximalEndId])] in vesselNameDict[vesselName]:
+                    if self.blanking[proximalEndId] == 0 and str(self.groupIdBranchModel[proximalEndId]) in list(self.groupIdsToVesselTypesDict.keys()) and self.groupIdsToVesselTypesDict[str(self.groupIdBranchModel[proximalEndId])] in vesselNameDict[vesselName]:
                         break
                 # Record coordinates of origin
                 self.featureExtractorDict[f"{vesselName} origin"] = list(self.branchModelCoordinates[proximalEndId])
                 self.featureExtractorExtendedDict[f"{vesselName} origin"] = list(self.branchModelCoordinates[proximalEndId])
                 # Return radius of the most proximal point found
-                return self.radius[proximalEndId]
+                return 2 * self.radius[proximalEndId]
 
     def computeRelativeLength(self, vesselName):
         ''' Computes relative length (RL) of vesselName segment (AA not included).
@@ -395,7 +406,7 @@ class featureExtractor:
             if self.cellIdToVesselType[idx] in vesselNameDict[vesselName]:
                 segmentIds.append(idx)
         # If no segments are detected, output a nan value
-        if len(segmentIds) == 0:
+        if len(segmentIds) == 0 or self.featureExtractorDict[f"{vesselName} origin"] == math.nan:
             print(f"   {vesselName} not present")
             self.featureExtractorExtendedDict[f"{vesselName} distal bifurcation"] = math.nan
             return math.nan
@@ -403,14 +414,14 @@ class featureExtractor:
         # Otherwise, perform computation
         else:
             # Get singleSegment, coordinatesArray and segmentsOrder
-            singleSegment, orderedCoordinatesArray = self.getSingleSegment(vesselName, segmentIds)
+            singleSegment, _ = self.getSingleSegment(vesselName, segmentIds)
             # Get start and endpoints from dict
             startpoint = np.array(self.featureExtractorDict[f"{vesselName} origin"])
             # For the R/LSA, just use closest point to R/LVA origin
-            if vesselName == "RSA" and not math.isnan(self.featureExtractorDict[f"RVA origin"][0]):
+            if vesselName == "RSA" and not isinstance(self.featureExtractorDict[f"RVA origin"], float) and np.amin(np.linalg.norm(singleSegment - self.featureExtractorDict[f"RVA origin"], axis = 1)) < 20.:
                 VAOrigin = np.array(self.featureExtractorDict[f"RVA origin"])
                 endpoint = singleSegment[np.argmin(np.linalg.norm(singleSegment - VAOrigin, axis = 1))]
-            elif vesselName == "LSA" and not math.isnan(self.featureExtractorDict[f"LVA origin"][0]):
+            elif vesselName == "LSA" and not isinstance(self.featureExtractorDict[f"LVA origin"], float) and np.amin(np.linalg.norm(singleSegment - self.featureExtractorDict[f"LVA origin"], axis = 1)) < 20.:
                 VAOrigin = np.array(self.featureExtractorDict[f"LVA origin"])
                 endpoint = singleSegment[np.argmin(np.linalg.norm(singleSegment - VAOrigin, axis = 1))]
             # For the rest of vessel types, use all segments found
@@ -444,8 +455,7 @@ class featureExtractor:
             if self.cellIdToVesselType[idx] in vesselNameDict[vesselName]:
                 segmentIds.append(idx)
         # If no segments are detected, output a nan value
-        if len(segmentIds) == 0:
-            print(f"   {vesselName} not present")
+        if len(segmentIds) == 0 or self.featureExtractorDict[f"{vesselName} origin"] == math.nan:
             self.featureExtractorExtendedDict[f"{vesselName} abs angle point"] = math.nan
             return math.nan, math.nan
 
@@ -479,13 +489,23 @@ class featureExtractor:
             - azimuth <float>: azimuthal component in spherical coordinates of relative departure angle.
 
         '''
-       # Select all those segments Ids from segmentsArray that make up the vessel
+        # Set bovineArch and ARSA
+        if "presence of bovine arch" in self.featureExtractorDict.keys():
+            bovineArch = self.featureExtractorDict["presence of bovine arch"]
+        else:
+            bovineArch = False
+        if "presence of ARSA" in self.featureExtractorDict.keys():
+            ARSA = self.featureExtractorDict["presence of ARSA"]
+        else:
+            ARSA = False
+        
+        # Select all those segments Ids from segmentsArray that make up the vessel
         segmentIds = []
         for idx in self.cellIdToVesselType:
             if self.cellIdToVesselType[idx] in vesselNameDict[vesselName]:
                 segmentIds.append(idx)
         # If no segments are detected, output a nan value
-        if len(segmentIds) == 0:
+        if len(segmentIds) == 0 or self.featureExtractorDict[f"{vesselName} origin"] == math.nan:
             self.featureExtractorExtendedDict[f"{vesselName} rel angle point"] = math.nan
             return math.nan, math.nan
 
@@ -511,23 +531,24 @@ class featureExtractor:
             potentialRelPointsIdx = []
             for idx, cellId in enumerate(closestSegmentsCellIds):
                 if np.linalg.norm(closestSegmentsPoints[idx] - bifurcationPoint) < 0.1 or self.cellIdToVesselType[cellId] == 1:
-                    potentialRelPointsIdx.append(idx)
+                    if edgeTypes[self.cellIdToVesselType[cellId]] not in ["other", "RICA", "RECA", "LICA", "LECA", "BA", "AA+BT", "RVA+LVA"]:
+                        potentialRelPointsIdx.append(idx)
 
             # Get cellId (position in segmentsArray), vesselTypes and diameters for corresponding segments
             potentialRelPointsCellIds = list(closestSegmentsCellIds[potentialRelPointsIdx])
             potentialRelPointsVesselTypes = [self.cellIdToVesselType[cellId] for cellId in potentialRelPointsCellIds]
+
             potentialRelPointsDiameters = [self.featureExtractorDict[f"{edgeTypes[vesselType]} proximal diameter"] for vesselType in potentialRelPointsVesselTypes]
             # Filter out those that do not have a point within a diameter from the origin
             deleteFarSegments = []
             potentialRelPoints = []
+
             for idx, cellId in enumerate(potentialRelPointsCellIds):
                 if np.amin(np.abs(np.linalg.norm(self.segmentsArrayAff[cellId] - origin, axis = 1) - potentialRelPointsDiameters[idx])) > 1.:
                     deleteFarSegments.append(idx)
                 else:
                     potentialRelPoints.append(self.segmentsArrayAff[cellId][np.argmin(np.abs(np.linalg.norm(self.segmentsArrayAff[cellId] - origin, axis = 1) - potentialRelPointsDiameters[idx]))])
-            potentialRelPointsCellIds = np.delete(potentialRelPointsCellIds, deleteFarSegments)
             potentialRelPointsVesselTypes = np.delete(potentialRelPointsVesselTypes, deleteFarSegments)
-            potentialRelPointsDiameters = np.delete(potentialRelPointsDiameters, deleteFarSegments)
             potentialRelPoints = np.array(potentialRelPoints)
 
             # Now, for each vesselType, different rules are set to select the point to compute the relative angle point. This point should be placed on the centerline coming from the catheter path, in most cases on the parent vessel
@@ -542,7 +563,7 @@ class featureExtractor:
             # For RCCA, check if ARSA
             if vesselName == "RCCA":
                 # If ARSA, RCCA should depart from the AA (1 or 14) (no BT)
-                if self.ARSA:
+                if ARSA:
                     if 1 in list(potentialRelPointsVesselTypes) or 14 in list(potentialRelPointsVesselTypes):
                         potentialRelPointsAux = [potentialRelPoints[idx] for idx in range(len(potentialRelPointsVesselTypes)) if potentialRelPointsVesselTypes[idx] in [1, 14]]
                         relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
@@ -553,14 +574,14 @@ class featureExtractor:
                 else:
                     if 2 in list(potentialRelPointsVesselTypes) or 14 in list(potentialRelPointsVesselTypes):
                         potentialRelPointsAux = [potentialRelPoints[idx] for idx in range(len(potentialRelPointsVesselTypes)) if potentialRelPointsVesselTypes[idx] in [2, 14]]
-                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - self.getClosestAAPoint(self, origin), axis = 1))]
+                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - self.getClosestAAPoint(origin), axis = 1))]
                     # If BT not found, return nan
                     else:
                         relPoint = math.nan
             # For RSA, check if ARSA
             if vesselName == "RSA":
                 # If ARSA, RSA should depart from AA (only type 1)
-                if self.ARSA:
+                if ARSA:
                     if 1 in list(potentialRelPointsVesselTypes):
                         relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If AA not found, return nan
@@ -577,17 +598,17 @@ class featureExtractor:
             # For RVA, search for points in RSA and select closest to AA       
             if vesselName == "RVA":
                 if 5 in list(potentialRelPointsVesselTypes):
-                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 5][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 5] - self.getClosestAAPoint(self, origin), axis = 1))]
+                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 5][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 5] - self.getClosestAAPoint(origin), axis = 1))]
                 # If AA not found, return nan
                 else:
                     relPoint = math.nan
             # For LCCA, check if bovine arch     
             if vesselName == "LCCA":
                 # If bovine arch, first check if any points fall into BT transition (types 2, 14) and select closest to AA
-                if self.bovineArch:
+                if bovineArch:
                     if 2 in list(potentialRelPointsVesselTypes) or 14 in list(potentialRelPointsVesselTypes):
                         potentialRelPointsAux = [potentialRelPoints[idx] for idx in range(len(potentialRelPointsVesselTypes)) if potentialRelPointsVesselTypes[idx] in [2, 14]]
-                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - self.getClosestAAPoint(self, origin), axis = 1))]
+                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - self.getClosestAAPoint(origin), axis = 1))]
                     # If no points fall into BT transition (this could be because BT transition is too short, for example), select points over AA centerline. Select point closest to coordinates origin
                     elif 1 in list(potentialRelPointsVesselTypes):
                         relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
@@ -612,7 +633,7 @@ class featureExtractor:
             # For LVA, first check if it departs from AA (rare case, but possible)    
             if vesselName == "LVA":
                 # If this is the case (distance from bifurcation point and closest AA point within 0.1 mm), search for AA points and select closest to origin
-                if np.linalg.norm(self.getClosestAAPoint(self, bifurcationPoint) - bifurcationPoint) < 0.1:
+                if np.linalg.norm(self.getClosestAAPoint(bifurcationPoint) - bifurcationPoint) < 0.1:
                     if 1 in list(potentialRelPointsVesselTypes):
                         relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If AA not found, return nan
@@ -620,29 +641,31 @@ class featureExtractor:
                         relPoint = math.nan
                 # If LVA departs from LSA (standard), check for LSA points and select closest to AA
                 elif 6 in list(potentialRelPointsVesselTypes):
-                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 5][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 5] - self.getClosestAAPoint(self, origin), axis = 1))]
+                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 6][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 6] - self.getClosestAAPoint(origin), axis = 1))]
                 # If LSA not found and LVA does not depart from AA, return nan
                 else:
                     relPoint = math.nan
 
             # Check if relPoint found has three coordinates (otherwise it will be nan)
-            if len(relPoint) == 3:
+            if not isinstance(relPoint, float):
                 self.featureExtractorExtendedDict[f"{vesselName} rel angle point"] = list(relPoint)
                 # Compute relative polar and azimuth 
-                polarRel, azimuthRel = absSphericalAnglesFrom3DCartesian(relPoint - origin)
+                polarRel, azimuthRel = absSphericalAnglesFrom3DCartesian(origin - relPoint)
                 # Get absolute polar and azimuth
                 polarAbs = self.featureExtractorDict[f"{vesselName} abs polar angle"]
-                azimuthAbs = self.featureExtractorDict[f"{vesselName} abs azmiuth angle"]
+                azimuthAbs = self.featureExtractorDict[f"{vesselName} abs azimuth angle"]
                 # Get difference between both (this is the actual relative angle)
                 polarRel -= polarAbs
                 azimuthRel -= azimuthAbs
-                # Polar has to be comprised between 0 and pi
-                if polarRel > math.pi:
+                # Polar has to be comprised between -pi / 2 and pi / 2
+                if polarRel < -math.pi / 2:
+                    polarRel += math.pi
+                elif polarRel > math.pi / 2:
                     polarRel -= math.pi
                 # Azimuth has to be comprised between -pi and pi
-                if azimuthRel < 0.0 - math.pi:
+                if azimuthRel < -math.pi:
                     azimuthRel += 2 * math.pi
-                elif azimuthRel > math.pi:
+                elif azimuthRel >= math.pi:
                     azimuthRel -= 2 * math.pi
 
                 return polarRel, azimuthRel
@@ -664,7 +687,7 @@ class featureExtractor:
         Returns:
             - singleSegment <numpy array>: array with all coordinates from segmentsArray, oriented 
             with respect to AA>
-            - orderedCoordinatesArray <numpy array>: array with dtype=object with alla ordered arrays 
+            - orderedCoordinatesArray <numpy array>: array with dtype=object with all ordered arrays 
             from segmentsArray separated and flipped if necessary.
 
         '''
@@ -742,7 +765,7 @@ class featureExtractor:
         for idx, AAsegmentId in enumerate(AAsegmentIds):
             for idx2 in range(len(self.segmentsArray[AAsegmentId][0])):
                 AACoordinatesArray[idx2 + auxIdx] = np.matmul(self.aff, np.append(self.segmentsArray[AAsegmentId][0][idx2], 1.0))[:3]
-            auxIdx += idx2
+            auxIdx += idx2 + 1
         coordinatesArray = np.ndarray([len(segmentIds)], dtype=object)
         for idx, segmentId in enumerate(segmentIds):
             coordinatesArray[idx] = np.ndarray([len(self.segmentsArray[segmentId][0]), 3])
@@ -772,7 +795,7 @@ class featureExtractor:
             for idx, AAsegmentId in enumerate(AAsegmentIds):
                 for idx2 in range(len(self.segmentsArray[AAsegmentId][0])):
                     AACoordinatesArray[idx2 + auxIdx] = np.matmul(self.aff, np.append(self.segmentsArray[AAsegmentId][0][idx2], 1.0))[:3]
-                auxIdx += idx2
+                auxIdx += idx2 + 1
         
         return AACoordinatesArray[np.argmin(np.linalg.norm(AACoordinatesArray - point, axis = 1))]
 
@@ -780,26 +803,67 @@ def findPointId(point, modelCoordinates):
     return np.argmin(np.linalg.norm(modelCoordinates - point, axis = 1))
 
 def absSphericalAnglesFrom3DCartesian(vec):
-    ''' Returns spherical angles of a vector in cartesian coordinates
-    with rescpect to a reference. If not specified, ref = [1, 0, 0].
+    ''' Returns spherical angles of a vector in cartesian coordinates.
 
     Arguments:
-        vec: numpy array of shape [3] or equivalent.
+        - vec: numpy array of shape [3] or equivalent.
 
     Returns:
-        polar: polar angle in spherical coordinates.
-        azimuth: azimuthal angle in spherical coordinates.
+        - polar: polar angle in spherical coordinates. Contained between -pi / 2 and pi / 2.
+        - azimuth: azimuth angle in spherical coordinates. Contained between -pi and pi.
 
     '''
     x, y, z = vec
-    
-    if x == 0:
-        return math.nan, math.nan
-    else:
+
+    # For the polar angle, we consider the case when z could be 0
+    if z == 0:
+        # If any x or y is different than 0, polar is pi / 2
+        if x != 0 or y != 0:
+            polar = math.pi / 2
+        # Otherwise, we are in the case when vec == [0, 0, 0]
+        else:
+            polar = math.nan
+    # Otherwise compute polar angle normally
+    else: 
         polar = math.atan((x ** 2 + y ** 2) ** 0.5 / z)
+
+    # # Keep it contained between 0 and pi (atan is contained between -pi / 2 and pi / 2)
+    # if polar < 0:
+    #     polar += math.pi
+    
+    # For the azimuth angle, let's check the case when x could be 0
+    if x == 0:
+        # If y is not 0, azimuth is either pi / 2 (y > 0) or 3 * pi / 2 (y < 0)
+        if y != 0:
+            azimuth = (2 - np.sign(y)) * (math.pi / 2)
+        # If y is 0, azimuth is undetermined
+        else:
+            azimuth = math.nan
+   # Otherwise compute azimuth angle normally
+    else:
         azimuth = math.atan(y / x)
+        # # Depending on the quadrant, we have to add additional rotation
+        # if x > 0 and y >= 0: # First quadrant (x / y > 0, atan in [0, pi / 2], angle should be between 0 and pi / 2). We add 0
+        #                      # Also included the possibility that y = 0 and x > 0. Then, azimuth should be 0
+        #     azimuth += 0
+        # elif x < 0 and y >= 0: # Second quadrant (x / y < 0, atan in [-pi / 2, 0], angle should be between pi / 2 and pi). We add pi
+        #                        # Also included the possibility that y = 0 and x < 0. Then, azimuth should be pi
+        #     azimuth += math.pi
+        # elif x < 0 and y < 0: # Third quadrant (x / y > 0, atan in [0, pi / 2], angle should be between pi and 3 * pi / 2). We add pi
+        #     azimuth += math.pi
+        # elif x > 0 and y < 0: # Fourth quadrant (x / y < 0, atan in [-pi / 2, 0], angle should be between 3 * pi / 2 and 2 * pi). We add 2 * pi
+        #     azimuth += 2 * math.pi
 
-        if polar < 0:
-            polar += math.pi
+        # Depending on the quadrant, we have to add additional rotation
+        if x > 0 and y >= 0: # First quadrant (x / y > 0, atan in [0, pi / 2], angle should be between 0 and pi / 2). We add 0
+                             # Also included the possibility that y = 0 and x > 0. Then, azimuth should be 0
+            azimuth += 0
+        elif x < 0 and y >= 0: # Second quadrant (x / y < 0, atan in [-pi / 2, 0], angle should be between pi / 2 and pi). We add pi
+                               # Also included the possibility that y = 0 and x < 0. Then, azimuth should be pi
+            azimuth += math.pi
+        elif x < 0 and y < 0: # Third quadrant (x / y > 0, atan in [0, pi / 2], angle should be between -pi and -pi / 2). We add -pi
+            azimuth -= math.pi
+        elif x > 0 and y < 0: # Fourth quadrant (x / y < 0, atan in [-pi / 2, 0], angle should be between -pi / 2 and 0). We add 0
+            azimuth += 0
 
-        return polar, azimuth
+    return polar, azimuth

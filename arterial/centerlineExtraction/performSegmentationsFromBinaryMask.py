@@ -1,8 +1,5 @@
-import os
-import vtk
 import slicer
 import numpy as np
-import nibabel as nib
 
 def performSegmentationsFromBinaryMask(masterVolumeNode):
     ''' Performs segmentation of a binary mask using Slicer's segmentEditorWidget. 
@@ -59,7 +56,7 @@ def performSegmentationsFromBinaryMask(masterVolumeNode):
     segmentEditorWidget.setActiveEffectByName("Smoothing")
     effect = segmentEditorWidget.activeEffect()
     effect.setParameter("SmoothingMethod", "GAUSSIAN")
-    effect.setParameter("GaussianStandardDeviationMm", 0.5)
+    effect.setParameter("GaussianStandardDeviationMm", 1)
     effect.self().onApply()
 
     # Remove small islands

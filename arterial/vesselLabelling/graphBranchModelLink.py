@@ -69,6 +69,7 @@ def graphBranchModelLink(caseDir):
     branchModelSegmentsWithBifurcations[:branchModel.GetNumberOfCells()] = branchModelSegments
     branchModelSegmentsIdsWithBifurcations = branchModelSegmentsIds
     cellDataArrayWithBifurcations = cellDataArray
+
     # We initialize a list to remove possible segments that do not continue after the bifurcation point. This is rare but it happens
     removeNones = []
     for idxAux, pairId in enumerate(containsBifurcations):
@@ -90,26 +91,25 @@ def graphBranchModelLink(caseDir):
                     cellDataArrayWithBifurcations[0, -2] = 1 
                     cellDataArrayWithBifurcations[0, -1] = 1
                 break
-        # We can't find the bifurcation point (these segments overlap all the way, and one of the two ends at the bifurcation while the other one continues)
-        if branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] is None:
-            if len(branchModelSegments[pairId[0]]) > len(branchModelSegments[pairId[1]]):
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
-                branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[0], pairId[0], pairId[0]]) # Third doesn't matter, will be removed (but has to be there)
-                cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]]])), axis=1)
-            else:
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[1]][:idx]
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[1]][idx:]
-                branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[1], pairId[1], pairId[1]])
-                cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[1]], cellDataArray[:, pairId[1]], cellDataArray[:, pairId[1]]])), axis=1)
-            # In this case, we directly set blanking as the parent. Other cases would not enter this loop (either len(parent) = 0 [this would enter the previous if] 
-            # or segments are equal [these would be removed in the first removeRepeats])
-            cellDataArrayWithBifurcations[0, -3] = 1 
-            cellDataArrayWithBifurcations[0, -2] = 0
-            # Add third slot to removeNones
-            removeNones.append(branchModel.GetNumberOfCells() + 3 * idxAux + 2)
+            if idx == len(branchModelSegments[pairId[0]]) - 1:
+                # We can't find the bifurcation point (these segments overlap all the way, and one of the two ends at the bifurcation while the other one continues)
+                if len(branchModelSegments[pairId[0]]) > len(branchModelSegments[pairId[1]]):
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
+                    branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[0], pairId[0], pairId[0]]) # Third doesn't matter, will be removed (but has to be there)
+                    cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]]])), axis=1)
+                else:
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[1]][:idx]
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[1]][idx:]
+                    branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[1], pairId[1], pairId[1]])
+                    cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[1]], cellDataArray[:, pairId[1]], cellDataArray[:, pairId[1]]])), axis=1)
+                # In this case, we directly set blanking as the parent. Other cases would not enter this loop (either len(parent) = 0 [this would enter the previous if] 
+                # or segments are equal [these would be removed in the first removeRepeats])
+                cellDataArrayWithBifurcations[0, -3] = 1 
+                cellDataArrayWithBifurcations[0, -2] = 0
+                # Add third slot to removeNones
+                removeNones.append(branchModel.GetNumberOfCells() + 3 * idxAux + 2)
 
-                
     # After adding individual segments from those cells containing bifurcations, we have to remove the repeated segments again. We also add the ones from removeNones
     removeRepeats2 = removeNones
     for idx in range(branchModel.GetNumberOfCells() + 3 * len(containsBifurcations))[1:]:    
@@ -144,7 +144,6 @@ def graphBranchModelLink(caseDir):
     linkedPairs = np.array(linkedPairsList)
     groupIds = uniqueCellDataArrayWithBifurcations[1, linkedPairs[:, 0]]
     linkedUniqueIds = np.arange(len(groupIds))
-    lengthLinkedUniqueBranchModelSegmentsWithBifurcationsAff = np.array([len(x) for x in uniqueBranchModelSegmentsWithBifurcationsAff[linkedPairs[:, 0]]])
     uniqueGroupIds, countsGroupIds = np.unique(groupIds, return_counts=True)
 
     vesselTypes = np.empty_like(linkedPairs[:, 1])
@@ -153,13 +152,24 @@ def graphBranchModelLink(caseDir):
 
     deleteIdx = []
 
+    # Current criteria chooses the branchModel cell's groupId depending on 1) Presence of AA and otherwise 2) the radius variation of the associated  
+    # segment in the segmentsArray. We look at the radius at the first and middle points of all segmentsArray segments associated to one groupId,
+    # and we choose the one with the least variation to be the final groupId chosen
     for idx, groupId in enumerate(uniqueGroupIds):
         if countsGroupIds[idx] > 1:
-            lengthsAux = lengthLinkedUniqueBranchModelSegmentsWithBifurcationsAff[groupIds == groupId]
             auxIds = linkedUniqueIds[groupIds == groupId]
-            for idx2 in range(len(auxIds)):
-                if idx2 != np.argmax(lengthsAux):
-                    deleteIdx.append(auxIds[idx2])
+            vesselTypesAux = vesselTypes[groupIds == groupId]
+            if 1 in vesselTypesAux:
+                for idx2 in range(len(auxIds)):
+                    if vesselTypesAux[idx2] != 1:
+                        deleteIdx.append(auxIds[idx2])
+            else:
+                radDiffArray = np.ndarray([len(auxIds)])
+                for idx2, auxId in enumerate(auxIds):
+                    radDiffArray[idx2] = np.abs(segmentsArray[linkedPairs[auxId, 1], 1][0] - segmentsArray[linkedPairs[auxId, 1], 1][int(len(segmentsArray[linkedPairs[auxId, 1], 1]) / 2)])
+                for idx2 in range(len(auxIds)):
+                    if radDiffArray[idx2] != np.amin(radDiffArray):
+                        deleteIdx.append(auxIds[idx2])
 
     finalGroupIds = np.delete(groupIds, deleteIdx)
     finalVesselTypes = np.delete(vesselTypes, deleteIdx)
@@ -167,7 +177,11 @@ def graphBranchModelLink(caseDir):
     finalGroupIds = finalGroupIds[np.argsort(finalVesselTypes)]
     finalVesselTypes = np.sort(finalVesselTypes)
 
-    if not os.path.isdir(os.path.join(caseDir, "labeledSegments")): os.mkdir(os.path.join(caseDir, "labeledSegments"))
+    if not os.path.isdir(os.path.join(caseDir, "labeledSegments")): 
+        os.mkdir(os.path.join(caseDir, "labeledSegments"))
+    else:
+        for filename in os.listdir(os.path.join(caseDir, "labeledSegments")):
+            os.remove(os.path.join(caseDir, "labeledSegments", filename))
 
     filenames = np.array(finalVesselTypes, dtype=str)
 
