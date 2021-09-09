@@ -58,9 +58,9 @@ nodeTypes = {
     18: "LCCA-LSA"
 }
 
-# Should be and environment variable
-gnnModelPath = "/Users/pere/GitHub/arterial/arterial/vesselLabelling/graphNet/model/model.ckpt"
-gnnModelMetaPath = "/Users/pere/GitHub/arterial/arterial/vesselLabelling/graphNet/model/model.ckpt.meta"
+# Path definition
+gnnModelPath = os.path.join(os.environ["arterialDir"], "vesselLabelling/graphNet/model/model.ckpt")
+gnnModelMetaPath = os.path.join(os.environ["arterialDir"], "vesselLabelling/graphNet/model/model.ckpt.meta")
 
 def gnnInference(caseDir):
     # Define path to graph
@@ -75,7 +75,7 @@ def gnnInference(caseDir):
     outputOp = model(inputPH, numProcessingSteps)
     # Restore variables from disk
     sess = tf.Session()
-    sess.run(tf.compat.v1.global_variables_initializer())
+    # sess.run(tf.compat.v1.global_variables_initializer())
     saver = tf.compat.v1.train.import_meta_graph(gnnModelMetaPath)
     saver.restore(sess, gnnModelPath)
 
