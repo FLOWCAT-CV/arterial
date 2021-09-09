@@ -11,6 +11,9 @@ from graph_nets import utils_np, utils_tf
 
 import matplotlib.pyplot as plt
 
+import warnings
+warnings.filterwarnings('ignore')
+
 # Number of different bifurcation types
 BIFTYPENUM = 19
 # Number of different vessel types
@@ -62,6 +65,11 @@ nodeTypes = {
 gnnModelPath = os.path.join(os.environ["arterialDir"], "vesselLabelling/graphNet/model/model.ckpt")
 gnnModelMetaPath = os.path.join(os.environ["arterialDir"], "vesselLabelling/graphNet/model/model.ckpt.meta")
 
+# Set session
+config2 = tf.compat.v1.ConfigProto()
+config2.gpu_options.allow_growth = True
+tf.compat.v1.keras.backend.set_session(tf.compat.v1.Session(config=config2))
+
 def gnnInference(caseDir):
     # Define path to graph
     graphPath = os.path.join(caseDir, "graph.pickle")
@@ -73,10 +81,14 @@ def gnnInference(caseDir):
     feedDict, inputPH, inputGraph = createFeedDictSingle(graphPath)
     # Define output operation
     outputOp = model(inputPH, numProcessingSteps)
+    # # Restore variables from disk
+    # sess = tf.compat.v1.Session()
+    # # sess.run(tf.compat.v1.global_variables_initializer())
+    # saver = tf.compat.v1.train.import_meta_graph(gnnModelMetaPath)
+    # saver.restore(sess, gnnModelPath)
     # Restore variables from disk
     sess = tf.Session()
-    # sess.run(tf.compat.v1.global_variables_initializer())
-    saver = tf.compat.v1.train.import_meta_graph(gnnModelMetaPath)
+    saver = tf.train.Saver()    
     saver.restore(sess, gnnModelPath)
 
     # Perform inference
