@@ -1,0 +1,9 @@
+nnunet
+nibabel
+networkx
+ipykernel
+graph_nets
+pytorch==1.6
+"tensorflow_gpu>=1.15,<2"
+"dm-sonnet<2"
+vtk==8.1
