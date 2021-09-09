@@ -81,11 +81,7 @@ def gnnInference(caseDir):
     feedDict, inputPH, inputGraph = createFeedDictSingle(graphPath)
     # Define output operation
     outputOp = model(inputPH, numProcessingSteps)
-    # # Restore variables from disk
-    # sess = tf.compat.v1.Session()
-    # # sess.run(tf.compat.v1.global_variables_initializer())
-    # saver = tf.compat.v1.train.import_meta_graph(gnnModelMetaPath)
-    # saver.restore(sess, gnnModelPath)
+
     # Restore variables from disk
     sess = tf.Session()
     saver = tf.train.Saver()    
