@@ -531,20 +531,23 @@ class featureExtractor:
             potentialRelPointsIdx = []
             for idx, cellId in enumerate(closestSegmentsCellIds):
                 if np.linalg.norm(closestSegmentsPoints[idx] - bifurcationPoint) < 0.1 or self.cellIdToVesselType[cellId] == 1:
-                    if edgeTypes[self.cellIdToVesselType[cellId]] not in ["other", "RICA", "RECA", "LICA", "LECA", "BA", "AA+BT", "RVA+LVA"]:
+                    if edgeTypes[self.cellIdToVesselType[cellId]] not in ["other", "RICA", "RECA", "LICA", "LECA", "BA", "RVA+LVA"]:
                         potentialRelPointsIdx.append(idx)
 
             # Get cellId (position in segmentsArray), vesselTypes and diameters for corresponding segments
             potentialRelPointsCellIds = list(closestSegmentsCellIds[potentialRelPointsIdx])
             potentialRelPointsVesselTypes = [self.cellIdToVesselType[cellId] for cellId in potentialRelPointsCellIds]
-
+            # For AA+BT vessel types (14), we tell the code to look for the proximal BT diameter
+            for idx, vesselType in enumerate(potentialRelPointsVesselTypes):
+                if vesselType == 14:
+                    potentialRelPointsVesselTypes[idx] = 2
             potentialRelPointsDiameters = [self.featureExtractorDict[f"{edgeTypes[vesselType]} proximal diameter"] for vesselType in potentialRelPointsVesselTypes]
             # Filter out those that do not have a point within a diameter from the origin
             deleteFarSegments = []
             potentialRelPoints = []
 
             for idx, cellId in enumerate(potentialRelPointsCellIds):
-                if np.amin(np.abs(np.linalg.norm(self.segmentsArrayAff[cellId] - origin, axis = 1) - potentialRelPointsDiameters[idx])) > 1.:
+                if np.amin(np.abs(np.linalg.norm(self.segmentsArrayAff[cellId] - origin, axis = 1) - potentialRelPointsDiameters[idx])) > 10:
                     deleteFarSegments.append(idx)
                 else:
                     potentialRelPoints.append(self.segmentsArrayAff[cellId][np.argmin(np.abs(np.linalg.norm(self.segmentsArrayAff[cellId] - origin, axis = 1) - potentialRelPointsDiameters[idx]))])
@@ -552,11 +555,11 @@ class featureExtractor:
             potentialRelPoints = np.array(potentialRelPoints)
 
             # Now, for each vesselType, different rules are set to select the point to compute the relative angle point. This point should be placed on the centerline coming from the catheter path, in most cases on the parent vessel
-            # For the BT, the point is chosen on the AA, on the centerline point closest to the coordinates origin of the image (the [0, 0, 0] in voxel (RAS) coordinates, the lowmost, posterior-most and leftmost point)
+            # For the BT, the point is chosen on the AA, on the centerline point closest to the coordinates origin of the image (the [512 (tested on Slicer), 0, 0] in voxel (RAS) coordinates, the lowmost, posterior-most and leftmost point)
             if vesselName == "BT":
                 # Check only type 1 vessels, ignore type 14
                 if 1 in list(potentialRelPointsVesselTypes):
-                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                 # If AA not found, return nan
                 else:
                     relPoint = math.nan
@@ -566,7 +569,7 @@ class featureExtractor:
                 if ARSA:
                     if 1 in list(potentialRelPointsVesselTypes) or 14 in list(potentialRelPointsVesselTypes):
                         potentialRelPointsAux = [potentialRelPoints[idx] for idx in range(len(potentialRelPointsVesselTypes)) if potentialRelPointsVesselTypes[idx] in [1, 14]]
-                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If AA not found, return nan
                     else:
                         relPoint = math.nan
@@ -583,7 +586,7 @@ class featureExtractor:
                 # If ARSA, RSA should depart from AA (only type 1)
                 if ARSA:
                     if 1 in list(potentialRelPointsVesselTypes):
-                        relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                        relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If AA not found, return nan
                     else:
                         relPoint = math.nan
@@ -591,7 +594,7 @@ class featureExtractor:
                 else:
                     if 2 in list(potentialRelPointsVesselTypes) or 14 in list(potentialRelPointsVesselTypes):
                         potentialRelPointsAux = [potentialRelPoints[idx] for idx in range(len(potentialRelPointsVesselTypes)) if potentialRelPointsVesselTypes[idx] in [2, 14]]
-                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If BT not found, return nan
                     else:
                         relPoint = math.nan
@@ -611,7 +614,7 @@ class featureExtractor:
                         relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - self.getClosestAAPoint(origin), axis = 1))]
                     # If no points fall into BT transition (this could be because BT transition is too short, for example), select points over AA centerline. Select point closest to coordinates origin
                     elif 1 in list(potentialRelPointsVesselTypes):
-                        relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                        relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If BT and AA are not found, return nan
                     else:
                         relPoint = math.nan
@@ -619,14 +622,14 @@ class featureExtractor:
                 else:
                     if 1 in list(potentialRelPointsVesselTypes) or 14 in list(potentialRelPointsVesselTypes):
                         potentialRelPointsAux = [potentialRelPoints[idx] for idx in range(len(potentialRelPointsVesselTypes)) if potentialRelPointsVesselTypes[idx] in [1, 14]]
-                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                        relPoint = potentialRelPointsAux[np.argmin(np.linalg.norm(potentialRelPointsAux - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If AA not found, return nan
                     else:
                         relPoint = math.nan
             # For LSA, search for AA points (1) and return closest to origin
             if vesselName == "LSA":
                 if 1 in list(potentialRelPointsVesselTypes):
-                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                    relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                 # If AA not found, return nan
                 else:
                     relPoint = math.nan
@@ -635,7 +638,7 @@ class featureExtractor:
                 # If this is the case (distance from bifurcation point and closest AA point within 0.1 mm), search for AA points and select closest to origin
                 if np.linalg.norm(self.getClosestAAPoint(bifurcationPoint) - bifurcationPoint) < 0.1:
                     if 1 in list(potentialRelPointsVesselTypes):
-                        relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [0.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
+                        relPoint = potentialRelPoints[potentialRelPointsVesselTypes == 1][np.argmin(np.linalg.norm(potentialRelPoints[potentialRelPointsVesselTypes == 1] - np.matmul(self.aff, [512.0, 0.0, 0.0, 1.0])[:3], axis = 1))]
                     # If AA not found, return nan
                     else:
                         relPoint = math.nan

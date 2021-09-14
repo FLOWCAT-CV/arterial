@@ -74,25 +74,8 @@ def graphBranchModelLink(caseDir):
     removeNones = []
     for idxAux, pairId in enumerate(containsBifurcations):
         for idx in range(len(branchModelSegments[pairId[0]])):
-            # We can find the bifurcation point (first point where the pair differs)
-            if not (branchModelSegments[pairId[0]][idx] == branchModelSegments[pairId[1]][idx]).all():
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
-                branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 2] = branchModelSegments[pairId[1]][idx:]
-                branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[0], pairId[0], pairId[1]])
-                cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]], cellDataArray[:, pairId[1]]])), axis=1)
-                # Blanking for child cells set to 1 (unless no overlapping). If no overlapping (len(parent) = 0), only child vessels have blanking = 0
-                if len(branchModelSegments[pairId[0]][:idx]) == 0:
-                    cellDataArrayWithBifurcations[0, -3] = 1 
-                    cellDataArrayWithBifurcations[0, -2] = 0
-                    cellDataArrayWithBifurcations[0, -1] = 0 
-                else:
-                    cellDataArrayWithBifurcations[0, -3] = 0 
-                    cellDataArrayWithBifurcations[0, -2] = 1 
-                    cellDataArrayWithBifurcations[0, -1] = 1
-                break
+            # We can't find the bifurcation point (these segments overlap all the way, and one of the two ends at the bifurcation while the other one continues)
             if idx == len(branchModelSegments[pairId[0]]) - 1:
-                # We can't find the bifurcation point (these segments overlap all the way, and one of the two ends at the bifurcation while the other one continues)
                 if len(branchModelSegments[pairId[0]]) > len(branchModelSegments[pairId[1]]):
                     branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
                     branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
@@ -109,6 +92,24 @@ def graphBranchModelLink(caseDir):
                 cellDataArrayWithBifurcations[0, -2] = 0
                 # Add third slot to removeNones
                 removeNones.append(branchModel.GetNumberOfCells() + 3 * idxAux + 2)
+            # We can find the bifurcation point (first point where the pair differs)
+            else:
+                if not (branchModelSegments[pairId[0]][idx] == branchModelSegments[pairId[1]][idx]).all():
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
+                    branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 2] = branchModelSegments[pairId[1]][idx:]
+                    branchModelSegmentsIdsWithBifurcations = np.append(branchModelSegmentsIdsWithBifurcations, [pairId[0], pairId[0], pairId[1]])
+                    cellDataArrayWithBifurcations = np.append(cellDataArrayWithBifurcations, np.transpose(np.array([cellDataArray[:, pairId[0]], cellDataArray[:, pairId[0]], cellDataArray[:, pairId[1]]])), axis=1)
+                    # Blanking for child cells set to 1 (unless no overlapping). If no overlapping (len(parent) = 0), only child vessels have blanking = 0
+                    if len(branchModelSegments[pairId[0]][:idx]) == 0:
+                        cellDataArrayWithBifurcations[0, -3] = 1 
+                        cellDataArrayWithBifurcations[0, -2] = 0
+                        cellDataArrayWithBifurcations[0, -1] = 0 
+                    else:
+                        cellDataArrayWithBifurcations[0, -3] = 0 
+                        cellDataArrayWithBifurcations[0, -2] = 1 
+                        cellDataArrayWithBifurcations[0, -1] = 1
+                    break
 
     # After adding individual segments from those cells containing bifurcations, we have to remove the repeated segments again. We also add the ones from removeNones
     removeRepeats2 = removeNones
