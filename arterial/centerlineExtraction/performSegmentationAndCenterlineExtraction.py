@@ -7,7 +7,6 @@
 
 import os
 import slicer
-import numpy as np
 import argparse
 
 from performSegmentationsFromBinaryMask import performSegmentationsFromBinaryMask
