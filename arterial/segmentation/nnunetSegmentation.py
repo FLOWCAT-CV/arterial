@@ -17,22 +17,6 @@ import shutil
 import argparse
 
 from time import time
-
-####################################### Arguments ############################################
-
-parser = argparse.ArgumentParser()
-
-parser.add_argument("-mode", "--mode", type=str, required=True, 
-    help="choose between `inference` or `ensemble`. Required.")
-
-parser.add_argument("-casePath", "--casePath", type=str, required=True,
-    help="absolute path to the input image (has to be a nifti). Required")
-
-
-args = parser.parse_args()
-
-mode     = args.mode
-casePath = args.casePath
     
 ##############################################################################################
 #--------------------------------------------------------------------------------------------#    
@@ -45,7 +29,7 @@ print("                                                                         
 #--------------------------------------------------------------------------------------------#    
 ##############################################################################################
 
-def inference(casePath):
+def nnUNetInference(casePath):
     ''' Performs inference of casePath (nifti, CTA) with the best performing model
     to output a binary mask in a nifti format. The resulting nifti will be placed in
     outputPath.
@@ -85,7 +69,7 @@ def inference(casePath):
     print("                                  ")
 
 
-def ensemble(casePath):
+def nnUNetEnsemble(casePath):
     ''' Performs inference of casePath (nifti, CTA) by ensembling all folds of 
     the best performing model to output a binary mask in a nifti format. The resulting 
     nifti will be placed in outputDir.
@@ -150,12 +134,3 @@ def ensemble(casePath):
 
     print(f"Ensembling took {time() - start} s")
     print("                                   ")
-
-##############################################################################################
-
-if mode == "inference":
-    inference(casePath)
-elif mode == "ensemble":
-    ensemble(casePath)
-else:
-    ValueError("Please introduce one of the possible modes. See main.py -h for more information.")
