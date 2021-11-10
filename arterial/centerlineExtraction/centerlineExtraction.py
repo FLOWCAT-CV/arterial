@@ -44,7 +44,7 @@ def centerlineExtraction(caseDir, segmentationNode):
         # writer.Write()
         # Decimating model
         decimator = vtk.vtkDecimatePro()
-        decimator.SetTargetReduction(0.7)
+        decimator.SetTargetReduction(0.6)
         decimator.AddInputData(surfaceModel)
         decimator.Update()
         decimatedSurfaceModel = decimator.GetOutput()
