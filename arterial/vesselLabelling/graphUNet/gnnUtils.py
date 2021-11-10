@@ -1,6 +1,6 @@
 import os
+import numpy as np
 import networkx as nx
-
 
 import matplotlib.pyplot as plt
 
@@ -203,9 +203,9 @@ class ArterialDatasetInference(InMemoryDataset):
                 cellIDs.append(graphNx.nodes[node]["CellID"])
             for n0, n1 in graphNx.edges:
                 edge_index.append([n0, n1])
-            graphPyg.pos = torch.tensor(pos, dtype=torch.float32)
-            graphPyg.x = torch.tensor(x, dtype=torch.float32)
-            graphPyg.edge_index = torch.transpose(torch.tensor(edge_index, dtype=torch.int64), 1, 0)
+            graphPyg.pos = torch.tensor(np.array(pos), dtype=torch.float32)
+            graphPyg.x = torch.tensor(np.array(x), dtype=torch.float32)
+            graphPyg.edge_index = torch.transpose(torch.tensor(np.array(edge_index), dtype=torch.int64), 1, 0)
             graphPyg.cellIDs = cellIDs
             graphPyg.num_nodes = len(graphNx.nodes)
             graphPyg.num_edges = len(graphNx.edges)
