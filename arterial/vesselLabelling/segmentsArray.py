@@ -26,6 +26,7 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
         - segmentsArray <numpy array>: numpy array containing the position of the centerline points, 
         as well as the associated radius to each point, and split into individual segments between 
         bifurcations.
+        
     '''
     
     centerlineList = [centerlineFile for centerlineFile in os.listdir(os.path.join(caseDir, "centerlines")) if centerlineFile.endswith(".vtk")]

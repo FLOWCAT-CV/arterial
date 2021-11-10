@@ -21,6 +21,7 @@ def generateCenterlineGraph(segmentsArray, caseDir, make_plot=False):
 
     Returns:
         - G <networkx graph>: networkx graph derived from segmentsArray.
+
     '''
     segmentsCoordinateArray = segmentsArray[:, 0]
     segmentsRadiusArray = segmentsArray[:, 1]
@@ -45,7 +46,7 @@ def generateCenterlineGraph(segmentsArray, caseDir, make_plot=False):
             G.add_node(total_nodes + 1, pos=curve[-1])
             G.nodes[total_nodes + 1]["deg"] = G.degree[total_nodes + 1]
             G.nodes[total_nodes + 1]["rad"] = segmentsRadiusArray[cellID][-1]
-            # Build features array
+            # Build node features array
             G.nodes[total_nodes + 1]["features"] = np.array([curve[-1][0], curve[-1][1], curve[-1][2], segmentsRadiusArray[cellID][-1], G.degree[total_nodes + 1]])
 
             # Add edges
@@ -53,9 +54,45 @@ def generateCenterlineGraph(segmentsArray, caseDir, make_plot=False):
             distance = np.linalg.norm(curve[-1] - curve[0])
             direction = (curve[-1] - curve[0]) / distance
             G[total_nodes][total_nodes + 1]["mean rad"] = np.mean(segmentsRadiusArray[cellID])
+            G[total_nodes][total_nodes + 1]["proximal radius"] = segmentsRadiusArray[cellID][0]
+            G[total_nodes][total_nodes + 1]["distal radius"] = segmentsRadiusArray[cellID][-1]
+            G[total_nodes][total_nodes + 1]["proximal/distal radius ratio"] = segmentsRadiusArray[cellID][0] / segmentsRadiusArray[cellID][-1]
+            G[total_nodes][total_nodes + 1]["minimum radius"] = np.amin(segmentsRadiusArray[cellID])
+            G[total_nodes][total_nodes + 1]["maximum radius"] = np.amax(segmentsRadiusArray[cellID])
             G[total_nodes][total_nodes + 1]["distance"] = distance
+            G[total_nodes][total_nodes + 1]["relative length"] = relativeLength(segmentsCoordinateArray[cellID])
             G[total_nodes][total_nodes + 1]["direction"] = direction
-            G[total_nodes][total_nodes + 1]["features"] = np.array([np.mean(segmentsRadiusArray[cellID]), distance, direction[0], direction[1], direction[2]])
+            G[total_nodes][total_nodes + 1]["departure angle"] = (segmentsCoordinateArray[cellID][1] - segmentsCoordinateArray[cellID][0]) / np.linalg.norm(segmentsCoordinateArray[cellID][1] - segmentsCoordinateArray[cellID][0])
+            G[total_nodes][total_nodes + 1]["number of points"] = len(segmentsCoordinateArray[cellID])
+            G[total_nodes][total_nodes + 1]["proximal bifurcation position"] = segmentsCoordinateArray[cellID][0]
+            G[total_nodes][total_nodes + 1]["distal bifurcation position"] = segmentsCoordinateArray[cellID][-1]
+            G[total_nodes][total_nodes + 1]["center of mass"] = np.sum(segmentsCoordinateArray[cellID], axis = 0) / len(segmentsCoordinateArray[cellID])
+            # Build edge feature array
+            G[total_nodes][total_nodes + 1]["features"] = np.array([G[total_nodes][total_nodes + 1]["mean rad"], 
+                                                                    G[total_nodes][total_nodes + 1]["proximal radius"],
+                                                                    G[total_nodes][total_nodes + 1]["distal radius"],
+                                                                    G[total_nodes][total_nodes + 1]["proximal/distal radius ratio"],
+                                                                    G[total_nodes][total_nodes + 1]["minimum radius"],
+                                                                    G[total_nodes][total_nodes + 1]["maximum radius"],
+                                                                    G[total_nodes][total_nodes + 1]["distance"],
+                                                                    G[total_nodes][total_nodes + 1]["relative length"],
+                                                                    G[total_nodes][total_nodes + 1]["direction"][0],
+                                                                    G[total_nodes][total_nodes + 1]["direction"][1],
+                                                                    G[total_nodes][total_nodes + 1]["direction"][2],
+                                                                    G[total_nodes][total_nodes + 1]["departure angle"][0],
+                                                                    G[total_nodes][total_nodes + 1]["departure angle"][1],
+                                                                    G[total_nodes][total_nodes + 1]["departure angle"][2],
+                                                                    G[total_nodes][total_nodes + 1]["number of points"],
+                                                                    G[total_nodes][total_nodes + 1]["proximal bifurcation position"][0],
+                                                                    G[total_nodes][total_nodes + 1]["proximal bifurcation position"][1],
+                                                                    G[total_nodes][total_nodes + 1]["proximal bifurcation position"][2],
+                                                                    G[total_nodes][total_nodes + 1]["distal bifurcation position"][0],
+                                                                    G[total_nodes][total_nodes + 1]["distal bifurcation position"][1],
+                                                                    G[total_nodes][total_nodes + 1]["distal bifurcation position"][2],
+                                                                    G[total_nodes][total_nodes + 1]["center of mass"][0],
+                                                                    G[total_nodes][total_nodes + 1]["center of mass"][1],
+                                                                    G[total_nodes][total_nodes + 1]["center of mass"][2]
+            ])
             total_nodes += 2
 
     # Merge nodes that share the same RAS coordinate (bifurcation spots)
@@ -89,6 +126,7 @@ def generateCenterlineGraph(segmentsArray, caseDir, make_plot=False):
         new_node += 1
     G = nx.relabel.relabel_nodes(G, mapping)
 
+    # Directional embeddings for node features have to be computed after all edge directions for the whole graph are computed
     for node in G.nodes:
         projectedMajorDirections = directionalEmbeddings(G, node)
         G.nodes(data=True)[node]["dir"] = projectedMajorDirections
@@ -146,7 +184,7 @@ def directionalEmbeddings(G, node):
                      [math.sin(math.pi * a / 4) * math.cos(math.pi * b / 4), 
                       math.cos(math.pi * a / 4) * math.cos(math.pi * b / 4), 
                       math.sin(math.pi * b / 4)]], axis=0)
-    majorDirections[np.abs(majorDirections) <0.01] = 0.
+    majorDirections[np.abs(majorDirections) < 0.01] = 0.
     majorDirections = np.unique(np.around(majorDirections, 10), axis=0)
     
     for edge in G.edges(node):
@@ -154,3 +192,26 @@ def directionalEmbeddings(G, node):
         projectedMajorDirections[np.argmax(np.abs(np.matmul(majorDirections, direction)))] += 1
         
     return projectedMajorDirections
+
+def relativeLength(segmentCoordinates):
+    ''' Computes relative length for a given segment.
+
+    Arguments:
+        - segmentCoordinates: coordinats for a given centerline segment.
+
+    Returns:
+        - RL: relative length.
+        
+    '''
+
+    def distanceAlongCenterline(centerline):
+            distance = 0
+            for idx in range(1, len(centerline)):
+                distance += np.linalg.norm(centerline[idx] - centerline[idx - 1])
+                
+            return distance
+        
+    euclideanDistance = np.linalg.norm(segmentCoordinates[-1] - segmentCoordinates[0])
+    centerlineDistance = distanceAlongCenterline(segmentCoordinates)
+
+    return euclideanDistance / centerlineDistance

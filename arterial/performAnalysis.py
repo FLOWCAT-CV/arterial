@@ -7,7 +7,7 @@ from vesselLabelling.segmentsArray import centerlineSegmentsArray
 from vesselLabelling.centerlineGraph import generateCenterlineGraph
 from vesselLabelling.segmentSplitting import segmentSplitting
 from vesselLabelling.graphBranchModelLink import graphBranchModelLink
-from vesselLabelling.graphNet.gnnInference import gnnInference
+from vesselLabelling.graphUNet.predictGraph import predictGraph
 
 from featureExtraction.automaticFeatureExtraction import featureExtractor
 
@@ -134,7 +134,7 @@ print("                                    ")
 print("Predicting graph edges...")
 
 # Perform inference with trained GNN
-gnnInference(caseDir)
+predictGraph(caseDir)
 
 start6 = time.time()
 

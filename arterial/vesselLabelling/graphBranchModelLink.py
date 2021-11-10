@@ -1,14 +1,26 @@
 import os
 import shutil
 import json
-import vtk
+
 import numpy as np
 import networkx as nx
 import nibabel as nib
 
+import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 
 def graphBranchModelLink(caseDir):
+    ''' Links all predicted vessel types and CellIDs fro segmentsArray to 
+    VMTK identifiers for groupIds in branchModel and clippedModel. Generates dictionary
+    with groupIds to vessel types and groupIds to vessel filenames for surface segments in 
+    os.path.join(caseDir, "surfaceSegments").
+
+    Arguments:
+        - caseDir <str or path>: path to the caseDir of the case.
+        
+    Returns:
+    
+    '''
 
     # Load predicted graph, segmentsArray and branchModel
     labeledGraph = nx.read_gpickle(os.path.join(caseDir, "graph_pred.pickle"))

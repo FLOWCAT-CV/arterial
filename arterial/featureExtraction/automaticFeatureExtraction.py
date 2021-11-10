@@ -112,7 +112,6 @@ class featureExtractor:
         self.clippedModel = vtkPolyDataReader.GetOutput()
         # Pool clippedModel point coordinates
         self.clippedModelCoordinates = np.ndarray([self.clippedModel.GetNumberOfPoints(), 3])
-        accumulatedNumberOfPoints = 0
         for idx in range(self.clippedModel.GetNumberOfPoints()):         
             self.clippedModelCoordinates[idx] = self.clippedModel.GetPoints().GetPoint(idx)
         # Get GroupId array for clippedModel
@@ -214,8 +213,9 @@ class featureExtractor:
             
             # If LCCA in contact with BT (2 or 14), we have to determine wether a BT transition segment is present or not
             if 2 in segmentsInContactVesselTypes or 14 in segmentsInContactVesselTypes:
-                # A first version will only check the existance of multiple BT/AA+BT with different groupIds
-                numberOfBTSegments = len([vesselType for vesselType in self.groupIdsToVesselTypesDict.values() if vesselType in [2, 14]])
+                # A first version will only check the existance of multiple BT/AA+BT with different groupIds (we only count AA+BT once)
+                vesselTypes = [vesselType for vesselType in self.groupIdsToVesselTypesDict.values() if vesselType in [2, 14]]
+                numberOfBTSegments = len(vesselTypes) - np.amin([len([vesselType for vesselType in vesselTypes if vesselType == 14]), 1])
                 # If there are muiltiple groupIds with the BT vesselType, consider that it is a bovine arch
                 # This is because, if the LCCA parts from the BT, a BT transition segment will be present, and it should be identified as a separate BT segment
                 # Otherwise, there should only be one BT segment in all cases. In the future, we should include the possibility that the LCCA could part from the BT
@@ -340,18 +340,24 @@ class featureExtractor:
             if len(AAsegmentIds) == 0:
                 print(f"   {vesselName} not present")
                 return math.nan
-            # Otherwise, find point with highest S coordinate (vertical/axial axis) and record associates dimateter   
+            # Otherwise, find clipped model point with highest S coordinate (vertical/axial axis) and record associated dimateter of closest AA centerline point
             else:
+                # Pool all clippedModel AA points into one array (regardless of order) (corresponding groupId has to correspond to type 1)
+                AAClippedModelCoordinatesArray = np.array([self.clippedModelCoordinates[idx] for idx in range(len(self.groupIdArrayClippedModel)) if str(self.groupIdArrayClippedModel[idx]) in list(self.groupIdsToVesselTypesDict.keys()) and self.groupIdsToVesselTypesDict[str(self.groupIdArrayClippedModel[idx])] == 1])
+                # Get clipped model point with highest S coordinate
+                highestAAClippedModelPoint = AAClippedModelCoordinatesArray[np.argmax(AAClippedModelCoordinatesArray[:, 2])]
+                # Now, get closest AA centerline point. First define AA centerline coordinates array
                 # Pool all AA coordinates into one array (regardless of order)
-                AACoordinatesArray = np.zeros([numberOfPoints, 3], dtype=float)
+                AACenterlineCoordinatesArray = np.zeros([numberOfPoints, 3], dtype=float)
                 auxIdx = 0
                 for idx, AAsegmentId in enumerate(AAsegmentIds):
                     for idx2 in range(len(self.segmentsArrayAff[AAsegmentId])):
-                        AACoordinatesArray[idx2 + auxIdx] = self.segmentsArrayAff[AAsegmentId][idx2]
+                        AACenterlineCoordinatesArray[idx2 + auxIdx] = self.segmentsArrayAff[AAsegmentId][idx2]
                     auxIdx += idx2 + 1
-                # Find point with highest S coordinate
-                highestAAPointId = findPointId(AACoordinatesArray[np.argmax(AACoordinatesArray[:, 2])], self.branchModelCoordinates)
-                # Return radius of that point
+                # Find closest point to highestAAClippedModelPointId
+                closestAACenterlinePoint = AACenterlineCoordinatesArray[np.argmin(np.linalg.norm(AACenterlineCoordinatesArray - highestAAClippedModelPoint, axis = 1))]
+                highestAAPointId = findPointId(closestAACenterlinePoint, self.branchModelCoordinates)
+                # Return diameter of that point
                 return 2 * self.radius[highestAAPointId]
         else:
             # Select all those segments Ids from segmentsArray that make up the vessel
@@ -359,6 +365,7 @@ class featureExtractor:
             for idx in self.cellIdToVesselType:
                 if self.cellIdToVesselType[idx] in vesselNameDict[vesselName]:
                     segmentIds.append(idx)
+
             # If no segments are detected, output a nan value
             if len(segmentIds) == 0:
                 self.featureExtractorDict[f"{vesselName} origin"] = math.nan
@@ -372,10 +379,14 @@ class featureExtractor:
                     # 1) Point has blanking 0
                     # 2) vesselName exists for this case
                     # 3) groupId in branch model is the same as found by graphBranchModelLink
-                for idx in range(len(singleSegment)):
-                    proximalEndId = findPointId(singleSegment[idx], self.branchModelCoordinates)
-                    if self.blanking[proximalEndId] == 0 and str(self.groupIdBranchModel[proximalEndId]) in list(self.groupIdsToVesselTypesDict.keys()) and self.groupIdsToVesselTypesDict[str(self.groupIdBranchModel[proximalEndId])] in vesselNameDict[vesselName]:
-                        break
+                # For computation of BT proximal diameter, if type 14 is present, choose middle point (will be more accurate than proximal end)
+                if vesselName == "BT" and 14 in self.cellIdToVesselType.values():
+                    proximalEndId = findPointId(singleSegment[int(len(singleSegment) / 2)] , self.branchModelCoordinates)
+                else:
+                    for idx in range(len(singleSegment)):
+                        proximalEndId = findPointId(singleSegment[idx], self.branchModelCoordinates)
+                        if self.blanking[proximalEndId] == 0 and str(self.groupIdBranchModel[proximalEndId]) in list(self.groupIdsToVesselTypesDict.keys()) and self.groupIdsToVesselTypesDict[str(self.groupIdBranchModel[proximalEndId])] in vesselNameDict[vesselName]:
+                            break
                 # Record coordinates of origin
                 self.featureExtractorDict[f"{vesselName} origin"] = list(self.branchModelCoordinates[proximalEndId])
                 self.featureExtractorExtendedDict[f"{vesselName} origin"] = list(self.branchModelCoordinates[proximalEndId])
@@ -828,7 +839,7 @@ def absSphericalAnglesFrom3DCartesian(vec):
             polar = math.nan
     # Otherwise compute polar angle normally
     else: 
-        polar = math.atan((x ** 2 + y ** 2) ** 0.5 / z)
+        polar = math.pi / 2 - math.atan((x ** 2 + y ** 2) ** 0.5 / z) 
 
     # # Keep it contained between 0 and pi (atan is contained between -pi / 2 and pi / 2)
     # if polar < 0:
