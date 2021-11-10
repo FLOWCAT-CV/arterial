@@ -22,10 +22,15 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-casePath', '--casePath', type=str, required=True, 
     help='path to dir containing the nifti (assumes that the binary map has the basename of the dir). Required.')
+parser.add_argument('-no_display', '--no_display', type=bool, required=False, default=False, 
+    help='If using a remote Linux, this should be used following correct Slicer installation, and should be coulpled '
+    'with the use of `xvfb-run --auto-servernum --server-num=1` upon use before calling this script (prior to the python command). '
+    'Not required, default=False.')
 
 args = parser.parse_args()
 
 casePath = args.casePath
+no_display = args.no_display
 
 print("                                                          ")
 print(f"Processing case {os.path.basename(casePath)} ({casePath})")
@@ -56,7 +61,10 @@ print("                                    ")
 print("Starting segmentation and centerline extraction...")
 
 # Perform segmentation and centerline extraction. This generates decimatedSegmentations and centerlines in caseDir
-os.system(f"{slicerPath} --disable-terminal-outputs --no-main-window --no-splash  --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+if no_display: # 
+    os.system(f"{slicerPath} --disable-terminal-outputs --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+else:
+    os.system(f"{slicerPath} --disable-terminal-outputs --no-main-window --no-splash  --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
 
 start2 = time.time()
 # Centerline extraction timestamp
