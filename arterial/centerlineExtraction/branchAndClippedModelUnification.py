@@ -181,10 +181,10 @@ def branchAndClippedModelUnification(caseDir):
     finalBranchModel.SetLines(cellArrayBranchModel)
 
     for idx in range(branchModel.GetCellData().GetNumberOfArrays()):
-        finalBranchModel.GetCellData().AddArray(vtk.util.numpy_support.numpy_to_vtk(finalCellDataArrayBranchModel[idx], array_type=vtk.VTK_INT))
+        finalBranchModel.GetCellData().AddArray(numpy_to_vtk(finalCellDataArrayBranchModel[idx], array_type=vtk.VTK_INT))
         finalBranchModel.GetCellData().GetArray(idx).SetName(branchModel.GetCellData().GetArrayName(idx))
 
-    finalBranchModel.GetPointData().AddArray(vtk.util.numpy_support.numpy_to_vtk(finalRadiusArray))
+    finalBranchModel.GetPointData().AddArray(numpy_to_vtk(finalRadiusArray))
     finalBranchModel.GetPointData().GetArray(0).SetName("Radius")
 
     writer = vtk.vtkPolyDataWriter()
