@@ -2,6 +2,8 @@ import os
 import vtk
 import numpy as np
 
+from vtk.util.numpy_support import vtk_to_numpy
+
 def branchAndClippedModelUnification(caseDir):
     ''' Reads all branchModels (branchModels/branchModels{idx}.vtk) derived from the 
     centerlines/centerline{idx}.vtk files and creates a unified branchModel.vtk.
@@ -38,7 +40,6 @@ def branchAndClippedModelUnification(caseDir):
     pointsFromPreviousClippedModels = 0
 
     for centerlineModelId, _ in enumerate(centerlineList):
-        print(f"Processing branch model {centerlineModelId}...")
         branchModelPath = os.path.join(caseDir, "branchModels", f"branchModel{centerlineModelId}.vtk")
         
         # Load branch model
@@ -62,10 +63,10 @@ def branchAndClippedModelUnification(caseDir):
         else:
             # Get cell data
             cellDataArray = np.ndarray([4, branchModel.GetNumberOfCells()], dtype=np.int64)
-            cellDataArray[0] = vtk.util.numpy_support.vtk_to_numpy(branchModel.GetCellData().GetArray("CenterlineIds")) # centerlinesId -> connections between origin and endpoints
-            cellDataArray[1] = vtk.util.numpy_support.vtk_to_numpy(branchModel.GetCellData().GetArray("TractIds")) # tractId -> following a centerline Id, tract number (closest to origin is 0, next is 1 and so on)
-            cellDataArray[2] = vtk.util.numpy_support.vtk_to_numpy(branchModel.GetCellData().GetArray("Blanking")) # blanking -> transition to a new branch
-            cellDataArray[3] = vtk.util.numpy_support.vtk_to_numpy(branchModel.GetCellData().GetArray("GroupIds")) # groupId -> indicates is the centerline is inside of the tract 
+            cellDataArray[0] = vtk_to_numpy(branchModel.GetCellData().GetArray("CenterlineIds")) # centerlinesId -> connections between origin and endpoints
+            cellDataArray[1] = vtk_to_numpy(branchModel.GetCellData().GetArray("TractIds")) # tractId -> following a centerline Id, tract number (closest to origin is 0, next is 1 and so on)
+            cellDataArray[2] = vtk_to_numpy(branchModel.GetCellData().GetArray("Blanking")) # blanking -> transition to a new branch
+            cellDataArray[3] = vtk_to_numpy(branchModel.GetCellData().GetArray("GroupIds")) # groupId -> indicates is the centerline is inside of the tract 
             # Collect max centerlineId and groupId
             maxCenterlineId = np.amax(cellDataArray[0])
             maxGroupId = np.amax(cellDataArray[3])
@@ -79,7 +80,7 @@ def branchAndClippedModelUnification(caseDir):
             finalCellDataArrayBranchModel = np.append(finalCellDataArrayBranchModel, cellDataArray, axis=1)
             
             # Get point data (we only get radius)
-            radiusArray = vtk.util.numpy_support.vtk_to_numpy(branchModel.GetPointData().GetArray("Radius"))
+            radiusArray = vtk_to_numpy(branchModel.GetPointData().GetArray("Radius"))
 
             # On rare occasions, there is a mismatch (a gap) between the number of points of the vtkPolyData and the sum of the number of points from each cell
             # These should be restarted for each branchModelIdx
@@ -129,7 +130,7 @@ def branchAndClippedModelUnification(caseDir):
             print(f"Processing clipped model {centerlineModelId}...")
             
             # Get point data (we only get groupId)
-            groupIdPointArrayClippedModel = vtk.util.numpy_support.vtk_to_numpy(clippedModel.GetPointData().GetArray("GroupIds"))
+            groupIdPointArrayClippedModel = vtk_to_numpy(clippedModel.GetPointData().GetArray("GroupIds"))
             # Store max groupId
             maxGroupId = np.amax(groupIdPointArrayClippedModel)
             # Update groupIds of current clippedModel
