@@ -2,7 +2,7 @@ import os
 import vtk
 import numpy as np
 
-from vtk.util.numpy_support import vtk_to_numpy
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
 def branchAndClippedModelUnification(caseDir):
     ''' Reads all branchModels (branchModels/branchModels{idx}.vtk) derived from the 
