@@ -61,7 +61,10 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
             centerlineModel.GetCell(cellID, cell)
             numberOfCellPoints = cell.GetNumberOfPoints()
             cellsCoordinateArray[cellID] = np.ndarray([numberOfCellPoints, 3])
-            cellsRadiusArray[cellID] = np.flip(radiusArray[cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1):cell.GetPointId(0) + 1])
+            if cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1) < cell.GetPointId(0):
+                cellsRadiusArray[cellID] = np.flip(radiusArray[cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1):cell.GetPointId(0) + 1])
+            else:
+                cellsRadiusArray[cellID] = np.flip(radiusArray[cell.GetPointId(0) - 1:cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1)])
             for idx in range(numberOfCellPoints):
                 cellsCoordinateArray[cellID][idx] = np.matmul(aff, np.append(cell.GetPoints().GetPoint(idx), 1.0))[:3]
             lengthCoordinateArray[cellID] = numberOfCellPoints
@@ -72,7 +75,7 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
 
         # We iterate over all segments starting from the shortest segment, except for the longest (unnecesary)
         for shortestLength in fromShortestToLongest[:-1]:
-            # New array created for this iteration. Only contains segments with length longer than currently analyzed, 
+            # New array created for this iteration. Only contains segments with longer length than currently analyzed, 
             # and up to the length of the segment. The goal is to identify bifurcations along each curve.
             auxArray = np.ndarray([len(auxFromShortestToLongest), shortestLength, 3]) 
 
@@ -84,7 +87,7 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
             for idx1 in range(len(auxFromShortestToLongest)):
                 cellID = auxFromShortestToLongest[idx1]
                 # cellID indicates cellID of an alternative cell
-                auxArray2 = auxArray # We generate a second copy of the suxiliar array that we delete iteratively
+                auxArray2 = auxArray # We generate a second copy of the auxiliar array that we delete iteratively
                 # We iterate over coordinates of each cell with a lenght longer or equal than
                 # the current shortest cell, searching for bifurcation points
                 for idxCoord in range(shortestLength):
@@ -93,6 +96,7 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
                     for idx2 in range(1, auxArray2.shape[0]): # We iterate over the cells that are still on the path
                         # idx2 indicates cellID of an alternative cell
                         if not (auxArray2[0][idxCoord] == auxArray2[idx2][idxCoord]).all():
+                        # if np.linalg.norm(auxArray2[0][idxCoord] - auxArray2[idx2][idxCoord]) > 10:
                             bifurcationsArray = np.append(bifurcationsArray, [[cellID, idxCoord - 1]], 0)
                             # Only continue with branches overlapping with current cellID
                             auxArray2 = np.delete(auxArray2, np.where(auxArray2[:, idxCoord, 0] != auxArray2[0, idxCoord, 0]), axis=0)
@@ -120,9 +124,9 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
                 else: # Segments in the middle
                     segmentsPositionArray = np.append(segmentsPositionArray, [[cellID, bifurcationsArray[auxBifurcationsID[idx-1], 1], bifurcationsArray[auxBifurcationsID[idx], 1]]], axis=0)
                 if idx == len(auxBifurcationsID) - 1: # Last segment of the cell
-                        segmentsPositionArray = np.append(segmentsPositionArray, [[cellID, bifurcationsArray[auxBifurcationsID[idx], 1], -1]], axis=0)
+                    segmentsPositionArray = np.append(segmentsPositionArray, [[cellID, bifurcationsArray[auxBifurcationsID[idx], 1], -1]], axis=0)
 
-        # We can find the start- and endpoints in RAS coordinates
+        # We can find the start- and endpoints in ijk (voxel) coordinates
         segmentsCoordinateArray = np.ndarray([len(segmentsPositionArray), 2, 3])
 
         for idx in range(len(segmentsCoordinateArray)):
@@ -151,8 +155,74 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
                 removeStraights.append(idx)
 
         segmentsArray = np.delete(segmentsArray, removeStraights, axis=0)
+
+        # Check if circular segments should be joint
+        newSegments = []
+        newSegmentsRadius = []
+        deleteIdx = []
+        for idx1 in range(len(segmentsArray)):
+            for idx2 in range(len(segmentsArray)):
+                if (segmentsArray[idx1, 0][-1] == segmentsArray[idx2, 0][-1]).all() and idx1 != idx2 and idx1 not in deleteIdx:
+                    # Shortest segment should be joint at the end of the other one
+                    if len(segmentsArray[idx1, 0]) < len(segmentsArray[idx2, 0]): # idx shorter
+                        newSegments.append(np.append(segmentsArray[idx2, 0], segmentsArray[idx1, 0], axis = 0))
+                        newSegmentsRadius.append(np.append(segmentsArray[idx2, 1], segmentsArray[idx1, 1]))
+                    else:
+                        newSegments.append(np.append(segmentsArray[idx1, 0], segmentsArray[idx2, 0], axis = 0))
+                        newSegmentsRadius.append(np.append(segmentsArray[idx1, 1], segmentsArray[idx2, 1]))
+                    deleteIdx.append(idx1)
+                    deleteIdx.append(idx2)
+
+        segmentsArray = np.delete(segmentsArray, deleteIdx, axis = 0)
+
+        for idx in range(len(newSegments)):
+            newSegment = np.ndarray([1, 2], dtype = object)
+            newSegment[0, 0] = newSegments[idx]
+            newSegment[0, 1] = newSegmentsRadius[idx]
+            segmentsArray = np.append(segmentsArray, newSegment, axis=0)
             
         finalSegmentsArray = np.append(finalSegmentsArray, segmentsArray, axis=0)
+
+    # We compare the startpoint of each cell with all other cell startpoints
+    deleteIdx = []
+    for idx1 in range(len(finalSegmentsArray)):
+        startpoint1 = finalSegmentsArray[idx1][0][0]
+        for idx2 in range(idx1 + 1, len(finalSegmentsArray)): # We ignore previous cells to avoid repeating comparisons
+            startpoint2 = finalSegmentsArray[idx2][0][0]
+            # If startpoints coincide, we can either be in the case of interest (there exists a node with degree = 2)
+            # Or we are in a bifurcation. We have to rule out the bifurcation in order to identify this event.
+            # To do that, we ensure that this point is not in any other cell
+            if np.linalg.norm(startpoint1 - startpoint2) < 1e-4:
+                isBifurcation = False
+                for idx3 in range(len(finalSegmentsArray)):
+                    startpoint3 = finalSegmentsArray[idx3][0][0]
+                    endpoint3 = finalSegmentsArray[idx3][0][-1]
+                    if idx3 not in [idx1, idx2]:
+                        if np.linalg.norm(startpoint1 - startpoint3) < 1e-4 or np.linalg.norm(startpoint1 - endpoint3) < 1e-4:
+                            isBifurcation = True
+                # If we have not been able to find a bifurcation, we proceed to make the final segment
+                if not isBifurcation:
+                    # We first check which segment is floating (see if endpoint is shared with another segment)
+                    endpoint1 = finalSegmentsArray[idx1][0][-1]
+                    endpoint2 = finalSegmentsArray[idx2][0][-1]
+                    for idx3 in range(len(segmentsArray)):
+                        if np.linalg.norm(endpoint1 - finalSegmentsArray[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint1 - finalSegmentsArray[idx3][0][-1]):
+                            firstSegmentIdx = idx2
+                            secondSegmentIdx = idx1
+                            break
+                        elif np.linalg.norm(endpoint2 - finalSegmentsArray[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint2 - finalSegmentsArray[idx3][0][-1]):
+                            firstSegmentIdx = idx1
+                            secondSegmentIdx = idx2
+                            break
+                    # Now we can build the final segment, both with positions and radii
+                    finalSegmentPositions = np.append(np.flip(finalSegmentsArray[firstSegmentIdx][0], axis = 0), finalSegmentsArray[secondSegmentIdx][0], axis = 0)
+                    finalSegmentRadius = np.append(np.flip(finalSegmentsArray[firstSegmentIdx][1], axis = 0), finalSegmentsArray[secondSegmentIdx][1], axis = 0)
+                    finalSegmentsArray[firstSegmentIdx][0] = finalSegmentPositions
+                    finalSegmentsArray[firstSegmentIdx][1] = finalSegmentRadius
+                    # We also keep the alternative index to delete it once the analysis is finished
+                    deleteIdx.append(secondSegmentIdx)
+    # Finally, we delete the additional segments
+    finalSegmentsArray = np.delete(finalSegmentsArray, deleteIdx, axis = 0)
 
     if make_plot:
         _ = plt.figure()
