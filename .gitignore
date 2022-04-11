@@ -1,6 +1,7 @@
 # Added by Pere
 *.DS_Store
 *.model
+*.pth
 *.pkl
 
 
