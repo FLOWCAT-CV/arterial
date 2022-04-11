@@ -63,7 +63,7 @@ def performSegmentationsFromBinaryMask(masterVolumeNode):
     segmentEditorWidget.setActiveEffectByName("Islands")
     effect = segmentEditorWidget.activeEffect()
     effect.setParameter("Operation", "REMOVE_SMALL_ISLANDS")
-    effect.setParameter("MinimumSize", 1000)
+    effect.setParameter("MinimumSize", 10000)
     effect.self().onApply()
 
     # Split large islands into individual segments
@@ -79,7 +79,7 @@ def performSegmentationsFromBinaryMask(masterVolumeNode):
     # Create closed surface representation of segmentation
     segmentationNode.CreateClosedSurfaceRepresentation()
 
-    return segmentationNode
+    return segmentationNode, maskedVolumeArray
 
 def bbox_3D(img):
     ''' Computes bounding box (only z axis) of a numpy array (expects an array with zeros as background).

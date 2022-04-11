@@ -30,6 +30,6 @@ slicer.util.loadLabelVolume(casePath)
 masterVolumeNode = getNode(os.path.basename(casePath[:-7]))
 
 # Perform and save segmentations as vtk files (segmentation.vtk and decimatedSegmentation.vtk)
-segmentationNode = performSegmentationsFromBinaryMask(masterVolumeNode)
+segmentationNode, maskedVolumeArray = performSegmentationsFromBinaryMask(masterVolumeNode)
 # Perform centerline extraction. Creates centerlines.vtk
-centerlineExtraction(caseDir, segmentationNode)
+centerlineExtraction(casePath, segmentationNode, maskedVolumeArray)

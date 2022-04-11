@@ -10,7 +10,7 @@ import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 
 def graphBranchModelLink(caseDir):
-    ''' Links all predicted vessel types and CellIDs fro segmentsArray to 
+    ''' Links all predicted vessel types and cellIds fro segmentsArray to 
     VMTK identifiers for groupIds in branchModel and clippedModel. Generates dictionary
     with groupIds to vessel types and groupIds to vessel filenames for surface segments in 
     os.path.join(caseDir, "surfaceSegments").
@@ -31,8 +31,8 @@ def graphBranchModelLink(caseDir):
     edgeTypes, _ = makeDicts()
     edgeTypesGraph = {}
     for n0, n1 in labeledGraph.edges:
-        cellId = int(labeledGraph[n0][n1]["CellID"])
-        edgeType = int(labeledGraph[n0][n1]["edgetype"])
+        cellId = int(labeledGraph[n0][n1]["cellId"])
+        edgeType = int(labeledGraph[n0][n1]["vessel type"])
         edgeTypesGraph[cellId] = edgeType
 
     # Load branch model
@@ -87,7 +87,7 @@ def graphBranchModelLink(caseDir):
     for idxAux, pairId in enumerate(containsBifurcations):
         for idx in range(len(branchModelSegments[pairId[0]])):
             # We can't find the bifurcation point (these segments overlap all the way, and one of the two ends at the bifurcation while the other one continues)
-            if idx == len(branchModelSegments[pairId[0]]) - 1:
+            if idx == len(branchModelSegments[pairId[0]]) - 1 or idx == len(branchModelSegments[pairId[1]]) - 1:
                 if len(branchModelSegments[pairId[0]]) > len(branchModelSegments[pairId[1]]):
                     branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 0] = branchModelSegments[pairId[0]][:idx]
                     branchModelSegmentsWithBifurcations[branchModel.GetNumberOfCells() + 3 * idxAux + 1] = branchModelSegments[pairId[0]][idx:]
@@ -104,6 +104,7 @@ def graphBranchModelLink(caseDir):
                 cellDataArrayWithBifurcations[0, -2] = 0
                 # Add third slot to removeNones
                 removeNones.append(branchModel.GetNumberOfCells() + 3 * idxAux + 2)
+                break
             # We can find the bifurcation point (first point where the pair differs)
             else:
                 if not (branchModelSegments[pairId[0]][idx] == branchModelSegments[pairId[1]][idx]).all():
