@@ -32,10 +32,10 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
     centerlineList = [centerlineFile for centerlineFile in os.listdir(os.path.join(caseDir, "centerlines")) if centerlineFile.endswith(".vtk")]
     finalSegmentsArray = np.ndarray([0, 2])
 
-    for idx, _ in enumerate(centerlineList):
+    for idxCenterline, _ in enumerate(centerlineList):
         # Load centerlines.vtk as a vtkPolyData object
         centerlinePolyDataReader = vtk.vtkPolyDataReader()
-        centerlinePolyDataReader.SetFileName(os.path.join(caseDir, "centerlines", f"centerlines{idx}.vtk"))
+        centerlinePolyDataReader.SetFileName(os.path.join(caseDir, "centerlines", f"centerlines{idxCenterline}.vtk"))
         centerlinePolyDataReader.Update()
         centerlineModel = centerlinePolyDataReader.GetOutput()
     
@@ -205,12 +205,12 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
                     # We first check which segment is floating (see if endpoint is shared with another segment)
                     endpoint1 = finalSegmentsArray[idx1][0][-1]
                     endpoint2 = finalSegmentsArray[idx2][0][-1]
-                    for idx3 in range(len(segmentsArray)):
-                        if np.linalg.norm(endpoint1 - finalSegmentsArray[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint1 - finalSegmentsArray[idx3][0][-1]):
+                    for idx3 in range(len(finalSegmentsArray)):
+                        if np.linalg.norm(endpoint1 - finalSegmentsArray[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint1 - finalSegmentsArray[idx3][0][-1]) < 1e-4:
                             firstSegmentIdx = idx2
                             secondSegmentIdx = idx1
                             break
-                        elif np.linalg.norm(endpoint2 - finalSegmentsArray[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint2 - finalSegmentsArray[idx3][0][-1]):
+                        elif np.linalg.norm(endpoint2 - finalSegmentsArray[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint2 - finalSegmentsArray[idx3][0][-1]) < 1e-4:
                             firstSegmentIdx = idx1
                             secondSegmentIdx = idx2
                             break
@@ -221,6 +221,7 @@ def centerlineSegmentsArray(caseDir, make_plot=False):
                     finalSegmentsArray[firstSegmentIdx][1] = finalSegmentRadius
                     # We also keep the alternative index to delete it once the analysis is finished
                     deleteIdx.append(secondSegmentIdx)
+
     # Finally, we delete the additional segments
     finalSegmentsArray = np.delete(finalSegmentsArray, deleteIdx, axis = 0)
 

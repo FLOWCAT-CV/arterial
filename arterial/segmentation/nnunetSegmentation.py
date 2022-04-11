@@ -14,20 +14,9 @@
 
 import os
 import shutil
-import argparse
 
 from time import time
-    
-##############################################################################################
-#--------------------------------------------------------------------------------------------#    
 
-print("                                                                                     ")
-print("Model optimization for nnUNet (Isensee et al. 2020) for segmentation of 3D CTA images")
-print("By Pere Canals (2020)                                                                ")
-print("                                                                                     ")
-
-#--------------------------------------------------------------------------------------------#    
-##############################################################################################
 
 def nnUNetInference(casePath):
     ''' Performs inference of casePath (nifti, CTA) with the best performing model

@@ -25,9 +25,7 @@ edgeTypes = {
     10: "LICA",
     11: "RECA",
     12: "LECA",
-    13: "BA",
-    14: "AA+BT",
-    15: "RVA+LVA"  
+    13: "BA" 
 }
 
 def nodeTransform(G):
@@ -92,7 +90,7 @@ def performInferenceGraphUNet(model, nodeFormGraphNx):
         - nodeFormGraphNx <networkx.graph>: graph in node form.
     
     Returns:
-        - cellIDToVesselType <dict>: dictionary with CellIDs as keys and 
+        - cellIDToVesselType <dict>: dictionary with cellIds as keys and 
         predicted vessel types as values.
     
     '''
@@ -118,7 +116,7 @@ def performInferenceGraphUNet(model, nodeFormGraphNx):
         # The result is a 1D list with the predicted vessel types for each node
         predictedNodes = model(graph.x, graph.edge_index).argmax(dim=1).tolist()
 
-    # We create a dict to link the CellIDs from the segmentaArray to the predicted vessel types
+    # We create a dict to link the cellIds from the segmentaArray to the predicted vessel types
     cellIDToVesselType = {}
     for idx, cellID in enumerate(inferenceData.databasePyg[0].cellIDs):
         cellIDToVesselType[cellID] = predictedNodes[idx]
@@ -135,7 +133,7 @@ def savePredictedGraph(caseDir, edgeFormGraphNx, predictedVessels):
     Arguments:
         - caseDir <str or path>: path to the caseDir of the case.
         - edgeFormGraphNx <networkx.graph>: graph in edge form.
-        - predictedVessels <dict>: dictionary with CellIDs as keys and 
+        - predictedVessels <dict>: dictionary with cellIds as keys and 
         predicted vessel types as values.
     
     Returns:
@@ -155,19 +153,25 @@ def savePredictedGraph(caseDir, edgeFormGraphNx, predictedVessels):
     # For edges, we keep all information from the original graph, and in addition we set the vessel type from the predictedVessels dict
     for n0, n1 in edgeFormGraphNx.edges:
         predictedGraph.add_edge(n0, n1)
-        predictedGraph[n0][n1]["CellID"] = edgeFormGraphNx[n0][n1]["CellID"]
-        predictedGraph[n0][n1]["edgetype"] = predictedVessels[edgeFormGraphNx[n0][n1]["CellID"]]
-        predictedGraph[n0][n1]["edgeTypeName"] = edgeTypes[predictedVessels[edgeFormGraphNx[n0][n1]["CellID"]]]
+        predictedGraph[n0][n1]["cellId"] = edgeFormGraphNx[n0][n1]["cellId"]
+        predictedGraph[n0][n1]["vessel type"] = predictedVessels[edgeFormGraphNx[n0][n1]["cellId"]]
+        predictedGraph[n0][n1]["vessel type name"] = edgeTypes[predictedVessels[edgeFormGraphNx[n0][n1]["cellId"]]]
         predictedGraph[n0][n1]["features"] = edgeFormGraphNx[n0][n1]["features"]
 
-    # We save the graph
+    # Save the graph
     nx.write_gpickle(predictedGraph, os.path.join(caseDir, "graph_pred.pickle"))
+
+    # Make graph
+    _ = plt.figure(figsize = [5, 10])
+    ax = plt.gca()
     # Set the edge labels for visualization in the png file
-    edge_labels = nx.get_edge_attributes(predictedGraph, 'edgeTypeName')
+    edge_labels = nx.get_edge_attributes(predictedGraph, 'vessel type name')
     # We draw the png file with the predicted vessel types
     nx.draw(edgeFormGraphNx, node_pos_dict_P, node_size=20)
-    nx.draw_networkx_edge_labels(edgeFormGraphNx, node_pos_dict_P, edge_labels = edge_labels)
+    nx.draw_networkx_edge_labels(edgeFormGraphNx, node_pos_dict_P, edge_labels = edge_labels, ax = ax)
     plt.savefig(os.path.join(caseDir, "graph_pred.png"))
+
+    return predictedGraph
 
 
 class ArterialDatasetInference(InMemoryDataset):
@@ -200,7 +204,7 @@ class ArterialDatasetInference(InMemoryDataset):
             for node in graphNx.nodes:
                 pos.append(graphNx.nodes[node]["center of mass"])
                 x.append(graphNx.nodes[node]["features"])
-                cellIDs.append(graphNx.nodes[node]["CellID"])
+                cellIDs.append(graphNx.nodes[node]["cellId"])
             for n0, n1 in graphNx.edges:
                 edge_index.append([n0, n1])
             graphPyg.pos = torch.tensor(np.array(pos), dtype=torch.float32)
@@ -263,9 +267,9 @@ class CustomNormalizeFeatures(BaseTransform):
                                                     2.621296421762096429e+02, # distal bifurcation position 0
                                                     2.301304323856222709e+02, # distal bifurcation position 1
                                                     3.054477580255216367e+02, # distal bifurcation position 2
-                                                    2.606832670113914219e+02, # center of mass 0
-                                                    2.257899084802627954e+02, # center of mass 1
-                                                    2.672428365375042176e+02] # center of mass 2
+                                                    1.182467300890445046e+02, # center of mass 0
+                                                    9.730756790265348855e+01, # center of mass 1
+                                                    1.059730889451579827e+02] # center of mass 2
                                                     , dtype=torch.float32)
 
     def __call__(self, data):

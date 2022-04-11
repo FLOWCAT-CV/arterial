@@ -28,13 +28,17 @@ def predictGraph(caseDir):
 
     # Pass the graph to node form
     graphNx = nodeTransform(edgeFormGraphNx)
-
+    
     # Load the trained graph U-Net model for inference
-    modelPath = os.path.join(os.environ["arterialDir"], "vesselLabelling/graphUNet/model/model.pth")
-    model = torch.load(modelPath)
+    modelPath = os.path.join(os.environ["arterialDir"], "graphProcessing/vesselLabelling/model/model.pth")
+    # Use GPU if available
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = torch.load(modelPath, map_location=torch.device(device))
 
     # Perform inference with the trained model
     predictedVessels = performInferenceGraphUNet(model, graphNx)
 
     # Save the predicted graph in edge form as graph_pred.pickle
-    savePredictedGraph(caseDir, edgeFormGraphNx, predictedVessels)
+    predictedGraph = savePredictedGraph(caseDir, edgeFormGraphNx, predictedVessels)
+
+    return predictedGraph
