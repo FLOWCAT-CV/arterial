@@ -97,12 +97,12 @@ class centerlineGraphOperator:
         counterHighlights = ["LVA"]
         self.configurations["radial"].append([priorityOrder, highlights, counterHighlights, "5_RadialRightPosterior"])
         # Configuration 6: radial + left + anterior
-        priorityOrder = ["RSA", "BT", "AA", "LCCA", "LICA"]
+        priorityOrder = ["RSA", "BT", "LCCA", "LICA"]
         highlights = ["LCCA", "LICA"]
         counterHighlights = []
         self.configurations["radial"].append([priorityOrder, highlights, counterHighlights, "6_RadialLeftAnterior"])
         # Configuration 7: radial + left + posterior
-        priorityOrder = ["RSA", "BT", "AA", "LSA", "LVA", "BA"]
+        priorityOrder = ["RSA", "BT", "LSA", "LVA", "BA"]
         highlights = ["LVA"]
         counterHighlights = ["RVA"]
         self.configurations["radial"].append([priorityOrder, highlights, counterHighlights, "7_RadialLeftPosterior"])
@@ -595,21 +595,6 @@ class centerlineGraphOperator:
                                 "LECA": "LCCA", 
                                 "BA": "RVA",
                                 "other": None}
-        # If a union is not found with the preferred vessels of each vessel type,
-        allowedUnions = {"AA": [],
-                         "BT": ["LCCA", "LSA"],
-                         "RCCA": ["RSA", "LCCA"],
-                         "RSA": ["RCCA", "AA"],
-                         "RVA": ["BT", "RCCA", "RICA", "RECA", "BA", "LVA"],
-                         "RICA": ["RECA", "RVA", "RSA"],
-                         "RECA": ["RICA", "RVA", "RSA"],
-                         "LCCA": ["BT", "LSA", "RCCA"],
-                         "LSA": ["LCCA", "RCCA", "BT"],
-                         "LVA": ["LCCA", "LICA", "LECA", "AA", "BA", "RVA", "BT"], 
-                         "LICA": ["LECA", "LVA", "LSA"],
-                         "LECA": ["LICA", "LVA", "LSA"], 
-                         "BA": ["LVA"],
-                         "other": []}
 
         # Compute the center of mass of each of the subgraphs
         if len(self.subgraphs) > 1:
@@ -683,76 +668,6 @@ class centerlineGraphOperator:
             # Append each candidate union node separately depending on the subgraph
             candidatesForSubgraphsUnion.append(candidatesForSubgraphUnion)
             oppositeNodesForSubgraphsUnion.append(oppositeNodesForSubgraphUnion)
-
-        # # Search for alternate union points in main subgraph or larger subgraphs following a preference system
-        # for idx, candidatesForSubgraphUnion in enumerate(candidatesForSubgraphsUnion):
-        #     for candidateIdx, candidateNode in enumerate(candidatesForSubgraphUnion):
-        #         # Pool all node and positions from the main graph with the same vesselType as the candidate node
-        #         candidateMainGraphCoordinates = np.ndarray([0, 3])
-        #         candidateMainGraphNodes = []
-        #         # Boolean variable to end search for union node
-        #         foundUnion = False
-        #         for subgraphIdx in range(max([idx, 1])):
-        #             if self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]] in [self.cellIdToVesselTypeName[cellId] for cellId in subgraphsCellIds[subgraphIdx]] and not foundUnion:
-        #             # Check if the same vessel type exists in the larger subgraphs
-        #                 # If it exists and has a different cellId, store all node coordinates
-        #                 for nodeSubgraphIdx in self.subgraphs[subgraphIdx]:
-        #                     if self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]] == self.cellIdToVesselTypeName[self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["cellId"]] and self.subgraphs[idx].nodes[candidateNode]["cellId"] != self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["cellId"]:
-        #                         # In the rare event that the connection node is found to be the self.rightmostNode, then choose its neighbor
-        #                         if nodeSubgraphIdx == self.rightmostNode:
-        #                             nodeSubgraphIdx = self.subgraphs[subgraphIdx].neighbors(self.rightmostNode).__next__()
-        #                         # In the case that we are looking at the same subgraph as the candidate node, group cellIds in contact with candidate node. Forbid union with segments in contact
-        #                         if subgraphIdx == idx:
-        #                             cellIdsInContact = []
-        #                             for neighbor in self.subgraphs[subgraphIdx].neighbors(oppositeNodesForSubgraphsUnion[idx][candidateIdx]):
-        #                                 cellIdsInContact.append(self.subgraphs[subgraphIdx].nodes[neighbor]["cellId"])
-        #                             if self.subgraphs[idx].nodes[nodeSubgraphIdx]["cellId"] in cellIdsInContact:
-        #                                 pass
-        #                             else:
-        #                                 candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
-        #                                 candidateMainGraphNodes.append(nodeSubgraphIdx)
-        #                                 foundUnion = True
-        #                         # Otherwise, go on with analysis
-        #                         else:
-        #                             candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
-        #                             candidateMainGraphNodes.append(nodeSubgraphIdx)
-        #                             foundUnion = True
-        #         # Check if the preferred vessel type exists in the larger subgraphs
-        #         # Look at all graphs larger than the one we are analyzing (except for main subgraph, where we only look at itself)
-        #         for subgraphIdx in range(max([idx, 1])):
-        #             if preferredVesselTypes[self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]]] in [self.cellIdToVesselTypeName[cellId] for cellId in subgraphsCellIds[subgraphIdx]] and not foundUnion:
-        #                 # If it exists, store all node coordinates
-        #                 for nodeSubgraphIdx in self.subgraphs[subgraphIdx]:
-        #                     if preferredVesselTypes[self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]]] == self.cellIdToVesselTypeName[self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["cellId"]]:
-        #                         # In the rare event that the connection node is found to be the self.rightmostNode, then choose its neighbor
-        #                         if nodeSubgraphIdx == self.rightmostNode:
-        #                             nodeSubgraphIdx = self.subgraphs[subgraphIdx].neighbors(self.rightmostNode).__next__()
-        #                         # In the case that we are looking at the same subgraph as the candidate node, group cellIds in contact with candidate node. Forbid union with segments in contact
-        #                         if subgraphIdx == idx:
-        #                             cellIdsInContact = []
-        #                             for neighbor in self.subgraphs[subgraphIdx].neighbors(oppositeNodesForSubgraphsUnion[idx][candidateIdx]):
-        #                                 cellIdsInContact.append(self.subgraphs[subgraphIdx].nodes[neighbor]["cellId"])
-        #                             if self.subgraphs[idx].nodes[nodeSubgraphIdx]["cellId"] in cellIdsInContact:
-        #                                 pass
-        #                             else:
-        #                                 candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
-        #                                 candidateMainGraphNodes.append(nodeSubgraphIdx)
-        #                                 foundUnion = True
-        #                         # Otherwise, go on with analysis
-        #                         else:
-        #                             candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
-        #                             candidateMainGraphNodes.append(nodeSubgraphIdx)
-        #                             foundUnion = True
-        #         # If none of the above have worked, pool all node coordinates from main subgraph
-        #         if not foundUnion:
-        #             for nodeMain in self.subgraphs[0]:
-        #                 candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[0].nodes[nodeMain]["pos"]], axis = 0)
-        #                 candidateMainGraphNodes.append(nodeMain)
-
-        #         # Choose closest node from the candidate pool
-        #         mainGraphNode = candidateMainGraphNodes[np.argmin(np.linalg.norm(candidateMainGraphCoordinates - self.subgraphs[idx].nodes[candidateNode]["pos"], axis = 1))]
-        #         # Append node pairs altogether
-        #         self.subgraphsUnionEdges.append([mainGraphNode, candidateNode])
 
         # Auxiliar list to store already joint subgraphs
         composedSubgraphs = []
@@ -831,7 +746,7 @@ class centerlineGraphOperator:
                 # If none of the above have worked, pool all node coordinates from main subgraph
                 if not foundUnion:
                     for nodeMain in self.subgraphs[0]:
-                        if self.cellIdToVesselTypeName[self.subgraphs[0].nodes[nodeMain]["cellId"]]:# in allowedUnions[self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]]]:
+                        if self.cellIdToVesselTypeName[self.subgraphs[0].nodes[nodeMain]["cellId"]]:
                             candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[0].nodes[nodeMain]["pos"]], axis = 0)
                             candidateMainGraphNodes.append(nodeMain)
                             candidateSubgraphIdx = 0
@@ -859,6 +774,78 @@ class centerlineGraphOperator:
                     # If no union is found, remove candidates and opposite nodes from lists
                     candidatesForSubgraphsUnion[idx].remove(candidateNode)
                     oppositeNodesForSubgraphsUnion[idx].remove(oppositeNodesForSubgraphsUnion[idx][candidateIdx])
+
+        # subgraphsUnionEdges = []
+
+        # # Search for alternate union points in main subgraph or larger subgraphs following a preference system
+        # for idx, candidatesForSubgraphUnion in enumerate(candidatesForSubgraphsUnion):
+        #     for candidateIdx, candidateNode in enumerate(candidatesForSubgraphUnion):
+        #         # Pool all node and positions from the main graph with the same vesselType as the candidate node
+        #         candidateMainGraphCoordinates = np.ndarray([0, 3])
+        #         candidateMainGraphNodes = []
+        #         # Boolean variable to end search for union node
+        #         foundUnion = False
+        #         for subgraphIdx in range(max([idx, 1])):
+        #             if self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]] in [self.cellIdToVesselTypeName[cellId] for cellId in subgraphsCellIds[subgraphIdx]] and not foundUnion:
+        #             # Check if the same vessel type exists in the larger subgraphs
+        #                 # If it exists and has a different cellId, store all node coordinates
+        #                 for nodeSubgraphIdx in self.subgraphs[subgraphIdx]:
+        #                     if self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]] == self.cellIdToVesselTypeName[self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["cellId"]] and self.subgraphs[idx].nodes[candidateNode]["cellId"] != self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["cellId"]:
+        #                         # In the rare event that the connection node is found to be the self.rightmostNode, then choose its neighbor
+        #                         if nodeSubgraphIdx == self.rightmostNode:
+        #                             nodeSubgraphIdx = self.subgraphs[subgraphIdx].neighbors(self.rightmostNode).__next__()
+        #                         # In the case that we are looking at the same subgraph as the candidate node, group cellIds in contact with candidate node. Forbid union with segments in contact
+        #                         if subgraphIdx == idx:
+        #                             cellIdsInContact = []
+        #                             for neighbor in self.subgraphs[subgraphIdx].neighbors(oppositeNodesForSubgraphsUnion[idx][candidateIdx]):
+        #                                 cellIdsInContact.append(self.subgraphs[subgraphIdx].nodes[neighbor]["cellId"])
+        #                             if self.subgraphs[idx].nodes[nodeSubgraphIdx]["cellId"] in cellIdsInContact:
+        #                                 pass
+        #                             else:
+        #                                 candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
+        #                                 candidateMainGraphNodes.append(nodeSubgraphIdx)
+        #                                 foundUnion = True
+        #                         # Otherwise, go on with analysis
+        #                         else:
+        #                             candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
+        #                             candidateMainGraphNodes.append(nodeSubgraphIdx)
+        #                             foundUnion = True
+        #         # Check if the preferred vessel type exists in the larger subgraphs
+        #         # Look at all graphs larger than the one we are analyzing (except for main subgraph, where we only look at itself)
+        #         for subgraphIdx in range(max([idx, 1])):
+        #             if preferredVesselTypes[self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]]] in [self.cellIdToVesselTypeName[cellId] for cellId in subgraphsCellIds[subgraphIdx]] and not foundUnion:
+        #                 # If it exists, store all node coordinates
+        #                 for nodeSubgraphIdx in self.subgraphs[subgraphIdx]:
+        #                     if preferredVesselTypes[self.cellIdToVesselTypeName[self.subgraphs[idx].nodes[candidateNode]["cellId"]]] == self.cellIdToVesselTypeName[self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["cellId"]]:
+        #                         # In the rare event that the connection node is found to be the self.rightmostNode, then choose its neighbor
+        #                         if nodeSubgraphIdx == self.rightmostNode:
+        #                             nodeSubgraphIdx = self.subgraphs[subgraphIdx].neighbors(self.rightmostNode).__next__()
+        #                         # In the case that we are looking at the same subgraph as the candidate node, group cellIds in contact with candidate node. Forbid union with segments in contact
+        #                         if subgraphIdx == idx:
+        #                             cellIdsInContact = []
+        #                             for neighbor in self.subgraphs[subgraphIdx].neighbors(oppositeNodesForSubgraphsUnion[idx][candidateIdx]):
+        #                                 cellIdsInContact.append(self.subgraphs[subgraphIdx].nodes[neighbor]["cellId"])
+        #                             if self.subgraphs[idx].nodes[nodeSubgraphIdx]["cellId"] in cellIdsInContact:
+        #                                 pass
+        #                             else:
+        #                                 candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
+        #                                 candidateMainGraphNodes.append(nodeSubgraphIdx)
+        #                                 foundUnion = True
+        #                         # Otherwise, go on with analysis
+        #                         else:
+        #                             candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[subgraphIdx].nodes[nodeSubgraphIdx]["pos"]], axis = 0)
+        #                             candidateMainGraphNodes.append(nodeSubgraphIdx)
+        #                             foundUnion = True
+        #         # If none of the above have worked, pool all node coordinates from main subgraph
+        #         if not foundUnion:
+        #             for nodeMain in self.subgraphs[0]:
+        #                 candidateMainGraphCoordinates = np.append(candidateMainGraphCoordinates, [self.subgraphs[0].nodes[nodeMain]["pos"]], axis = 0)
+        #                 candidateMainGraphNodes.append(nodeMain)
+
+        #         # Choose closest node from the candidate pool
+        #         mainGraphNode = candidateMainGraphNodes[np.argmin(np.linalg.norm(candidateMainGraphCoordinates - self.subgraphs[idx].nodes[candidateNode]["pos"], axis = 1))]
+        #         # Append node pairs altogether
+        #         subgraphsUnionEdges.append([mainGraphNode, candidateNode])
 
         # Prepare nextCellId for segment splitting
         nextCellId = len(self.segmentsCoordinateArray)
@@ -1156,10 +1143,18 @@ class centerlineGraphOperator:
                 for idxA, supersegmentCandidateCellIdsA in enumerate(supersegmentCandidatesCellIds[access]):
                     for idxB, supersegmentCandidateCellIdsB in enumerate(supersegmentCandidatesCellIds[access][:idxA]):
                         if supersegmentCandidateCellIdsA[:-1] == supersegmentCandidateCellIdsB[:-1] and self.cellIdToVesselTypeName[supersegmentCandidateCellIdsA[-1]] == self.cellIdToVesselTypeName[supersegmentCandidateCellIdsB[-1]]:
-                            if len(self.segmentsCoordinateArray[supersegmentCandidateCellIdsA[-1]]) > len(self.segmentsCoordinateArray[supersegmentCandidateCellIdsB[-1]]):
+                            distanceA = 0
+                            distanceB = 0
+                            for n0, n1 in self.centerlineGraph.edges:
+                                if self.centerlineGraph[n0][n1]["cellId"] == supersegmentCandidateCellIdsA[-1] and len(self.centerlineGraph[n0][n1]["segmentsArrayPoints"]) != 0:
+                                    distanceA += np.linalg.norm(self.centerlineGraph.nodes[n0]["pos"] - self.centerlineGraph.nodes[n1]["pos"])
+                                elif self.centerlineGraph[n0][n1]["cellId"] == supersegmentCandidateCellIdsB[-1] and len(self.centerlineGraph[n0][n1]["segmentsArrayPoints"]) != 0:
+                                    distanceB += np.linalg.norm(self.centerlineGraph.nodes[n0]["pos"] - self.centerlineGraph.nodes[n1]["pos"])
+                            if distanceA > distanceB:
                                 deleteIdx.append(idxB)
                             else:
                                 deleteIdx.append(idxA)
+
                 # Delete discarded sequences
                 supersegmentCandidatesCellIds[access] = list(np.delete(supersegmentCandidatesCellIds[access], deleteIdx))
                 supersegmentCandidatesVesselTypes[access] = list(np.delete(supersegmentCandidatesVesselTypes[access], deleteIdx))
@@ -1245,7 +1240,7 @@ class centerlineGraphOperator:
                                 # For the last point of every centerline cell (presumably at a distance smaller than sampleNodeEvery) we differentiate between two possible cases
                                 elif idx == len(curve) - 1:
                                     # If the number of nodes of the previous node of the cell is 0 (which means that the segment's length is smaller than sampleNodeEvery), we add an additional node
-                                    if len([n for n in supersegment.neighbors(totalNodes - 1)]) == 0:
+                                    if len([n for n in supersegment.neighbors(totalNodes - 1)]) == 0 or np.linalg.norm(supersegment.nodes[totalNodes - 1]["pos"] - curve[idx]) > 10:
                                         supersegment.add_node(totalNodes, pos=position)
                                         supersegment.nodes[totalNodes]["cellId"] = cellId
                                         supersegment.nodes[totalNodes]["isSupersegment"] = True
@@ -1299,7 +1294,7 @@ class centerlineGraphOperator:
                                         distance = 0
                                     # For the last point of every centerline cell (presumably at a distance smaller than sampleNodeEvery) we differentiate between two possible cases
                                     elif idx == len(curve) - 1:
-                                        if len([n for n in supersegment.neighbors(totalNodes - 1)]) == 0:
+                                        if len([n for n in supersegment.neighbors(totalNodes - 1)]) == 0 or np.linalg.norm(supersegment.nodes[totalNodes - 1]["pos"] - curve[idx]) > 10:
                                             supersegment.add_node(totalNodes, pos=position)
                                             supersegment.nodes[totalNodes]["cellId"] = cellId
                                             supersegment.nodes[totalNodes]["isSupersegment"] = False

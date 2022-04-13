@@ -11,7 +11,6 @@ from centerlineExtraction.segmentsArray import centerlineSegmentsArray
 from graphProcessing.centerlineGraph import centerlineGraphOperator
 from graphProcessing.graphToVisualizationModels.graphBranchModelLink import graphBranchModelLink
 
-
 import time
 
 ####################################### Arguments ############################################
