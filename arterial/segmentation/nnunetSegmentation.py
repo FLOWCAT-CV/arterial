@@ -30,7 +30,7 @@ def nnUNetInference(casePath):
 
     '''
 
-    patId = os.path.basename(casePath)[:-7] # Name of the nifti casePath except the .nii.gz extension
+    caseId = os.path.basename(casePath)[:-7] # Name of the nifti casePath except the .nii.gz extension
     caseDir = os.path.dirname(casePath)
 
     # Paths used by nnUNet
@@ -39,20 +39,27 @@ def nnUNetInference(casePath):
     if not os.path.isdir(inputPath): os.mkdir(inputPath)
     if not os.path.isdir(outputPath): os.mkdir(outputPath)
     
-    # The casePath will be placed in a newly created dir with the patId as name
-    if not os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")):
-        os.rename(casePath, os.path.join(inputPath, patId + "_0000.nii.gz"))
+    # The casePath will be placed in a newly created dir with the caseId as name
+    if not os.path.isfile(os.path.join(inputPath, caseId + "_0000.nii.gz")):
+        os.rename(casePath, os.path.join(inputPath, caseId + "_0000.nii.gz"))
 
-    # Only use if running on Colab
-    if inputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
-        inputPath = inputPath[:17] + "\ " + inputPath[18:]
+    # We have to get rid of potential spaces in paths for the terminal commands to work 
+    inputPath = inputPath.replace("\\", "")
+    inputPath = inputPath.replace(" ", "\ ")
+    outputPath = outputPath.replace("\\", "")
+    outputPath = outputPath.replace(" ", "\ ")
 
     start = time()
 
-    os.system("nnUNet_predict -i " + inputPath + " -o " + outputPath + f" -t Task001_Arterial -m 3d_lowres -f all")
+    if not os.path.isfile(os.path.join(outputPath, f"{caseId}.nii.gz")):
+        os.system("nnUNet_predict -i " + inputPath + " -o " + outputPath + " -t Task001_Arterial -m 3d_lowres -f all")
 
-    shutil.copyfile(os.path.join(inputPath, patId + "_0000.nii.gz"), os.path.join(caseDir, patId + "_CTA.nii.gz"))
-    shutil.copyfile(os.path.join(outputPath, patId + ".nii.gz"), os.path.join(caseDir, patId + ".nii.gz"))
+    # Set paths back to normal
+    inputPath = inputPath.replace("\\", "")
+    outputPath = outputPath.replace("\\", "")
+
+    shutil.copyfile(os.path.join(inputPath, caseId + "_0000.nii.gz"), os.path.join(caseDir, caseId + "_CTA.nii.gz"))
+    shutil.copyfile(os.path.join(outputPath, caseId + ".nii.gz"), os.path.join(caseDir, caseId + ".nii.gz"))
 
     print(f"Inference took {time() - start} s")
     print("                                  ")
@@ -70,37 +77,35 @@ def nnUNetEnsemble(casePath):
 
     '''
 
-    patId = os.path.basename(casePath)[:-7]
+    caseId = os.path.basename(casePath)[:-7]
     caseDir = os.path.dirname(casePath)
 
     inputPath = os.path.join(caseDir, "input")
     if not os.path.isdir(inputPath): os.mkdir(inputPath)
     if not os.path.isdir(os.path.join(caseDir, "ensemble")): os.mkdir(os.path.join(caseDir, "ensemble"))
 
-    if not os.path.isfile(os.path.join(inputPath, patId + "_0000.nii.gz")):
-        os.rename(casePath, os.path.join(inputPath, patId + "_0000.nii.gz"))
-    
-    # Only use if running on Colab. Make sure inputPath and outputPath do not contain spaces
-    if inputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
-        inputPath = inputPath[:17] + "\ " + inputPath[18:]
+    if not os.path.isfile(os.path.join(inputPath, caseId + "_0000.nii.gz")):
+        os.rename(casePath, os.path.join(inputPath, caseId + "_0000.nii.gz"))
+
+    # We have to get rid of potential spaces in paths for the terminal commands to work 
+    inputPath = inputPath.replace("\\", "")
+    inputPath = inputPath.replace(" ", "\ ")
 
     npzDirs = []
 
     start = time()
 
     for fold in range(5):
-        print(f"Predicting {patId} fold {fold}")
+        print(f"Predicting {caseId} fold {fold}")
         print("                               ")
 
         outputPath = os.path.join(caseDir, "ensemble", f"fold_{fold}")
         if not os.path.isdir(outputPath): os.mkdir(outputPath)
 
-        # Only use if running on Colab. Make sure inputPath and outputPath do not contain spaces
-        if outputPath[:8] == "/content": # If we are working on Colab and Drive, we need to get rid of spaces in the path
-            outputPathAux = outputPath[:17] + "\ " + outputPath[18:]
-        else:
-            outputPathAux = outputPath
+        outputPathAux = outputPath.replace("\\", "")
+        outputPathAux = outputPath.replace(" ", "\ ")
             
+        # We have to get rid of potential spaces in paths for the terminal commands to work 
         os.system("nnUNet_predict -i " + inputPath + " -o " + outputPathAux + " -t Task001_Arterial -z -m 3d_lowres -f " + str(fold))
 
         npzDirs.append(outputPath)
@@ -111,15 +116,18 @@ def nnUNetEnsemble(casePath):
     outputDir = os.path.join(caseDir, "ensemble", "output")
     if not os.path.isdir(outputDir): os.mkdir(outputDir)
 
-    if outputDir[:8] == "/content":
-        outputDir = outputDir[:17] + "\ " + outputDir[18:]
+    outputDir = outputDir.replace("\\", "")
 
     print("Starting ensembling")
 
     os.system(f"nnUNet_ensemble -f {npzDirs[0]} {npzDirs[1]} {npzDirs[2]} {npzDirs[3]} {npzDirs[4]} -o {outputDir}")
 
-    shutil.copyfile(os.path.join(inputPath, patId + "_0000.nii.gz"), os.path.join(caseDir, patId + "_CTA.nii.gz"))
-    shutil.copyfile(os.path.join(outputDir, patId + ".nii.gz"), os.path.join(caseDir, patId + ".nii.gz"))
+    # Set paths back to normal
+    inputPath = inputPath.replace("\\", "")
+    outputDir = outputDir.replace("\\", "")
+
+    shutil.copyfile(os.path.join(inputPath, caseId + "_0000.nii.gz"), os.path.join(caseDir, caseId + "_CTA.nii.gz"))
+    shutil.copyfile(os.path.join(outputDir, caseId + ".nii.gz"), os.path.join(caseDir, caseId + ".nii.gz"))
 
     print(f"Ensembling took {time() - start} s")
     print("                                   ")
