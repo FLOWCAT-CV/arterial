@@ -1,11 +1,13 @@
 import os
+import json
+import shutil
 
 import numpy as np
 import networkx as nx
 
 import nibabel as nib
 
-from .centerlineGraphUtils import getHierarchicalOrderingDense, getMaxHierarchy, extractFeatures, vesselTypeSequenceToOneHot, cosineSimilarity, makeGraphPlot, makeSupersegmentPlots
+from .centerlineGraphUtils import getHierarchicalOrderingDense, getMaxHierarchy, extractFeatures, vesselTypeSequenceToOneHot, cosineSimilarity, makeGraphPlot, makeSupersegmentPlots, makeSupersegmentPlot
 from .vesselLabelling.predictGraph import predictGraph
 
 import warnings
@@ -222,9 +224,14 @@ class centerlineGraphOperator:
 
         # Remove short (less than 5 nodes) subgraphs (do not introduce much information and can easily corrupt feature extraction)
         if len(self.subgraphs) > 1:
-            for subgraph in self.subgraphs:
+            deleteSubgraphs = []
+            for idx, subgraph in enumerate(self.subgraphs):
                 if len(subgraph) < 5:
-                    self.subgraphs.remove(subgraph)
+                    print(f"     Removing subgraph {idx} with length", len(subgraph))
+                    deleteSubgraphs.append(idx)
+                    # self.subgraphs.remove(subgraph)
+
+            self.subgraphs = list(np.delete(self.subgraphs, deleteSubgraphs))
 
         # Loop over the subgraphs and get hierarchical indexing for each (separately) and extract features
         # We have to divide the graphs into subgraphs for the hierarchical indexing to be applied properly,
@@ -281,7 +288,7 @@ class centerlineGraphOperator:
                         deleteCellIds.append(self.subgraphs[idx].nodes[node]["cellId"])
 
         if len(deleteCellIds) > 0:
-            print("         Found random islands containing the follwing cellId:", deleteCellIds)
+            print("     Found random islands containing the follwing cellId:", deleteCellIds)
             # Delete subgraphs from random islands
             self.subgraphs = list(np.delete(self.subgraphs, deleteSubgraphs))
             # Correcting position shift due to presence of random island
@@ -875,7 +882,6 @@ class centerlineGraphOperator:
                 downstream = False
                 for neighbor in self.centerlineGraph.neighbors(mainGraphNode):
                     # If neighbor with higher hierarchy has smaller segmentsArrayPoints indices than cutOffIdx, the segment is downstream. Otherwise it is not
-                    # print(self.centerlineGraph.nodes[mainGraphNode]["cellId"], self.centerlineGraph.nodes[mainGraphNode]["features"][0], self.centerlineGraph.nodes[neighbor]["features"][0], cutOffIdx, self.centerlineGraph[neighbor][mainGraphNode]["segmentsArrayPoints"])
                     if self.centerlineGraph.nodes[mainGraphNode]["cellId"] == self.centerlineGraph.nodes[neighbor]["cellId"] and self.centerlineGraph.nodes[neighbor]["features"][0] > self.centerlineGraph.nodes[mainGraphNode]["features"][0] and np.mean(self.centerlineGraph[neighbor][mainGraphNode]["segmentsArrayPoints"]) < cutOffIdx:
                         downstream = True
                 # We keep mainGraphNode as initial previousNode for recursive node analysis
@@ -897,7 +903,6 @@ class centerlineGraphOperator:
                             self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"] = self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"] - cutOffIdx
                             # Eliminate negative edges if found (this)
                             while self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"][0] < 0 and len(self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"]) > 1:
-                                # print("A", self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"])
                                 self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"] = np.delete(self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"], 0)
                             # Update previousNode
                             previousNode = neighbor
@@ -912,7 +917,6 @@ class centerlineGraphOperator:
                             # Update edge segmentsArrayPoints with cutOffIdx
                             self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"] = self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"] - cutOffIdx
                             while self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"][0] < 0 and len(self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"]) > 1:
-                                # print("B", self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"])
                                 self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"] = np.delete(self.centerlineGraph[previousNode][neighbor]["segmentsArrayPoints"], 0)
                             # Update previousNode
                             previousNode = neighbor
@@ -943,6 +947,7 @@ class centerlineGraphOperator:
         # Check for separate subgraphs after graph unification
         subgraphsAux = [self.centerlineGraph.subgraph(components) for components in nx.connected_components(self.centerlineGraph)]
         # If more than one subgraph is found, it is probably a problematic one. Just skip it for further analysis
+        ### To be revsited, this causes problems (lacking nodes!)
         if len(subgraphsAux) > 1:
             print("We are here")
             self.centerlineGraph = None
@@ -1191,9 +1196,13 @@ class centerlineGraphOperator:
             
             '''
             # Make supersegment directory in case it is missing
-            if not os.path.isdir(os.path.join(self.caseDir, "supersegmentsPred")): os.mkdir(os.path.join(self.caseDir, "supersegmentsPred"))
+            if not os.path.isdir(os.path.join(self.caseDir, "supersegments")): os.mkdir(os.path.join(self.caseDir, "supersegments"))
             # Specify the maximum length for a bifurcating segment
             limitBifurcationLength = 1000
+            # Store all full graph positions to filter out those nodes that were not in the complete graph (should not happen but it does happen from time to time)
+            positionsFullGraph = []
+            for node in self.centerlineGraph:
+                positionsFullGraph.append(self.centerlineGraph.nodes[node]["pos"])
             # Extract sequences for both accesses
             for access in self.accesses:
                 # Initiaize supersegment list for both accesses
@@ -1312,6 +1321,14 @@ class centerlineGraphOperator:
                                         distance += np.linalg.norm(previousPosition - position)
                                         accumulatedDistance += distance
 
+                    # Remove nodes that were in not in the original full graph
+                    removedNodes = []
+                    for node in supersegment:
+                        if not np.amin(np.linalg.norm(supersegment.nodes[node]["pos"] - positionsFullGraph, axis = 1)) < 1e-5:
+                            removedNodes.append(node)
+                    for node in removedNodes:
+                        supersegment.remove_node(node) 
+
                     # Merge nodes that share the same RAS coordinate (bifurcation spots)
                     # First get all nodes that have a degree of 1 (start- and endpoints)
                     deg1Nodes = []
@@ -1328,12 +1345,12 @@ class centerlineGraphOperator:
                             for auxNodes in removedNodes:
                                 aux.remove(auxNodes)
                             for _, node2 in enumerate(aux):
-                                C1 = supersegment.nodes(data=True)[node]["pos"]
-                                C2 = supersegment.nodes(data=True)[node2]["pos"]
+                                C1 = supersegment.nodes[node]["pos"]
+                                C2 = supersegment.nodes[node2]["pos"]
                                 if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
                                     supersegment = nx.contracted_nodes(supersegment, node, node2)
                                     removedNodes.append(node2)
-                                    supersegment.nodes(data=True)[node].pop("contraction")
+                                    supersegment.nodes[node].pop("contraction")
 
                     # Relabel nodes as sequential labels
                     mapping = {}
@@ -1346,16 +1363,81 @@ class centerlineGraphOperator:
                     # Transfer hierarchy and features from the corresponding access to the final supersegments
                     for node in supersegment:
                         for nodeFullGraph in self.centerlineGraph:
-                            if np.linalg.norm(supersegment.nodes[node]["pos"] - self.centerlineGraph.nodes[nodeFullGraph]["pos"]) < 1e-5:
+                            if np.linalg.norm(supersegment.nodes[node]["pos"] - self.centerlineGraph.nodes[nodeFullGraph]["pos"]) < 1e-3:
                                 supersegment.nodes[node]["hierarchy"] = self.centerlineGraph.nodes[nodeFullGraph][f"hierarchy {access}"]
                                 supersegment.nodes[node]["features"] = self.centerlineGraph.nodes[nodeFullGraph][f"features {access}"]
+                    
+                    # Eliminate nodes that were not present in the original full graph (no computed features and hierarchy)
+                    # Maybe it would be worth exploring further why this happens
+                    removeNodes = []
+                    for node in supersegment:
+                        if "features" not in supersegment.nodes[node].keys():
+                            print(configIdx, node, supersegment.nodes[node]["pos"])
+                            # distances = []
+                            # for nodeFullGraph in self.centerlineGraph:
+                            #     distances.append(np.linalg.norm(supersegment.nodes[node]["pos"] - self.centerlineGraph.nodes[nodeFullGraph]["pos"]))
+                            # assert supersegment.degree(node) < 3
+                            # if supersegment.degree(node) == 1:
+                            #     removeNodes.append(node)
+                            # elif supersegment.degree(node) == 2:
+                            #     neighbors = [neighbor for neighbor in supersegment.neighbors(node)]
+                            #     supersegment.add_edge(neighbors[0], neighbors[1])
+                            #     removeNodes.append(node)
+                                
+                    for node in removeNodes:            
+                        supersegment.remove_node(node)
+
+
                     # Add to the supersegments dict
                     self.supersegments[access].append(supersegment)
                     # Save supersegment as pickle
-                    nx.readwrite.gpickle.write_gpickle(supersegment, os.path.join(self.caseDir, "supersegmentsPred", f"{configurationName}.pickle"), protocol = 4)
+                    nx.readwrite.gpickle.write_gpickle(supersegment, os.path.join(self.caseDir, "supersegments", f"{configurationName}.pickle"), protocol = 4)
             # Make plot with all supersegments
             makeSupersegmentPlots(self.caseDir, self.supersegments)
+
+        def selectConfiguration(self):
+            ''' Selects supersegment configuration if patientConfiguration.json is present in self.caseDir.
+
+            Creats new dir self.caseDir/thrombectomyConfiguration, and stores selected supersegment and image.
+            
+            '''
+
+            with open(os.path.join(self.caseDir, "patientConfiguration.json")) as jsonFile:
+                self.patientConfiguration = json.load(jsonFile)[self.caseId]
+
+            if self.patientConfiguration["Laterality"] in ["Right", "Left"]:
+                configurationId = 0
+                if self.patientConfiguration["Access"] is "Femoral":
+                    configurationId += 0
+                elif self.patientConfiguration["Access"] is "Radial": 
+                    configurationId += 4
+                    
+                if self.patientConfiguration["Laterality"] is "Right":
+                    configurationId += 0
+                elif self.patientConfiguration["Laterality"] is "Left": 
+                    configurationId += 2
+                    
+                if self.patientConfiguration["Antero-posterior"] is "Anterior":
+                    configurationId += 0
+                elif self.patientConfiguration["Antero-posterior"] is "Posterior": 
+                    configurationId += 1
+                    
+                print("         Access:", self.patientConfiguration["Access"])
+                print("         Laterality:", self.patientConfiguration["Laterality"])
+                print("         Antero-posterior:", self.patientConfiguration["Antero-posterior"])
+                print("         Configuration selected:", configurationId)
+
+                if not os.path.isdir(os.path.join(self.caseDir, "thrombectomyConfiguration")): os.mkdir(os.path.join(self.caseDir, "thrombectomyConfiguration"))
+
+                for supersegment in [supersegment for supersegment in os.listdir(os.path.join(self.caseDir, "supersegments")) if supersegment.endswith(".pickle") and supersegment.startswith(str(configurationId))]:
+                    print("         Selecting supersegment:", supersegment)
+                    shutil.copyfile(os.path.join(self.caseDir, "supersegments", supersegment), os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
+                    makeSupersegmentPlot(self.caseDir, nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle")), self.patientConfiguration)
+
+            else:
+                print("        Laterality is ambiguous:", self.patientConfiguration["Laterality"])
         
         # Perform both methods to perform supersegment extraction
         supersegmentPrediction(self)
         supersegmentBuilt(self)
+        selectConfiguration(self)

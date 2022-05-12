@@ -512,9 +512,10 @@ def extractFeatures(caseDir, G, segmentsCoordinateArray, segmentsRadiusArray, ac
             for neighbor in G.neighbors(currentNode):
                 # Now we choose first following node to also include first node
                 if G.nodes[currentNode][f"hierarchy {access}"] < G.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(G.nodes[neighbor][f"features {access}"][featureKey]) and not math.isinf(G.nodes[neighbor][f"features {access}"][featureKey]):
-                    print(featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
+                    # print("        ", featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
                     G.nodes[node][f"features {access}"][featureKey] = G.nodes[neighbor][f"features {access}"][featureKey]
                     break
+
             # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
             # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
             currentNode = neighbor
@@ -529,7 +530,7 @@ def extractFeatures(caseDir, G, segmentsCoordinateArray, segmentsRadiusArray, ac
                     for neighbor in G.neighbors(currentNode):
                         # Now we choose first following node to also include first node
                         if G.nodes[currentNode][f"hierarchy {access}"] > G.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(G.nodes[neighbor][f"features {access}"][featureKey]) and not math.isinf(G.nodes[neighbor][f"features {access}"][featureKey]):
-                            print(featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
+                            # print("        ", featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
                             G.nodes[node][f"features {access}"][featureKey] = G.nodes[neighbor][f"features {access}"][featureKey]
                             break
                     # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
@@ -743,11 +744,10 @@ def makeSupersegmentPlots(caseDir, supersegments):
     for idxAccess, access in enumerate(supersegments.keys()):
         for idx, supersegment in enumerate(supersegments[access]):
             highlightNode = None
-            # print(idx, idxAccess, access)
-            # print(supersegment.nodes[0][f"hierarchy {access}"])
-            # for node in supersegment:
-            #     if supersegment.nodes[node][f"hierarchy {access}"] == 0:
-            #         highlightNode = node
+
+            for node in supersegment:
+                if supersegment.nodes[node]["hierarchy"] == 0:
+                    highlightNode = node
                 
             colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
             colorMap = [colorPalette[not supersegment.nodes[node]["isSupersegment"]] for node in supersegment] 
@@ -765,4 +765,32 @@ def makeSupersegmentPlots(caseDir, supersegments):
             ax[(4 * idxAccess + idx) // columns, (4 * idxAccess + idx) % columns].set_xlim([8, 200])
             ax[(4 * idxAccess + idx) // columns, (4 * idxAccess + idx) % columns].set_ylim([-10, 280])
         
-    plt.savefig(os.path.join(caseDir, "supersegmentsPred.png"))
+    plt.savefig(os.path.join(caseDir, "supersegments.png"))
+
+def makeSupersegmentPlot(caseDir, supersegment, patientConfiguration):
+
+    _ = plt.figure(figsize = [5, 10])
+    ax = plt.gca()
+
+    highlightNode = None
+    for node in supersegment:
+        if supersegment.nodes[node]["hierarchy"] == 0:
+            highlightNode = node
+        
+    colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
+    colorMap = [colorPalette[not supersegment.nodes[node]["isSupersegment"]] for node in supersegment] 
+    
+    if highlightNode is not None:
+        colorMap[highlightNode] = "chartreuse"
+
+    # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
+    node_pos_dict_P = {}
+    for n in supersegment.nodes():
+        node_pos_dict_P[n] = [supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
+
+    nx.draw(supersegment, node_pos_dict_P, node_size=10, node_color=colorMap)
+    ax.set_title(patientConfiguration["Access"] + " + " + patientConfiguration["Laterality"] + " + " + patientConfiguration["Antero-posterior"] + ". Time: " + str(patientConfiguration["Time first angiography"]), fontsize=12)
+    ax.set_xlim([8, 200])
+    ax.set_ylim([-10, 280])
+        
+    plt.savefig(os.path.join(caseDir, "thrombectomyConfiguration", "supersegment.png"))

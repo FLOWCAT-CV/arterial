@@ -1,22 +1,28 @@
 import os
+import shutil
 
-databaseDir = "/Users/pere/opt/anaconda3/envs/gnnenv/graphUNet/denseGraphs/database/testDatabase"
+databaseDir = "/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/Database"
+externalHDPath = "/Volumes/My Passport/Arterial II/Database"
 
-skip = ["12878665"]
-# skip = ["16871012"]
+# skip = ["18545937"]
+# skip = ["Revisit", "Unsolved"]
+skip = []
 
-for caseId in [x for x in sorted(os.listdir(databaseDir)) if not x.startswith(".") and x not in skip]:
+for caseId in [x for x in sorted(os.listdir(databaseDir)) if not x.startswith(".") and x not in skip][:1]:
 
-    casePath = os.path.join(databaseDir, caseId, f"{caseId}.nii.gz")
+    # if not os.path.isfile(os.path.join(databaseDir, caseId, "supersegments.png")):
+        casePath = os.path.join(databaseDir, caseId, f"{caseId}.nii.gz")
 
-    # os.system(f"python3 /Users/pere/GitHub/dev/arterial/arterial/performAnalysis.py -casePath {casePath}")
+        if os.path.isfile(os.path.join(externalHDPath, caseId, f"{caseId}_CTA.nii.gz")):
+            shutil.copyfile(os.path.join(externalHDPath, caseId, f"{caseId}_CTA.nii.gz"), os.path.join(databaseDir, caseId, f"{caseId}_CTA.nii.gz"))
+        else:
+            shutil.copyfile(os.path.join(externalHDPath, caseId, f"{caseId}.nii.gz"), os.path.join(databaseDir, caseId, f"{caseId}_CTA.nii.gz"))
 
-    try:
-        os.remove(os.path.join(databaseDir, caseId, "supersegmentsPredv0.png"))
-        os.remove(os.path.join(databaseDir, caseId, "supersegmentsPredv1.png"))
-        os.rename(os.path.join(databaseDir, caseId, "supersegmentsPredv2.png"), os.path.join(databaseDir, caseId, "supersegmentsPred.png"))
-        os.remove(os.path.join(databaseDir, caseId, "supersegmentsLabelv0.png"))
-        os.remove(os.path.join(databaseDir, caseId, "supersegmentsLabelv1.png"))
-        os.rename(os.path.join(databaseDir, caseId, "supersegmentsLabelv2.png"), os.path.join(databaseDir, caseId, "supersegmentsLabel.png"))
-    except:
-        print(caseId)
+        os.system(f"python3 /Users/pere/GitHub/arterial/arterial/performAnalysis.py -casePath {casePath}")
+
+        os.remove(os.path.join(databaseDir, caseId, f"{caseId}_CTA.nii.gz"))
+
+# for caseId in [x for x in sorted(os.listdir(externalHDPath)) if not x.startswith(".") and x not in skip]:
+#     if len([x for x in sorted(os.listdir(os.path.join(externalHDPath, caseId))) if x.endswith(".nii.gz")]) < 2:
+#         # print(caseId, [x for x in sorted(os.listdir(os.path.join(externalHDPath, caseId))) if x.endswith(".nii.gz")])
+#         shutil.move(os.path.join(externalHDPath, caseId), os.path.join("/Volumes/My Passport/Arterial II/Fix", caseId))
