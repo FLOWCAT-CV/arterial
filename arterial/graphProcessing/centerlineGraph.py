@@ -481,7 +481,7 @@ class centerlineGraphOperator:
                 self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["number of points"] = len(self.segmentsCoordinateArray[cellId])
                 self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal bifurcation position"] = self.segmentsCoordinateArray[cellId][0]
                 self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"] = self.segmentsCoordinateArray[cellId][-1]
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["center of mass"] = np.sum(self.segmentsCoordinateArray[cellId], axis = 0) / len(self.segmentsCoordinateArray[cellId])
+                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"] = np.sum(self.segmentsCoordinateArray[cellId], axis = 0) / len(self.segmentsCoordinateArray[cellId])
                 # Build edge feature array
                 self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["features"] = np.array([self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["mean rad"], 
                                                                         self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal radius"],
@@ -504,9 +504,9 @@ class centerlineGraphOperator:
                                                                         self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"][0],
                                                                         self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"][1],
                                                                         self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"][2],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["center of mass"][0],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["center of mass"][1],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["center of mass"][2]
+                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"][0],
+                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"][1],
+                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"][2]
                 ])
                 totalNodes += 2   
 
