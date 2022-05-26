@@ -680,8 +680,8 @@ def vesselTypeSequenceToOneHot(sequence, highlights = None, counterHighlights = 
     
     supersegmentCandidateOneHot = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     for vesselType in sequence:
-            supersegmentCandidateOneHot[vesselTypeOneHotCode[vesselType]] = 1
-            
+        supersegmentCandidateOneHot[vesselTypeOneHotCode[vesselType]] = 1
+
     if highlights is not None:
         for highlight in highlights:
             supersegmentCandidateOneHot[vesselTypeOneHotCode[highlight]] += 1

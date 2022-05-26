@@ -197,12 +197,12 @@ class centerlineGraphOperator:
                 for auxNodes in removedNodes:
                     aux.remove(auxNodes)
                 for _, node2 in enumerate(aux):
-                    C1 = self.centerlineGraph.nodes(data=True)[node]["pos"]
-                    C2 = self.centerlineGraph.nodes(data=True)[node2]["pos"]
+                    C1 = self.centerlineGraph.nodes[node]["pos"]
+                    C2 = self.centerlineGraph.nodes[node2]["pos"]
                     if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
                         self.centerlineGraph = nx.contracted_nodes(self.centerlineGraph, node, node2)
                         removedNodes.append(node2)
-                        self.centerlineGraph.nodes(data=True)[node].pop("contraction")              
+                        self.centerlineGraph.nodes[node].pop("contraction")           
                         
         # Relabel nodes as sequential labels
         mapping = {}
@@ -213,11 +213,17 @@ class centerlineGraphOperator:
         self.centerlineGraph = nx.relabel.relabel_nodes(self.centerlineGraph, mapping)
 
         # The self.rightmostNode node can be used for hierarchical indexing from radial access
+        removeNodes = []
         rightmostNodePosition = self.segmentsCoordinateArray[0][0]
         for node in self.centerlineGraph:
             if self.centerlineGraph.nodes[node]["pos"][0] < rightmostNodePosition[0] and self.centerlineGraph.degree(node) == 1:
                 self.rightmostNode = node
                 rightmostNodePosition = self.centerlineGraph.nodes[node]["pos"]
+            # If any nodes with degree == 0 are present, remove them
+            if self.centerlineGraph.degree(node) == 0:
+                removeNodes.append(node)
+        for node in removeNodes:
+            self.centerlineGraph.remove_node(node)
 
         # Divide the dense graph into disconnected subgraphs
         self.subgraphs = [self.centerlineGraph.subgraph(components) for components in nx.connected_components(self.centerlineGraph)]
@@ -349,12 +355,12 @@ class centerlineGraphOperator:
         #         for auxNodes in removedNodes:
         #             aux.remove(auxNodes)
         #         for _, node2 in enumerate(aux):
-        #             C1 = self.simpleCenterlineGraph.nodes(data=True)[node]["pos"]
-        #             C2 = self.simpleCenterlineGraph.nodes(data=True)[node2]["pos"]
+        #             C1 = self.simpleCenterlineGraph.nodes[node]["pos"]
+        #             C2 = self.simpleCenterlineGraph.nodes[node2]["pos"]
         #             if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
         #                 self.simpleCenterlineGraph = nx.contracted_nodes(self.simpleCenterlineGraph, node, node2)
         #                 removedNodes.append(node2)
-        #                 self.simpleCenterlineGraph.nodes(data=True)[node].pop("contraction")
+        #                 self.simpleCenterlineGraph.nodes[node].pop("contraction")
 
         # # Relabel nodes as sequential labels
         # mapping = {}
@@ -367,12 +373,12 @@ class centerlineGraphOperator:
         # # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
         # node_pos_dict_P = {}
         # for n in self.simpleCenterlineGraph.nodes():
-        #     node_pos_dict_P[n] = [self.simpleCenterlineGraph.nodes(data=True)[n]["pos"][0], self.simpleCenterlineGraph.nodes(data=True)[n]["pos"][2]]
+        #     node_pos_dict_P[n] = [self.simpleCenterlineGraph.nodes[n]["pos"][0], self.simpleCenterlineGraph.nodes[n]["pos"][2]]
 
         # # For a coronal view, we use P and S coordinates (the view will be from the coronal plane, R axis)
         # node_pos_dict_R = {}
         # for n in self.simpleCenterlineGraph.nodes():
-        #     node_pos_dict_R[n] = [self.simpleCenterlineGraph.nodes(data=True)[n]["pos"][1], self.simpleCenterlineGraph.nodes(data=True)[n]["pos"][2]]
+        #     node_pos_dict_R[n] = [self.simpleCenterlineGraph.nodes[n]["pos"][1], self.simpleCenterlineGraph.nodes[n]["pos"][2]]
 
         # # Save simplified graph
         # nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "graph.pickle"), protocol = 4)
@@ -520,12 +526,12 @@ class centerlineGraphOperator:
                 for auxNodes in removedNodes:
                     aux.remove(auxNodes)
                 for _, node2 in enumerate(aux):
-                    C1 = self.simpleCenterlineGraph.nodes(data=True)[node]["pos"]
-                    C2 = self.simpleCenterlineGraph.nodes(data=True)[node2]["pos"]
+                    C1 = self.simpleCenterlineGraph.nodes[node]["pos"]
+                    C2 = self.simpleCenterlineGraph.nodes[node2]["pos"]
                     if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
                         self.simpleCenterlineGraph = nx.contracted_nodes(self.simpleCenterlineGraph, node, node2)
                         removedNodes.append(node2)
-                        self.simpleCenterlineGraph.nodes(data=True)[node].pop("contraction")
+                        self.simpleCenterlineGraph.nodes[node].pop("contraction")
 
         # Relabel nodes as sequential labels
         mapping = {}
@@ -538,8 +544,8 @@ class centerlineGraphOperator:
         # Directional embeddings for node features have to be computed after all edge directions for the whole graph are computed
         for node in self.simpleCenterlineGraph.nodes:
             projectedMajorDirections = directionalEmbeddings(self.simpleCenterlineGraph, node)
-            self.simpleCenterlineGraph.nodes(data=True)[node]["dir"] = projectedMajorDirections
-            self.simpleCenterlineGraph.nodes(data=True)[node]["features"] = np.append(self.simpleCenterlineGraph.nodes(data=True)[node]["features"], projectedMajorDirections)
+            self.simpleCenterlineGraph.nodes[node]["dir"] = projectedMajorDirections
+            self.simpleCenterlineGraph.nodes[node]["features"] = np.append(self.simpleCenterlineGraph.nodes[node]["features"], projectedMajorDirections)
 
         # Save simplified graph
         nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "graph.pickle"))
@@ -946,12 +952,21 @@ class centerlineGraphOperator:
 
         # Check for separate subgraphs after graph unification
         subgraphsAux = [self.centerlineGraph.subgraph(components) for components in nx.connected_components(self.centerlineGraph)]
-        # If more than one subgraph is found, it is probably a problematic one. Just skip it for further analysis
-        ### To be revsited, this causes problems (lacking nodes!)
+
+        # If more than one subgraph is found, it is probably a problematic one. We remove all nodes from all remaining secondary subgraphs
         if len(subgraphsAux) > 1:
-            print("We are here")
-            self.centerlineGraph = None
-            self.centerlineGraph = subgraphsAux[0].copy()
+            positionsSubgraphs = []
+            for subgraph in subgraphsAux[1:]:
+                for subgraphNode in subgraph:
+                    positionsSubgraphs.append(subgraph.nodes[subgraphNode]["pos"])
+
+            removeNodes = []
+            for node in self.centerlineGraph:
+                if np.amin(np.linalg.norm(self.centerlineGraph.nodes[node]["pos"] - positionsSubgraphs, axis = 1)) < 1e-5:
+                    removeNodes.append(node)
+
+            for node in removeNodes:
+                self.centerlineGraph.remove_node(node)
 
         # Save unified graph
         nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "centerlineGraph.pickle"), protocol = 4)
@@ -1028,7 +1043,7 @@ class centerlineGraphOperator:
 
                 # Now, we loop over all nodes and stack them depending on the hierarchy indices for each access
                 # Every time we find a bifurcation, we create a new path. From here, we can extract a cellId sequence for each of the paths    
-                # 3 To detect bifurcations, we check the node degree        
+                # To detect bifurcations, we check the node degree        
                 for currentHierarchy in range(maxHierarchy + 1):
                     for node in self.centerlineGraph:
                         if self.centerlineGraph.nodes[node][f"hierarchy {access}"] == currentHierarchy:
@@ -1167,10 +1182,13 @@ class centerlineGraphOperator:
                 bifurcatingSegmentsCandidatesVesselTypes[access] = list(np.delete(bifurcatingSegmentsCandidatesVesselTypes[access], deleteIdx))
 
             # Build a one-hot encoded version of the paths (encoding vesselType). We use the same name convention as in the vessel labelling problem
+            print(supersegmentCandidatesVesselTypes[access])
             supersegmentCandidatesOneHot = {}
             for access in self.accesses:
                 supersegmentCandidatesOneHot[access] = []
                 for sequence in supersegmentCandidatesVesselTypes[access]:
+                    if type(sequence) is not list:
+                        sequence = [sequence]
                     supersegmentCandidatesOneHot[access].append(vesselTypeSequenceToOneHot(sequence))
                 
             # Now we select the closest candidate to each of the reference configurations, using the cosine similarity between the one-hot
@@ -1182,6 +1200,7 @@ class centerlineGraphOperator:
                     for supersegmentCandidateOneHot in supersegmentCandidatesOneHot[access]:
                         cosineSimilarities.append(cosineSimilarity(configurationOneHot, supersegmentCandidateOneHot))
                     # For the most similar configuration, we store the cellId sequences for the supersegment and the bifurcating segments
+                    print(len(supersegmentCandidatesCellIds[access]), np.argmax(cosineSimilarities), len(bifurcatingSegmentsCandidatesCellIds[access]))
                     self.predictedConfigurations[access].append([supersegmentCandidatesCellIds[access][np.argmax(cosineSimilarities)], bifurcatingSegmentsCandidatesCellIds[access][np.argmax(cosineSimilarities)]])
 
         def supersegmentBuilt(self):
@@ -1199,10 +1218,12 @@ class centerlineGraphOperator:
             if not os.path.isdir(os.path.join(self.caseDir, "supersegments")): os.mkdir(os.path.join(self.caseDir, "supersegments"))
             # Specify the maximum length for a bifurcating segment
             limitBifurcationLength = 1000
-            # Store all full graph positions to filter out those nodes that were not in the complete graph (should not happen but it does happen from time to time)
+            # Store positions from full main graph
             positionsFullGraph = []
+            nodesFullGraph = []
             for node in self.centerlineGraph:
                 positionsFullGraph.append(self.centerlineGraph.nodes[node]["pos"])
+                nodesFullGraph.append(node)
             # Extract sequences for both accesses
             for access in self.accesses:
                 # Initiaize supersegment list for both accesses
@@ -1321,14 +1342,6 @@ class centerlineGraphOperator:
                                         distance += np.linalg.norm(previousPosition - position)
                                         accumulatedDistance += distance
 
-                    # Remove nodes that were in not in the original full graph
-                    removedNodes = []
-                    for node in supersegment:
-                        if not np.amin(np.linalg.norm(supersegment.nodes[node]["pos"] - positionsFullGraph, axis = 1)) < 1e-5:
-                            removedNodes.append(node)
-                    for node in removedNodes:
-                        supersegment.remove_node(node) 
-
                     # Merge nodes that share the same RAS coordinate (bifurcation spots)
                     # First get all nodes that have a degree of 1 (start- and endpoints)
                     deg1Nodes = []
@@ -1363,30 +1376,14 @@ class centerlineGraphOperator:
                     # Transfer hierarchy and features from the corresponding access to the final supersegments
                     for node in supersegment:
                         for nodeFullGraph in self.centerlineGraph:
-                            if np.linalg.norm(supersegment.nodes[node]["pos"] - self.centerlineGraph.nodes[nodeFullGraph]["pos"]) < 1e-3:
-                                supersegment.nodes[node]["hierarchy"] = self.centerlineGraph.nodes[nodeFullGraph][f"hierarchy {access}"]
-                                supersegment.nodes[node]["features"] = self.centerlineGraph.nodes[nodeFullGraph][f"features {access}"]
-                    
-                    # Eliminate nodes that were not present in the original full graph (no computed features and hierarchy)
-                    # Maybe it would be worth exploring further why this happens
-                    removeNodes = []
-                    for node in supersegment:
-                        if "features" not in supersegment.nodes[node].keys():
-                            print(configIdx, node, supersegment.nodes[node]["pos"])
-                            # distances = []
-                            # for nodeFullGraph in self.centerlineGraph:
-                            #     distances.append(np.linalg.norm(supersegment.nodes[node]["pos"] - self.centerlineGraph.nodes[nodeFullGraph]["pos"]))
-                            # assert supersegment.degree(node) < 3
-                            # if supersegment.degree(node) == 1:
-                            #     removeNodes.append(node)
-                            # elif supersegment.degree(node) == 2:
-                            #     neighbors = [neighbor for neighbor in supersegment.neighbors(node)]
-                            #     supersegment.add_edge(neighbors[0], neighbors[1])
-                            #     removeNodes.append(node)
-                                
-                    for node in removeNodes:            
-                        supersegment.remove_node(node)
+                            nodeFullGraph = nodesFullGraph[np.argmin(np.linalg.norm(supersegment.nodes[node]["pos"] - positionsFullGraph, axis = 1))]
+                            supersegment.nodes[node]["pos"] = self.centerlineGraph.nodes[nodeFullGraph]["pos"]
+                            supersegment.nodes[node]["hierarchy"] = self.centerlineGraph.nodes[nodeFullGraph][f"hierarchy {access}"]
+                            supersegment.nodes[node]["features"] = self.centerlineGraph.nodes[nodeFullGraph][f"features {access}"]
 
+                    for node in supersegment:
+                        if "hierarchy" not in supersegment.nodes[node].keys():
+                            print(node, supersegment.nodes[node])
 
                     # Add to the supersegments dict
                     self.supersegments[access].append(supersegment)
@@ -1407,19 +1404,19 @@ class centerlineGraphOperator:
 
             if self.patientConfiguration["Laterality"] in ["Right", "Left"]:
                 configurationId = 0
-                if self.patientConfiguration["Access"] is "Femoral":
+                if self.patientConfiguration["Access"] == "Femoral":
                     configurationId += 0
-                elif self.patientConfiguration["Access"] is "Radial": 
+                elif self.patientConfiguration["Access"] == "Radial": 
                     configurationId += 4
                     
-                if self.patientConfiguration["Laterality"] is "Right":
+                if self.patientConfiguration["Laterality"] == "Right":
                     configurationId += 0
-                elif self.patientConfiguration["Laterality"] is "Left": 
+                elif self.patientConfiguration["Laterality"] == "Left": 
                     configurationId += 2
                     
-                if self.patientConfiguration["Antero-posterior"] is "Anterior":
+                if self.patientConfiguration["Antero-posterior"] == "Anterior":
                     configurationId += 0
-                elif self.patientConfiguration["Antero-posterior"] is "Posterior": 
+                elif self.patientConfiguration["Antero-posterior"] == "Posterior": 
                     configurationId += 1
                     
                 print("         Access:", self.patientConfiguration["Access"])
