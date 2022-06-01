@@ -50,7 +50,16 @@ class centerlineGraphOperator:
         self.simpleCenterlineGraph = nx.Graph()
         
         # Set reference scale for node sampling
-        self.sampleNodeEvery = 50
+        self.sampleNodeEvery = 5
+
+        # Get CTA data from nifti
+        self.niftiCTA = nib.load(os.path.join(self.caseDir, f"{os.path.basename(self.caseDir)}_CTA.nii.gz"))
+
+        # Load branchModel
+        vtkPolyDataReader = vtk.vtkPolyDataReader()
+        vtkPolyDataReader.SetFileName(os.path.join(self.caseDir, "branchModel.vtk"))
+        vtkPolyDataReader.Update()
+        self.branchModel = vtkPolyDataReader.GetOutput()
 
         # Define accesses
         self.accesses = ["femoral", "radial"]
@@ -145,6 +154,7 @@ class centerlineGraphOperator:
                 # For the first node in every cell, we add just a node with its corresponding cellId
                 if idx == 0:
                     self.centerlineGraph.add_node(totalNodes, pos=position)
+                    self.centerlineGraph.nodes[totalNodes]["radius"] = self.segmentsRadiusArray[cellId][idx]
                     self.centerlineGraph.nodes[totalNodes]["cellId"] = cellId
                     totalNodes += 1
                     previousPosition = position
@@ -152,10 +162,13 @@ class centerlineGraphOperator:
                 # node, keeping cellId and the indices of the centerline points in the segmentsArray
                 elif distance > self.sampleNodeEvery:
                     self.centerlineGraph.add_node(totalNodes, pos=position)
+                    self.centerlineGraph.nodes[totalNodes]["radius"] = self.segmentsRadiusArray[cellId][idx]
                     self.centerlineGraph.nodes[totalNodes]["cellId"] = cellId
                     self.centerlineGraph.add_edge(totalNodes - 1, totalNodes)
                     self.centerlineGraph[totalNodes - 1][totalNodes]["cellId"] = cellId
                     self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsArrayPoints"] = np.arange(previousIdx, idx)
+                    self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsCoordinateArray"] = self.segmentsCoordinateArray[cellId][self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsArrayPoints"]]
+                    self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsRadiusArray"] = self.segmentsRadiusArray[cellId][self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsArrayPoints"]]
                     totalNodes += 1
                     previousPosition = position
                     # We alse reinitialize the accumulated distance and update the prior node previousIdx
@@ -166,20 +179,29 @@ class centerlineGraphOperator:
                     # If the number of nodes of the previous node of the cell is 0 (which means that the segment's length is smaller than sampleNodeEvery), we add an additional node
                     if len([n for n in self.centerlineGraph.neighbors(totalNodes - 1)]) == 0:
                         self.centerlineGraph.add_node(totalNodes, pos=position)
+                        self.centerlineGraph.nodes[totalNodes]["radius"] = self.segmentsRadiusArray[cellId][idx]
                         self.centerlineGraph.nodes[totalNodes]["cellId"] = cellId
                         self.centerlineGraph.add_edge(totalNodes - 1, totalNodes)
                         self.centerlineGraph[totalNodes - 1][totalNodes]["cellId"] = cellId
                         self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsArrayPoints"] = np.arange(previousIdx, idx)
+                        self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsCoordinateArray"] = self.segmentsCoordinateArray[cellId][self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsArrayPoints"]]
+                        self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsRadiusArray"] = self.segmentsRadiusArray[cellId][self.centerlineGraph[totalNodes - 1][totalNodes]["segmentsArrayPoints"]]
                         totalNodes += 1
+                        previousPosition = position
                     # If it is not, which will be the general case, we do not add a new node, but instead we transform the last added node and change its position to be placed at the bifurcation/endpoint
                     else:
                         self.centerlineGraph.nodes[totalNodes - 1]["pos"]= position
+                        self.centerlineGraph.nodes[totalNodes - 1]["radius"] = self.segmentsRadiusArray[cellId][idx]
                         self.centerlineGraph.nodes[totalNodes - 1]["cellId"] = cellId
                         self.centerlineGraph[totalNodes - 2][totalNodes - 1]["cellId"] = cellId
                         self.centerlineGraph[totalNodes - 2][totalNodes - 1]["segmentsArrayPoints"] = np.append(self.centerlineGraph[totalNodes - 2][totalNodes - 1]["segmentsArrayPoints"], np.arange(previousIdx, idx))
+                        self.centerlineGraph[totalNodes - 2][totalNodes - 1]["segmentsCoordinateArray"] = self.segmentsCoordinateArray[cellId][self.centerlineGraph[totalNodes - 2][totalNodes - 1]["segmentsArrayPoints"]]
+                        self.centerlineGraph[totalNodes - 2][totalNodes - 1]["segmentsRadiusArray"] = self.segmentsRadiusArray[cellId][self.centerlineGraph[totalNodes - 2][totalNodes - 1]["segmentsArrayPoints"]]
+                        previousPosition = position
                 # If the accumulated distance from the last sample node is smaller than sampleNodeEvery, and we are not in either the first or last nodes of the segmentsArray cell, just update the distance
                 else:
                     distance += np.linalg.norm(previousPosition - position)
+                    previousPosition = position
                     
         # Merge nodes that share the same coordinate (bifurcation spots)
         # First get all nodes that have a degree of 1 (start- and endpoints)
@@ -568,8 +590,12 @@ class centerlineGraphOperator:
             self.cellIdToVesselTypeName[self.predictedSimpleCenterlineGraph[n0][n1]["cellId"]] = self.predictedSimpleCenterlineGraph[n0][n1]["vessel type name"]
 
         for node in self.centerlineGraph:
-            self.centerlineGraph.nodes[node]["vessel type"] = self.cellIdToVesselType[self.centerlineGraph.nodes[node]["cellId"]]
-            self.centerlineGraph.nodes[node]["vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph.nodes[node]["cellId"]]
+            self.centerlineGraph.nodes[node]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph.nodes[node]["cellId"]]
+            self.centerlineGraph.nodes[node]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph.nodes[node]["cellId"]]
+
+        for src, dst in self.centerlineGraph.edges:
+            self.centerlineGraph[src][dst]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph[src][dst]["cellId"]]
+            self.centerlineGraph[src][dst]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph[src][dst]["cellId"]]
 
         # Save graph with predicted edge types
         nx.readwrite.gpickle.write_gpickle(self.centerlineGraph, os.path.join(self.caseDir, "centerlineGraph.pickle"), protocol = 4)
