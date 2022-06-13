@@ -4,7 +4,6 @@ import numpy as np
 import networkx as nx
 
 import nibabel as nib
-import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 
 import matplotlib.pyplot as plt
@@ -87,7 +86,12 @@ def extractEdgeFeatures(G, niftiCTA, access = "femoral", edgesToRemove = None, c
 
     # If edges were artificially added for hierarchical ordering, remove them before feature extraction
     if edgesToRemove is not None:
+        removedEdgesAttributes = []
         for src, dst in edgesToRemove:
+            auxDict = {}
+            for key in G[src][dst].keys():
+                auxDict[key] = G[src][dst][key]
+            removedEdgesAttributes.append(auxDict)
             G.remove_edge(src, dst)
 
     for src, dst in G.edges:
@@ -114,11 +118,15 @@ def extractEdgeFeatures(G, niftiCTA, access = "femoral", edgesToRemove = None, c
         G[src][dst][f"features {access}"]["Min/Max radius ratio"] = G[src][dst][f"features {access}"]["Minimum radius"] / G[src][dst][f"features {access}"]["Maximum radius"]
 
         # Curvature
-        radiusOfCurvatureArray = computeCurvature(segmentPoints)
-        if len(radiusOfCurvatureArray) > 7:
-            G[src][dst][f"features {access}"]["Maximum curvature"] = 1 / np.amin(radiusOfCurvatureArray[2:-2])
-        else:
-            G[src][dst][f"features {access}"]["Maximum curvature"] = 1 / np.amin(radiusOfCurvatureArray)
+        try:
+            radiusOfCurvatureArray = computeCurvature(segmentPoints)
+            if len(radiusOfCurvatureArray) > 7:
+                G[src][dst][f"features {access}"]["Maximum curvature"] = 1 / np.amin(radiusOfCurvatureArray[2:-2])
+            else:
+                G[src][dst][f"features {access}"]["Maximum curvature"] = 1 / np.amin(radiusOfCurvatureArray)
+        except:
+            # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest edge value
+            G[src][dst][f"features {access}"]["Maximum curvature"] = math.nan
 
         # Segment length
         G[src][dst][f"features {access}"]["Segment length"] = sum([np.linalg.norm(segmentPoints[idx - 1] - segmentPoints[idx]) for idx in range(1, len(segmentPoints))])
@@ -148,19 +156,7 @@ def extractEdgeFeatures(G, niftiCTA, access = "femoral", edgesToRemove = None, c
         # When available, we also add the vessel label as node feature
         if cellIdToVesselType is not None:
             G[src][dst][f"features {access}"]["Vessel type"] = cellIdToVesselType[G[src][dst]["cellId"]]
-
-    # Add removed edges back
-    if edgesToRemove is not None:
-        for src, dst in edgesToRemove:
-            G.add_edge(src, dst, cellId = G.nodes[dst]["cellId"])
-            G[src][dst]["isArtificial"] = True
-            if G.nodes[src][f"hierarchy {access}"] < G.nodes[dst][f"hierarchy {access}"]:
-                G[src][dst][f"hierarchy {access}"] = G.nodes[src][f"hierarchy {access}"]
-            else:
-                G[src][dst][f"hierarchy {access}"] = G.nodes[dst][f"hierarchy {access}"]
-            G[src][dst][f"features {access}"] = {}
-            G[src][dst][f"features {access}"]["Segment length"] = np.linalg.norm(G.nodes[src]["pos"] - G.nodes[dst]["pos"])
-
+            
     # We finally check all edges not to have any nan or inf values
     # If present, we choose the value from the neighboring edges
     # We first check fist node (there is only one node with hierarchy equal to 0). This way, we ensure no error propagation and
@@ -196,7 +192,7 @@ def extractEdgeFeatures(G, niftiCTA, access = "femoral", edgesToRemove = None, c
                 while math.isnan(G[src][dst][f"features {access}"][featureKey]) or math.isinf(G[src][dst][f"features {access}"][featureKey]):
                     for neighbor in G.neighbors(currentSrc):
                         # Now we choose first following node to also include first node
-                        if G[currentSrc][neighbor][f"hierarchy {access}"] < G[currentSrc][currentDst][f"hierarchy {access}"] and not math.isnan(G[currentSrc][neighbor][f"features {access}"][featureKey]) and not math.isinf(G[currentSrc][neighbor][f"features {access}"][featureKey]):
+                        if G[currentSrc][neighbor][f"hierarchy {access}"] <= G[currentSrc][currentDst][f"hierarchy {access}"] and not math.isnan(G[currentSrc][neighbor][f"features {access}"][featureKey]) and not math.isinf(G[currentSrc][neighbor][f"features {access}"][featureKey]):
                             print("        ", featureKey, currentSrc, neighbor, G[currentSrc][neighbor][f"features {access}"][featureKey])
                             G[src][dst][f"features {access}"][featureKey] = G[currentSrc][neighbor][f"features {access}"][featureKey]
                             break
@@ -205,13 +201,24 @@ def extractEdgeFeatures(G, niftiCTA, access = "femoral", edgesToRemove = None, c
                     currentDst = currentSrc
                     currentSrc = neighbor
 
+    # Add removed edges back
+    if edgesToRemove is not None:
+        for idx, edge in enumerate(edgesToRemove):
+            src, dst = edge
+            G.add_edge(src, dst, cellId = G.nodes[dst]["cellId"])
+            G[src][dst]["isArtificial"] = True
+            for key in removedEdgesAttributes[idx].keys():
+                G[src][dst][key] = removedEdgesAttributes[idx][key]
+            G[src][dst][f"features {access}"] = {}
+            G[src][dst][f"features {access}"]["Segment length"] = np.linalg.norm(G.nodes[src]["pos"] - G.nodes[dst]["pos"])
+
     if featureExtractionForVesselLabelling:
         for src, dst in G.edges:
-            G[src][dst].pop("hierarchy femoral")
             G[src][dst]["features"] = []
             for key in G[src][dst]["features femoral"]:
                  G[src][dst]["features"].append(G[src][dst]["features femoral"][key])
             G[src][dst]["features"] = np.array(G[src][dst]["features"])
+            G[src][dst].pop("hierarchy femoral")
             G[src][dst].pop("features femoral")
 
     return G
@@ -231,7 +238,12 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
 
     # If edges were artificially added for hierarchical ordering, remove them before feature extraction
     if edgesToRemove is not None:
+        removedEdgesAttributes = []
         for src, dst in edgesToRemove:
+            auxDict = {}
+            for key in G[src][dst].keys():
+                auxDict[key] = G[src][dst][key]
+            removedEdgesAttributes.append(auxDict)
             G.remove_edge(src, dst)
 
     for node in G:
@@ -244,6 +256,8 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
         G.nodes[node][f"features {access}"]["Node position i"] = G.nodes[node]["pos"][0]
         G.nodes[node][f"features {access}"]["Node position j"] = G.nodes[node]["pos"][1]
         G.nodes[node][f"features {access}"]["Node position k"] = G.nodes[node]["pos"][2]
+        # Degree
+        G.nodes[node][f"features {access}"]["Degree"] = G.degree(node)
         # Radius
         G.nodes[node][f"features {access}"]["Radius"] = G.nodes[node]["radius"]
 
@@ -256,8 +270,12 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
                 # Eliminate repeated points
                 segmentPoints = np.unique(segmentPoints, axis = 0)
                 # Compute curvature
-                radiusOfCurvatureArray = computeCurvature(segmentPoints)
-                G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[len(radiusOfCurvatureArray) // 2]
+                try:
+                    radiusOfCurvatureArray = computeCurvature(segmentPoints)
+                    G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[len(radiusOfCurvatureArray) // 2]
+                except:
+                    # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest node value
+                    G.nodes[node][f"features {access}"]["Curvature at node"] = math.nan
         elif G.degree(node) == 2:
             # We define these empty arrays in case there is a rare event like a startpoint originating two centerlines (extremely rare)
             segmentPointsProx = np.ndarray([0, 3])
@@ -285,15 +303,20 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
             segmentPoints = np.append(segmentPointsProx, segmentPointsDist, axis = 0)
             # Eliminate repeated points
             segmentPoints = np.unique(segmentPoints, axis = 0)
-            # Compute curvature
-            radiusOfCurvatureArray = computeCurvature(segmentPoints)
-            G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[np.argmin(np.linalg.norm(segmentPoints - G.nodes[node]["pos"], axis = 1))]
+                # Compute curvature
+            try:
+                radiusOfCurvatureArray = computeCurvature(segmentPoints)
+                G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[np.argmin(np.linalg.norm(segmentPoints - G.nodes[node]["pos"], axis = 1))]
+            except:
+                # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest node value
+                G.nodes[node][f"features {access}"]["Curvature at node"] = math.nan
         # Multi-furcations (degree > 2)
         elif G.degree[node] > 2:
             # We treat multi-furcation as endpoints (since there is no preference a priori for the path that needs to be taken). We only look at the preceeding node
             # First we search the neighboring nodes and we get the candidate centerline points for segment feature extraction from the preceeding node
             # To find the preceeding node, we check the hierarchical order (there should be one node with a lower hierarchical index than the bifurcation point)
             # We have to initialize the segment arrays just in case we are in the rare event of a multifurcation with hierarchy = 0
+            segmentPoints = np.ndarray([0, 3])
             for nodeAux in G.neighbors(node):
                 if G.nodes[nodeAux][f"hierarchy {access}"] < G.nodes[node][f"hierarchy {access}"]:
                     nodeProx = nodeAux
@@ -308,40 +331,34 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
             if len(segmentPoints) == 0:
                 originalNode = node
                 for nodeAux in G.neighbors(node):
-                    nodeProx = originalNode
-                    node = nodeAux
                     # During the graph building phase, we stored the centerline points between each graph node
                     # We only want to keep those closer to the node as part of the feature computations
-                    segmentPoints = G[node][nodeProx]["segmentsCoordinateArray"]
-                    # We have to see the direction for the hierarchization in comparison to the centerline to see if we have to flip the position and radius arrays 
-                    # for a correct computation of the directional features
-                    if np.sign(node - nodeProx) != np.sign(G.nodes[node][f"hierarchy {access}"] - G.nodes[nodeProx][f"hierarchy {access}"]):
-                        segmentPoints = np.flip(segmentPoints, axis = 0)
+                    segmentPoints = G[node][nodeAux]["segmentsCoordinateArray"]
                     break
 
             # Eliminate repeated points
             segmentPoints = np.unique(segmentPoints, axis = 0)
             # Compute curvature
-            radiusOfCurvatureArray = computeCurvature(segmentPoints)
-            G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[len(radiusOfCurvatureArray) // 2]
+            try:
+                radiusOfCurvatureArray = computeCurvature(segmentPoints)
+                G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[len(radiusOfCurvatureArray) // 2]
+            except:
+                # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest node value
+                G.nodes[node][f"features {access}"]["Curvature at node"] = math.nan
 
         # Blanking
         G.nodes[node][f"features {access}"]["Blanking"] = blanking[findPointId(G.nodes[node]["pos"], branchModelCoordinates)]
         # HU at node
         G.nodes[node][f"features {access}"]["HU at node"] = arrayCTA[np.round(G.nodes[node]["pos"]).astype(int)[0], np.round(G.nodes[node]["pos"]).astype(int)[1], np.round(G.nodes[node]["pos"]).astype(int)[2]]
-        
 
     # Add removed edges back
     if edgesToRemove is not None:
-        for src, dst in edgesToRemove:
+        for idx, edge in enumerate(edgesToRemove):
+            src, dst = edge
             G.add_edge(src, dst, cellId = G.nodes[dst]["cellId"])
             G[src][dst]["isArtificial"] = True
-            if G.nodes[src][f"hierarchy {access}"] < G.nodes[dst][f"hierarchy {access}"]:
-                G[src][dst][f"hierarchy {access}"] = G.nodes[src][f"hierarchy {access}"]
-            else:
-                G[src][dst][f"hierarchy {access}"] = G.nodes[dst][f"hierarchy {access}"]
-            G[src][dst][f"features {access}"] = {}
-            G[src][dst][f"features {access}"]["Segment length"] = np.linalg.norm(G.nodes[src]["pos"] - G.nodes[dst]["pos"])
+            for key in removedEdgesAttributes[idx].keys():
+                G[src][dst][key] = removedEdgesAttributes[idx][key]
 
     # We finally check all nodes not to have any nan or inf values
     # If present, we choose the value from the neighboring nodes
@@ -377,10 +394,10 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
                         if G.nodes[currentNode][f"hierarchy {access}"] > G.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(G.nodes[neighbor][f"features {access}"][featureKey]) and not math.isinf(G.nodes[neighbor][f"features {access}"][featureKey]):
                             # print("        ", featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
                             G.nodes[node][f"features {access}"][featureKey] = G.nodes[neighbor][f"features {access}"][featureKey]
-                            break
-                    # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
-                    # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
-                    currentNode = neighbor
+                        # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
+                        # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
+                        elif G.nodes[currentNode][f"hierarchy {access}"] > G.nodes[neighbor][f"hierarchy {access}"]:
+                            currentNode = neighbor
 
     if not featureExtractionForVesselLabelling:
         # Accumulative features
@@ -398,26 +415,22 @@ def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRem
     # If we are preparing the graph for labelling, pop hierarchy and make feature array for GNN processing
     else:
         for node in G:
-            G.nodes[node].pop("hierarchy femoral")
             G.nodes[node]["features"] = []
             for key in G.nodes[node]["features femoral"]:
                 G.nodes[node]["features"].append(G.nodes[node]["features femoral"][key])
             G.nodes[node]["features"] = np.array(G.nodes[node]["features"])
+            G.nodes[node].pop("hierarchy femoral")
             G.nodes[node].pop("features femoral")
 
     return G
 
-def getGlobalFeatures(G):
-
-    G.graph["AA type"] = getAAType(G)
-    G.graph["Bovine arch"] = getBovineArch(G)
-    G.graph["ARSA"] = getARSA(G)
+def extractGlobalFeatures(G):
 
     def getAANodeGoordinates(G):
         AApositions = np.ndarray([0, 3], dtype = float)
         for node in G:
             if G.nodes[node]["Vessel type name"] == "AA":
-                AApositions = np.append(AApositions, G.nodes[node]["pos"], axis = 0)
+                AApositions = np.append(AApositions, [G.nodes[node]["pos"]], axis = 0)
 
         return AApositions
     
@@ -428,7 +441,7 @@ def getGlobalFeatures(G):
         A = 0
         B, C = None, None
         for node in G:
-            if G.nodes[node]["Vessel type name"] == "AA" and G.nodes[node]["pos"] + G.nodes[node]["radius"] > A:
+            if G.nodes[node]["Vessel type name"] == "AA" and G.nodes[node]["pos"][2] + G.nodes[node]["radius"] > A:
                 A = G.nodes[node]["pos"][2] + G.nodes[node]["radius"]
             if G.nodes[node]["Vessel type name"] == "BT" and G.nodes[node]["features femoral"]["Blanking"] == 0 and np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1)) < closestBTNodeDistance:
                 B = G.nodes[node]["pos"][2]
@@ -453,18 +466,23 @@ def getGlobalFeatures(G):
     def getBovineArch(G):
         AApositions = getAANodeGoordinates(G)
         closestLCCANodeDistance = 100
+        closestLCCANode = None
         for node in G:
             if G.nodes[node]["Vessel type name"] == "LCCA" and np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1)) < closestLCCANodeDistance:
                 closestLCCANode = node
                 closestLCCANodeDistance = np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1))
 
-        vesselTypeNamesInContact = []
-        for neighbor in G.neighbors(closestLCCANode):
-            for src, dst in G.edges(neighbor):
-                vesselTypeNamesInContact.append(G[src][dst]["Vessel type name"])
+        if closestLCCANode is not None:
+            vesselTypeNamesInContact = []
+            for neighbor in G.neighbors(closestLCCANode):
+                for src, dst in G.edges(neighbor):
+                    if not G[src][dst]["isArtificial"]:
+                        vesselTypeNamesInContact.append(G[src][dst]["Vessel type name"])
 
-        if "BT" in vesselTypeNamesInContact:
-            bovineArch = 1
+            if "BT" in vesselTypeNamesInContact:
+                bovineArch = 1
+            else:
+                bovineArch = 0
         else:
             bovineArch = 0
 
@@ -473,22 +491,33 @@ def getGlobalFeatures(G):
     def getARSA(G):
         AApositions = getAANodeGoordinates(G)
         closestRSANodeDistance = 100
+        closestRSANode = None
         for node in G:
             if G.nodes[node]["Vessel type name"] == "RSA" and np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1)) < closestRSANodeDistance:
                 closestRSANode = node
                 closestRSANodeDistance = np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1))
 
-        vesselTypeNamesInContact = []
-        for neighbor in G.neighbors(closestRSANode):
-            for src, dst in G.edges(neighbor):
-                vesselTypeNamesInContact.append(G[src][dst]["Vessel type name"])
+        if closestRSANode is not None:
+            vesselTypeNamesInContact = []
+            for neighbor in G.neighbors(closestRSANode):
+                for src, dst in G.edges(neighbor):
+                    if not G[src][dst]["isArtificial"]:
+                        vesselTypeNamesInContact.append(G[src][dst]["Vessel type name"])
 
-        if "AA" in vesselTypeNamesInContact:
-            ARSA = 1
+            if "AA" in vesselTypeNamesInContact:
+                ARSA = 1
+            else:
+                ARSA = 0
         else:
             ARSA = 0
 
         return ARSA
+
+    G.graph["AA type"] = getAAType(G)
+    G.graph["Bovine arch"] = getBovineArch(G)
+    G.graph["ARSA"] = getARSA(G)
+
+    return G
 
 
 def extractFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRemove = None, cellIdToVesselType = None, featureExtractionForVesselLabelling = False):
@@ -527,7 +556,8 @@ def extractFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRemove 
 
     G = extractEdgeFeatures(G, niftiCTA = niftiCTA, access = access, edgesToRemove = edgesToRemove, cellIdToVesselType = cellIdToVesselType, featureExtractionForVesselLabelling = featureExtractionForVesselLabelling)
     G = extractNodeFeatures(G, niftiCTA = niftiCTA, branchModel = branchModel, access = access, edgesToRemove = edgesToRemove, featureExtractionForVesselLabelling = featureExtractionForVesselLabelling)
-    G = extractGlobalFeatures(G)
+    if not featureExtractionForVesselLabelling:
+        G = extractGlobalFeatures(G)
 
     return G
 
@@ -755,3 +785,79 @@ def makeSupersegmentPlot(caseDir, supersegment, patientConfiguration):
     ax.set_ylim([-10, 280])
         
     plt.savefig(os.path.join(caseDir, "thrombectomyConfiguration", "supersegment.png"))
+
+def addConfigurationFeatures(G, patientConfiguration):
+    ''' Adds global features from patient configuration to graph.
+    
+    '''
+    # Interventionalist
+    # Define dict
+    interventionalistsDict = {}
+    interventionalistsDict["David"] = 0
+    interventionalistsDict["Tomasello"] = 1
+    interventionalistsDict["Ribo"] = 2
+    interventionalistsDict["Piñana"] = 3
+    interventionalistsDict["Coscojuela"] = 4
+    interventionalistsDict["Remullo"] = 5
+    interventionalistsDict["Bellvitge"] = 6
+    interventionalistsDict["Requena"] = 7
+    interventionalistsDict["Marta"] = 8
+    internventionalistsOneHot = np.zeros(9)
+    if patientConfiguration["Interventionalist"] in interventionalistsDict.keys():
+        internventionalistsOneHot[interventionalistsDict[patientConfiguration["Interventionalist"]]] = 1.
+    G.graph["Interventionalist"] = internventionalistsOneHot
+
+    # Date
+    year, month, _ = patientConfiguration["Date"].split("-")
+    monthsFromJan2018 = 12 * (int(year) - 2018) + int(month) - 1
+    G.graph["Months from Jan 2018"] = monthsFromJan2018
+
+    # Access
+    if patientConfiguration["Access"] == "Femoral":
+        G.graph["Access"] = 0
+    elif patientConfiguration["Access"] == "Radial":
+        G.graph["Access"] = 1
+    else:
+        G.graph["Access"] = 2
+
+    # DCP
+    if not math.isnan(patientConfiguration["DCP"]):
+        G.graph["DCP"] = 1
+    else:
+        G.graph["DCP"] = 0
+
+    # Antero-posterior
+    if patientConfiguration["Antero-posterior"] == "Anterior":
+        G.graph["Antero-posterior"] = 0
+    if patientConfiguration["Antero-posterior"] == "Posterior":
+        G.graph["Antero-posterior"] = 1
+    else:
+        G.graph["Antero-posterior"] = 2
+        
+    # Laterality
+    if patientConfiguration["Laterality"] == "Right":
+        G.graph["Laterality"] = 0
+    elif patientConfiguration["Laterality"] == "Left":
+        G.graph["Laterality"] = 1
+    else:
+        G.graph["Laterality"] = 2
+
+    # Impossible accesses
+    if not math.isnan(patientConfiguration["TFA impossible"]):
+        G.graph["TFA impossible"] = 1
+    else:
+        G.graph["TFA impossible"] = 0
+        
+    if not math.isnan(patientConfiguration["TRA impossible"]):
+        G.graph["TRA impossible"] = 1
+    else:
+        G.graph["TRA impossible"] = 0
+
+    # Total supersegment length
+    totalLength = 0
+    for src, dst in G.edges:
+        if G[src][dst]["isSupersegment"] > 0.5:
+            totalLength += G[src][dst]["features"]["Segment length"]    
+    G.graph["Total length"] = totalLength
+
+    return G
