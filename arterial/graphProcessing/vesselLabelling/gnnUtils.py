@@ -154,8 +154,8 @@ def savePredictedGraph(caseDir, edgeFormGraphNx, predictedVessels):
     for n0, n1 in edgeFormGraphNx.edges:
         predictedGraph.add_edge(n0, n1)
         predictedGraph[n0][n1]["cellId"] = edgeFormGraphNx[n0][n1]["cellId"]
-        predictedGraph[n0][n1]["vessel type"] = predictedVessels[edgeFormGraphNx[n0][n1]["cellId"]]
-        predictedGraph[n0][n1]["vessel type name"] = edgeTypes[predictedVessels[edgeFormGraphNx[n0][n1]["cellId"]]]
+        predictedGraph[n0][n1]["Vessel type"] = predictedVessels[edgeFormGraphNx[n0][n1]["cellId"]]
+        predictedGraph[n0][n1]["Vessel type name"] = edgeTypes[predictedVessels[edgeFormGraphNx[n0][n1]["cellId"]]]
         predictedGraph[n0][n1]["features"] = edgeFormGraphNx[n0][n1]["features"]
 
     # Save the graph
@@ -165,7 +165,7 @@ def savePredictedGraph(caseDir, edgeFormGraphNx, predictedVessels):
     _ = plt.figure(figsize = [5, 10])
     ax = plt.gca()
     # Set the edge labels for visualization in the png file
-    edge_labels = nx.get_edge_attributes(predictedGraph, 'vessel type name')
+    edge_labels = nx.get_edge_attributes(predictedGraph, 'Vessel type name')
     # We draw the png file with the predicted vessel types
     nx.draw(edgeFormGraphNx, node_pos_dict_P, node_size=20)
     nx.draw_networkx_edge_labels(edgeFormGraphNx, node_pos_dict_P, edge_labels = edge_labels, ax = ax)
@@ -202,7 +202,7 @@ class ArterialDatasetInference(InMemoryDataset):
             graphPyg = Data()
             pos, x, cellIDs, edge_index = [], [], [], []
             for node in graphNx.nodes:
-                pos.append(graphNx.nodes[node]["center of mass"])
+                pos.append(graphNx.nodes[node]["pos"])
                 x.append(graphNx.nodes[node]["features"])
                 cellIDs.append(graphNx.nodes[node]["cellId"])
             for n0, n1 in graphNx.edges:
@@ -267,9 +267,9 @@ class CustomNormalizeFeatures(BaseTransform):
                                                     2.621296421762096429e+02, # distal bifurcation position 0
                                                     2.301304323856222709e+02, # distal bifurcation position 1
                                                     3.054477580255216367e+02, # distal bifurcation position 2
-                                                    1.182467300890445046e+02, # center of mass 0
-                                                    9.730756790265348855e+01, # center of mass 1
-                                                    1.059730889451579827e+02] # center of mass 2
+                                                    1.182467300890445046e+02, # pos 0
+                                                    9.730756790265348855e+01, # pos 1
+                                                    1.059730889451579827e+02] # pos 2
                                                     , dtype=torch.float32)
 
     def __call__(self, data):

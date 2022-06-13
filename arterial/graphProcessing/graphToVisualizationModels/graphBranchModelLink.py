@@ -32,7 +32,7 @@ def graphBranchModelLink(caseDir):
     edgeTypesGraph = {}
     for n0, n1 in labeledGraph.edges:
         cellId = int(labeledGraph[n0][n1]["cellId"])
-        edgeType = int(labeledGraph[n0][n1]["vessel type"])
+        edgeType = int(labeledGraph[n0][n1]["Vessel type"])
         edgeTypesGraph[cellId] = edgeType
 
     # Load branch model
@@ -269,31 +269,7 @@ def makeDicts():
         10: "LICA",
         11: "RECA",
         12: "LECA",
-        13: "BA",
-        14: "AA+BT",
-        15: "RVA+LVA"
+        13: "BA"
     }
 
-    nodeTypes = {
-        0: "other",
-        1: "endpoint",
-        2: "AA_BT",
-        3: "AA-LCCA",
-        4: "AA-LSA",
-        5: "AA-RSA",
-        6: "BT-LCCA",
-        7: "BT-RCCA/RSA",
-        8: "RSA-RVA",
-        9: "LSA-LVA",
-        10: "RCCA-RICA/RECA",
-        11: "LCCA-LICA/LECA",
-        12: "RVA/LVA-BA",
-        13: "BT-LSA",
-        14: "AA-BT/LCCA",
-        15: "AA-LVA",
-        16: "BT-LSA",
-        17: "AA-RCCA",
-        18: "LCCA-LSA"
-    }
-
-    return edgeTypes, nodeTypes
+    return edgeTypes
