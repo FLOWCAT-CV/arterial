@@ -28,7 +28,7 @@ def graphBranchModelLink(caseDir):
     branchModelPath = os.path.join(caseDir, "branchModel.vtk")
 
     # Get cellID and predicted nodetype for all edges of predicted graph
-    edgeTypes, _ = makeDicts()
+    edgeTypes = makeDicts()
     edgeTypesGraph = {}
     for n0, n1 in labeledGraph.edges:
         cellId = int(labeledGraph[n0][n1]["cellId"])

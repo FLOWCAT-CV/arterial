@@ -9,7 +9,7 @@ import nibabel as nib
 
 import vtk
 
-from .centerlineGraphUtils import getHierarchicalOrderingDense, getMaxHierarchy, extractFeatures, vesselTypeSequenceToOneHot, cosineSimilarity, makeGraphPlot, makeSupersegmentPlots, makeSupersegmentPlot, addConfigurationFeatures
+from .centerlineGraphUtils import getHierarchicalOrderingDense, getMaxHierarchy, extractFeatures, vesselTypeSequenceToOneHot, cosineSimilarity, makeGraphPlot, makeSupersegmentPlots, makeSupersegmentPlot, addConfigurationFeatures, selectVertebrobasilarLaterality
 from .vesselLabelling.predictGraph import predictGraph
 
 import warnings
@@ -45,6 +45,9 @@ class centerlineGraphOperator:
                 self.segmentsArrayRAS[idx][idx2] = np.matmul(self.aff, np.append(self.segmentsArray[idx][0][idx2], 1.0))[:3]
         # Get coordinates array from segmentsArray
         self.segmentsCoordinateArray = self.segmentsArrayRAS
+        a = np.ndarray([0, 3])
+        for segment in self.segmentsCoordinateArray:
+            a = np.append(a, segment, axis = 0)
         # Get radius array from segmentsArray
         self.segmentsRadiusArray = self.segmentsArray[:, 1]
 
@@ -279,7 +282,7 @@ class centerlineGraphOperator:
                         minS = subgraph.nodes[node]["pos"][2]
                         startNode = node
             subgraph = getHierarchicalOrderingDense(subgraph, "femoral", startNode)
-            subgraph = extractFeatures(subgraph, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "femoral", featureExtractionForVesselLabelling = True)
+            subgraph = extractFeatures(subgraph, segmentsCoordinateArray = self.segmentsCoordinateArray, segmentsRadiusArray = self.segmentsRadiusArray, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "femoral", featureExtractionForVesselLabelling = True)
             self.subgraphs[idx] = subgraph
 
         # Now join all subgraphs for labelling
@@ -586,7 +589,8 @@ class centerlineGraphOperator:
         
         '''
         # Perform vesselType prediction
-        self.predictedSimpleCenterlineGraph = predictGraph(self.caseDir)
+        # self.predictedSimpleCenterlineGraph = predictGraph(self.caseDir)
+        self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_pred.pickle"))
         # If manually labelled are to be used for labelling of dense graphs
         # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_label.pickle"))
         # Get cellId to vesselType dict from predicted graph
@@ -952,11 +956,11 @@ class centerlineGraphOperator:
         # Hierarchization of self.centerlineGraph for femoral access (hierarchy femoral)
         self.centerlineGraph = getHierarchicalOrderingDense(self.centerlineGraph, access = "femoral", startNode = 0)
         # Featurizes self.centerlineGraph (features femoral)
-        self.centerlineGraph = extractFeatures(self.centerlineGraph, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "femoral", edgesToRemove = self.subgraphsUnionEdges, cellIdToVesselType = self.cellIdToVesselType)
+        self.centerlineGraph = extractFeatures(self.centerlineGraph, segmentsCoordinateArray = self.segmentsCoordinateArray, segmentsRadiusArray = self.segmentsRadiusArray, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "femoral", edgesToRemove = self.subgraphsUnionEdges, cellIdToVesselType = self.cellIdToVesselType)
         # Hierarchization of self.centerlineGraph for radial access (hierarchy radial)
         self.centerlineGraph = getHierarchicalOrderingDense(self.centerlineGraph, access = "radial", startNode = self.rightmostNode)
         # Featurizes self.centerlineGraph (features radial)
-        self.centerlineGraph = extractFeatures(self.centerlineGraph, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "radial", edgesToRemove = self.subgraphsUnionEdges, cellIdToVesselType = self.cellIdToVesselType)
+        self.centerlineGraph = extractFeatures(self.centerlineGraph, segmentsCoordinateArray = self.segmentsCoordinateArray, segmentsRadiusArray = self.segmentsRadiusArray, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "radial", edgesToRemove = self.subgraphsUnionEdges, cellIdToVesselType = self.cellIdToVesselType)
 
         # Save featurized graph (with artificial edges)
         nx.readwrite.gpickle.write_gpickle(self.centerlineGraph, os.path.join(self.caseDir, "centerlineGraph.pickle"), protocol = 4)
@@ -1243,7 +1247,8 @@ class centerlineGraphOperator:
                                         check = True
                                         if supersegment.degree(neighbor) == 2:
                                             bifurcatingNodes.append(neighbor)
-                                            distance += supersegment[currentDst][neighbor][f"features {access}"]["Segment length"]
+                                            # distance += supersegment[currentDst][neighbor][f"features {access}"]["Segment length"]
+                                            distance += np.linalg.norm(supersegment.nodes[currentDst]["pos"] - supersegment.nodes[neighbor]["pos"])
                                             currentDst = neighbor
                                         else:
                                             bifurcatingNodes.append(neighbor)
@@ -1272,26 +1277,26 @@ class centerlineGraphOperator:
                             supersegment[src][dst]["isSupersegment"] = 1
                         else:
                             supersegment[src][dst]["isSupersegment"] = 0
-                        if supersegment[src][dst]["isArtificial"]:
-                            # Either remove edges or make dummy feature array. Some features could be computed only with node data (make function?)
-                            # supersegment.remove_edge(src, dst)
-                            supersegment[src][dst]["features"] = supersegment[0][1]["features"]
-                            for key in supersegment[0][1]["features"].keys():
-                                if key in ["Segment length"]:
-                                    supersegment[src][dst]["features"][key] = supersegment[src][dst]["features femoral"][key]
-                                else:
-                                    supersegment[src][dst]["features"][key] = 0.0
-                            supersegment[src][dst]["hierarchy"] = supersegment[src][dst][f"hierarchy {access}"]
-                            supersegment[src][dst].pop("hierarchy femoral")
-                            supersegment[src][dst].pop("hierarchy radial")
-                        else:
-                            supersegment[src][dst]["features"] = supersegment[src][dst][f"features {access}"]
-                            supersegment[src][dst]["hierarchy"] = supersegment[src][dst][f"hierarchy {access}"]
-                            supersegment[src][dst]["features"]["isSupersegment"] = supersegment[src][dst]["isSupersegment"]
-                            supersegment[src][dst].pop("features femoral")
-                            supersegment[src][dst].pop("features radial")
-                            supersegment[src][dst].pop("hierarchy femoral")
-                            supersegment[src][dst].pop("hierarchy radial")
+                    #     if supersegment[src][dst]["isArtificial"]:
+                    #         # Either remove edges or make dummy feature array. Some features could be computed only with node data (make function?)
+                    #         # supersegment.remove_edge(src, dst)
+                    #         supersegment[src][dst]["features"] = supersegment[0][1]["features"]
+                    #         for key in supersegment[0][1]["features"].keys():
+                    #             if key in ["Segment length"]:
+                    #                 supersegment[src][dst]["features"][key] = supersegment[src][dst]["features femoral"][key]
+                    #             else:
+                    #                 supersegment[src][dst]["features"][key] = 0.0
+                    #         supersegment[src][dst]["hierarchy"] = supersegment[src][dst][f"hierarchy {access}"]
+                    #         supersegment[src][dst].pop("hierarchy femoral")
+                    #         supersegment[src][dst].pop("hierarchy radial")
+                    #     else:
+                    #         supersegment[src][dst]["features"] = supersegment[src][dst][f"features {access}"]
+                    #         supersegment[src][dst]["hierarchy"] = supersegment[src][dst][f"hierarchy {access}"]
+                    #         supersegment[src][dst]["features"]["isSupersegment"] = supersegment[src][dst]["isSupersegment"]
+                    #         supersegment[src][dst].pop("features femoral")
+                    #         supersegment[src][dst].pop("features radial")
+                    #         supersegment[src][dst].pop("hierarchy femoral")
+                    #         supersegment[src][dst].pop("hierarchy radial")
 
                     # Perform masking (remove non-included nodes)
                     for node in removeNodes:
@@ -1323,6 +1328,10 @@ class centerlineGraphOperator:
 
             with open(os.path.join(self.caseDir, "patientConfiguration.json")) as jsonFile:
                 self.patientConfiguration = json.load(jsonFile)[self.caseId]
+
+            # If laterality for thrombectomy is undetermined but it is known that occlusion was vertebrobasilar, choose side with larger VA (mean radius)
+            if "Vertebrobasilar" in self.patientConfiguration["Laterality"]:
+                self.patientConfiguration["Laterality"] = selectVertebrobasilarLaterality(self.centerlineGraph, self.patientConfiguration["Laterality"])
 
             if self.patientConfiguration["Laterality"] in ["Right", "Left"]:
                 configurationId = 0
@@ -1356,7 +1365,20 @@ class centerlineGraphOperator:
                 self.supersegment = nx.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
                 self.supersegment = addConfigurationFeatures(self.supersegment, self.patientConfiguration)
 
+                self.supersegment.graph["features"] = {}
+                for feature in self.supersegment.graph.keys():
+                    if feature not in ["Time to first series", "features", "DCP"]:
+                        self.supersegment.graph["features"][feature] = self.supersegment.graph[feature]
+
+                # Specially added for database preparation
+                self.supersegment.graph["Time to first series"] = self.patientConfiguration["Time first angiography"]
+                if self.patientConfiguration["Time first angiography"] <= 15:
+                    self.supersegment.graph["Time to first series class"] = 0
+                else:
+                    self.supersegment.graph["Time to first series class"] = 1
+
                 nx.write_gpickle(self.supersegment, os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
+                nx.write_gpickle(self.supersegment, os.path.join("/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/onlyNodeFeaturesGraphDatabase", f"{self.caseId}.pickle"))
 
             else:
                 print("        Laterality is ambiguous:", self.patientConfiguration["Laterality"])
