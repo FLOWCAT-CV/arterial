@@ -32,7 +32,7 @@ class centerlineGraphOperator:
         # Get segmentsArray
         self.segmentsArray = np.load(os.path.join(caseDir, "segmentsArray.npy"), allow_pickle = True)
         # Get affine matrix from nifti
-        self.aff = nib.load(os.path.join(self.caseDir, f"{self.caseId}.nii.gz")).affine
+        self.aff = nib.load(os.path.join(self.caseDir, f"{self.caseId}_CTA.nii.gz")).affine
         # Change sign of first component (change transformation from LAS to RAS)
         self.aff[0, 0] = - self.aff[0, 0]
         # Set translation from affine matrix to 0
@@ -354,68 +354,6 @@ class centerlineGraphOperator:
         Stores graph.pickle and graph.png.
         
         '''
-        # # We can make a simplified version of the graph for visualization purposes (cellId easy visualization)
-
-        # # Only taking first and last positions of the curves arrays
-        # totalNodes = 0 # We only link nodes from the same centerline
-        # for cellId, curve in enumerate(self.segmentsCoordinateArray):
-        #     if len(curve) > 1 and len(self.segmentsRadiusArray[cellId]) > 1:
-        #         # Add nodes
-        #         # First node of cell (startpoint)
-        #         self.simpleCenterlineGraph.add_node(totalNodes + 0, pos=curve[0])
-        #         # Last node of cell (endpoint)
-        #         self.simpleCenterlineGraph.add_node(totalNodes + 1, pos=curve[-1])
-        #         # Add edges
-        #         self.simpleCenterlineGraph.add_edge(totalNodes, totalNodes + 1, cellId = cellId)
-        #         totalNodes += 2   
-
-        # # Merge nodes that share the same RAS coordinate (bifurcation spots)
-        # # First get all nodes that have a degree of 1 (start- and endpoints)
-        # deg1Nodes = []
-        # for node, deg in self.simpleCenterlineGraph.degree:
-        #     if deg == 1:
-        #         deg1Nodes.append(node)
-                
-        # # For all degree 1 nodes, we check position to join corresponding start- and enpoints, as well as bifurcations
-        # removedNodes = []
-        # for _, node in enumerate(deg1Nodes):
-        #     if node not in removedNodes:
-        #         aux = deg1Nodes.copy()
-        #         aux.remove(node)
-        #         for auxNodes in removedNodes:
-        #             aux.remove(auxNodes)
-        #         for _, node2 in enumerate(aux):
-        #             C1 = self.simpleCenterlineGraph.nodes[node]["pos"]
-        #             C2 = self.simpleCenterlineGraph.nodes[node2]["pos"]
-        #             if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
-        #                 self.simpleCenterlineGraph = nx.contracted_nodes(self.simpleCenterlineGraph, node, node2)
-        #                 removedNodes.append(node2)
-        #                 self.simpleCenterlineGraph.nodes[node].pop("contraction")
-
-        # # Relabel nodes as sequential labels
-        # mapping = {}
-        # newNode = 0
-        # for oldNode in self.simpleCenterlineGraph.nodes():
-        #     mapping[oldNode] = newNode
-        #     newNode += 1
-        # self.simpleCenterlineGraph = nx.relabel.relabel_nodes(self.simpleCenterlineGraph, mapping)
-
-        # # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
-        # node_pos_dict_P = {}
-        # for n in self.simpleCenterlineGraph.nodes():
-        #     node_pos_dict_P[n] = [self.simpleCenterlineGraph.nodes[n]["pos"][0], self.simpleCenterlineGraph.nodes[n]["pos"][2]]
-
-        # # For a coronal view, we use P and S coordinates (the view will be from the coronal plane, R axis)
-        # node_pos_dict_R = {}
-        # for n in self.simpleCenterlineGraph.nodes():
-        #     node_pos_dict_R[n] = [self.simpleCenterlineGraph.nodes[n]["pos"][1], self.simpleCenterlineGraph.nodes[n]["pos"][2]]
-
-        # # Save simplified graph
-        # nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "graph.pickle"), protocol = 4)
-        # # Make quick plot for easy visualization
-        # makeGraphPlot(self.caseDir, self.simpleCenterlineGraph, "simpleGraph.png")
-
-        ######### This is provisional for vessel labelling
 
         def directionalEmbeddings(G, node):
             ''' Computes the major directions one-hot vector associated with the inward directions of the 
@@ -589,8 +527,8 @@ class centerlineGraphOperator:
         
         '''
         # Perform vesselType prediction
-        # self.predictedSimpleCenterlineGraph = predictGraph(self.caseDir)
-        self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_pred.pickle"))
+        self.predictedSimpleCenterlineGraph = predictGraph(self.caseDir)
+        # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_pred.pickle"))
         # If manually labelled are to be used for labelling of dense graphs
         # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_label.pickle"))
         # Get cellId to vesselType dict from predicted graph
@@ -1277,26 +1215,6 @@ class centerlineGraphOperator:
                             supersegment[src][dst]["isSupersegment"] = 1
                         else:
                             supersegment[src][dst]["isSupersegment"] = 0
-                    #     if supersegment[src][dst]["isArtificial"]:
-                    #         # Either remove edges or make dummy feature array. Some features could be computed only with node data (make function?)
-                    #         # supersegment.remove_edge(src, dst)
-                    #         supersegment[src][dst]["features"] = supersegment[0][1]["features"]
-                    #         for key in supersegment[0][1]["features"].keys():
-                    #             if key in ["Segment length"]:
-                    #                 supersegment[src][dst]["features"][key] = supersegment[src][dst]["features femoral"][key]
-                    #             else:
-                    #                 supersegment[src][dst]["features"][key] = 0.0
-                    #         supersegment[src][dst]["hierarchy"] = supersegment[src][dst][f"hierarchy {access}"]
-                    #         supersegment[src][dst].pop("hierarchy femoral")
-                    #         supersegment[src][dst].pop("hierarchy radial")
-                    #     else:
-                    #         supersegment[src][dst]["features"] = supersegment[src][dst][f"features {access}"]
-                    #         supersegment[src][dst]["hierarchy"] = supersegment[src][dst][f"hierarchy {access}"]
-                    #         supersegment[src][dst]["features"]["isSupersegment"] = supersegment[src][dst]["isSupersegment"]
-                    #         supersegment[src][dst].pop("features femoral")
-                    #         supersegment[src][dst].pop("features radial")
-                    #         supersegment[src][dst].pop("hierarchy femoral")
-                    #         supersegment[src][dst].pop("hierarchy radial")
 
                     # Perform masking (remove non-included nodes)
                     for node in removeNodes:

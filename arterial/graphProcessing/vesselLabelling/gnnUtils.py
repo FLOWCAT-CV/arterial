@@ -246,30 +246,30 @@ class CustomNormalizeFeatures(BaseTransform):
     def __init__(self):
         # These normalization constants are extracted from the average values of each attribute accross
         # the training dataset
-        self.normalizationConstants = torch.tensor([5.273747439888846422e+00, # mean rad
-                                                    7.303014327468136280e+00, # proximal radius
-                                                    4.322198077560408080e+00, # distal radius
-                                                    1.000000000000000000e+00, # proximal/distal radius ratio
-                                                    3.727253986260447238e+00, # minimum radius
-                                                    7.909319265201797400e+00, # maximum radius
-                                                    1.467396407007539381e+02, # distance
-                                                    1.000000000000000000e+00, # relative length
-                                                    1.000000000000000000e+00, # direction 0
-                                                    1.000000000000000000e+00, # direction 1
-                                                    1.000000000000000000e+00, # direction 2
-                                                    1.000000000000000000e+00, # departure angle 0
-                                                    1.000000000000000000e+00, # departure angle 1
-                                                    1.000000000000000000e+00, # departure angle 2
-                                                    3.407976539589442950e+02, # number of points
-                                                    2.582839364498616987e+02, # proximal bifurcation position 0
-                                                    2.294162140744778640e+02, # proximal bifurcation position 1
-                                                    2.139304154958557262e+02, # proximal bifurcation position 2
-                                                    2.621296421762096429e+02, # distal bifurcation position 0
-                                                    2.301304323856222709e+02, # distal bifurcation position 1
-                                                    3.054477580255216367e+02, # distal bifurcation position 2
-                                                    1.182467300890445046e+02, # pos 0
-                                                    9.730756790265348855e+01, # pos 1
-                                                    1.059730889451579827e+02] # pos 2
+        self.normalizationConstants = torch.tensor([5.30396181e+00, # mean rad
+                                                    6.82525207e+00, # proximal radius
+                                                    4.68581140e+00, # distal radius
+                                                    1.00000000e+00, # proximal/distal radius
+                                                    3.89337766e+00, # minimum radius
+                                                    7.72459695e+00, # maximum radius
+                                                    5.67800745e+01, # distance
+                                                    1.00000000e+00, # relative length
+                                                    1.47850216e-01, # direction module
+                                                    1.57079632e+00, # direction polar
+                                                    3.14159265e+00, # direction azimuth
+                                                    2.41050587e-01, # departure angle module
+                                                    1.57079632e+00, # departure angle polar
+                                                    3.14159265e+00, # departure angle azimuth
+                                                    2.92448287e+02, # number of points 
+                                                    1.27771321e+02, # proximal bifurcation R
+                                                    9.69472061e+01, # proximal bifurcation A
+                                                    8.50165220e+01, # proximal bifurcation S
+                                                    1.22975793e+02, # distal bifurcation R
+                                                    1.09849332e+02, # distal bifurcation A
+                                                    1.21327432e+02, # distal bifurcation S
+                                                    1.24610277e+02, # pos R
+                                                    1.03381928e+02, # pos A
+                                                    1.05303725e+02] # pos S
                                                     , dtype=torch.float32)
 
     def __call__(self, data):
