@@ -14,6 +14,258 @@ import math
 import warnings
 warnings.filterwarnings('ignore')
 
+def extractSegmentLevelFeatures(self, forLabelling = True):
+    '''
+    
+    '''
+    def relativeLength(segmentCoordinates):
+        ''' Computes relative length for a given segment.
+
+        Arguments:
+            - segmentCoordinates: coordinats for a given centerline segment.
+
+        Returns:
+            - RL: relative length.
+            
+        '''
+
+        def distanceAlongCenterline(centerline):
+                distance = 0
+                for idx in range(1, len(centerline)):
+                    distance += np.linalg.norm(centerline[idx] - centerline[idx - 1])
+                    
+                return distance
+            
+        euclideanDistance = np.linalg.norm(segmentCoordinates[-1] - segmentCoordinates[0])
+        centerlineDistance = distanceAlongCenterline(segmentCoordinates)
+
+        return euclideanDistance / centerlineDistance
+
+    for src, dst in self.simpleCenterlineGraph.edges:
+        segmentsCoordinateArray = self.simpleCenterlineGraph[src][dst]["segmentsCoordinateArray"]
+        segmentsRadiusArray = self.simpleCenterlineGraph[src][dst]["segmentsRadiusArray"]
+
+        self.simpleCenterlineGraph[src][dst]["pos"] = np.sum(segmentsCoordinateArray, axis = 0) / len(segmentsCoordinateArray)
+        
+        # Build edge feature array
+        self.simpleCenterlineGraph[src][dst]["features"] = {}
+        self.simpleCenterlineGraph[src][dst]["features"]["Mean radius"] = np.mean(segmentsRadiusArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["Proximal radius"] = segmentsRadiusArray[0]
+        self.simpleCenterlineGraph[src][dst]["features"]["Distal radius"] = segmentsRadiusArray[-1]
+        self.simpleCenterlineGraph[src][dst]["features"]["Proximal/distal radius ratio"] = segmentsRadiusArray[0] / segmentsRadiusArray[-1]
+        self.simpleCenterlineGraph[src][dst]["features"]["Minimum radius"] = np.amin(segmentsRadiusArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["Maximum radius"] = np.amax(segmentsRadiusArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["Distance"] = np.linalg.norm(segmentsCoordinateArray[-1] - segmentsCoordinateArray[0])
+        self.simpleCenterlineGraph[src][dst]["features"]["Relative length"] = relativeLength(segmentsCoordinateArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["Direction R"] = ((segmentsCoordinateArray[-1] - segmentsCoordinateArray[0]) / np.linalg.norm(segmentsCoordinateArray[-1] - segmentsCoordinateArray[0]))[0]
+        self.simpleCenterlineGraph[src][dst]["features"]["Direction A"] = ((segmentsCoordinateArray[-1] - segmentsCoordinateArray[0]) / np.linalg.norm(segmentsCoordinateArray[-1] - segmentsCoordinateArray[0]))[1]
+        self.simpleCenterlineGraph[src][dst]["features"]["Direction S"] = ((segmentsCoordinateArray[-1] - segmentsCoordinateArray[0]) / np.linalg.norm(segmentsCoordinateArray[-1] - segmentsCoordinateArray[0]))[2]
+        self.simpleCenterlineGraph[src][dst]["features"]["Departure angle R"] = ((segmentsCoordinateArray[1] - segmentsCoordinateArray[0]) / np.linalg.norm(segmentsCoordinateArray[1] - segmentsCoordinateArray[0]))[0]
+        self.simpleCenterlineGraph[src][dst]["features"]["Departure angle A"] = ((segmentsCoordinateArray[1] - segmentsCoordinateArray[0]) / np.linalg.norm(segmentsCoordinateArray[1] - segmentsCoordinateArray[0]))[1]
+        self.simpleCenterlineGraph[src][dst]["features"]["Departure angle S"] = ((segmentsCoordinateArray[1] - segmentsCoordinateArray[0]) / np.linalg.norm(segmentsCoordinateArray[1] - segmentsCoordinateArray[0]))[2]
+        self.simpleCenterlineGraph[src][dst]["features"]["Number of points"] = len(segmentsCoordinateArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["Proximal bifurcation position R"] = segmentsCoordinateArray[0][0]
+        self.simpleCenterlineGraph[src][dst]["features"]["Proximal bifurcation position A"] = segmentsCoordinateArray[0][1]
+        self.simpleCenterlineGraph[src][dst]["features"]["Proximal bifurcation position S"] = segmentsCoordinateArray[0][2]
+        self.simpleCenterlineGraph[src][dst]["features"]["Distal bifurcation position R"] = segmentsCoordinateArray[-1][0]
+        self.simpleCenterlineGraph[src][dst]["features"]["Distal bifurcation position A"] = segmentsCoordinateArray[-1][1]
+        self.simpleCenterlineGraph[src][dst]["features"]["Distal bifurcation position S"] = segmentsCoordinateArray[-1][2]
+        self.simpleCenterlineGraph[src][dst]["features"]["pos R"] = np.sum(segmentsCoordinateArray, axis = 0)[1] / len(segmentsCoordinateArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["pos A"] = np.sum(segmentsCoordinateArray, axis = 0)[1] / len(segmentsCoordinateArray)
+        self.simpleCenterlineGraph[src][dst]["features"]["pos S"] = np.sum(segmentsCoordinateArray, axis = 0)[2] / len(segmentsCoordinateArray)
+
+    if not forLabelling:
+        self = segmentLevelFeatureExtractionFromNodes(self)
+
+    return self.simpleCenterlineGraph
+
+def segmentLevelFeatureExtractionFromNodes(self):
+    
+    def bendingLength(segment):
+        bendingLengths = []
+        maxHierarchy = 0
+        if len(segment) > 2:
+            for node in segment:
+                if segment.nodes[node]["hierarchy femoral"] == 0:
+                    node_A = node
+                elif segment.nodes[node]["hierarchy femoral"] > maxHierarchy:
+                    node_B = node
+                    maxHierarchy = segment.nodes[node]["hierarchy femoral"]
+
+            A = segment.nodes[node_A]["pos"]
+            B = segment.nodes[node_B]["pos"]
+        
+            for node in segment:
+                if node not in [node_A, node_B]:
+                    C = segment.nodes[node]["pos"]
+                    bendingLengths.append(np.linalg.norm(C - A) * np.sqrt(1 - (np.dot(B - A, C - A) / (np.linalg.norm(B - A) * np.linalg.norm(C - A))) ** 2))
+        else:
+            bendingLengths.append(0.0)
+
+        return np.amax(bendingLengths)
+    
+    def minAngleCurve(segment):
+        maxHierarchy = 0
+        angulations = []
+        if len(segment) > 2:
+            for node in segment:
+                if segment.nodes[node]["hierarchy femoral"] == 0:
+                    node_A = node
+                elif segment.nodes[node]["hierarchy femoral"] > maxHierarchy:
+                    node_B = node
+                    maxHierarchy = segment.nodes[node]["hierarchy femoral"]
+
+            A = segment.nodes[node_A]["pos"]
+            B = segment.nodes[node_B]["pos"]
+
+            angles = []
+            curvature = []
+
+            for hierarchy in range(maxHierarchy + 1):
+                for node in segment:
+                    if segment.nodes[node]["hierarchy femoral"] == hierarchy:
+                        foundNeighbor = False
+                        for neighbor in segment.neighbors(node):
+                            if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
+                                foundNeighbor = True
+                                break
+
+                        if not foundNeighbor:
+                            theta = 0.0
+                        else:
+                            C = segment.nodes[node]["pos"]
+                            D = segment.nodes[neighbor]["pos"]
+                            theta = np.arccos(np.dot(D - C, B - A) / (np.linalg.norm(D - C) * np.linalg.norm(B - A)))
+
+                        angles.append(theta)    
+                        segment.nodes[node]["Tangential polar angle"] = theta
+                        curvature.append(segment.nodes[node]["features femoral"]["Curvature"])
+
+            angleGradGrad = np.gradient(np.gradient(angles))
+            nodes = []
+
+            for hierarchy in range(maxHierarchy + 1):
+                for node in segment:
+                    if segment.nodes[node]["hierarchy femoral"] == hierarchy:
+                        nodes.append(node)
+
+            subsegmentNodeIdxBounds = []
+            currentSign = np.sign(angleGradGrad[0])
+            initialNodeIdx = 0
+
+            for idx, angleGradGradIdx in enumerate(angleGradGrad):
+                if np.sign(angleGradGradIdx) != currentSign:
+                    subsegmentNodeIdxBounds.append([initialNodeIdx, idx])
+                    initialNodeIdx = idx
+                    currentSign = np.sign(angleGradGradIdx)
+                if idx == len(angleGradGrad) - 1:
+                    subsegmentNodeIdxBounds.append([initialNodeIdx, idx])
+
+            subsegmentNodes = []
+
+            for nodeBoundsIdx in subsegmentNodeIdxBounds:
+                subsegmentNodes.append(nodes[nodeBoundsIdx[0]:nodeBoundsIdx[1]])
+
+            turnsNodes = []
+            numSegments = 3
+
+            if len(subsegmentNodes) <= numSegments:
+                for idx in range(len(subsegmentNodes)):
+                    turnsNodes += subsegmentNodes[idx]
+                turnsNodes = [turnsNodes]
+            else:
+                for idx in range(len(subsegmentNodes) - (numSegments - 1)):
+                    turnsNodes.append([])
+                    for idx2 in range(numSegments):
+                        turnsNodes[-1] += subsegmentNodes[idx + idx2]
+
+            turns = []
+
+            for idx, turnNodes in enumerate(turnsNodes):
+                turn = segment.copy()
+                removeNodes = []
+                for node in turn:
+                    if node not in turnNodes:
+                        removeNodes.append(node)
+                for node in removeNodes:
+                    turn.remove_node(node)
+
+                turns.append(turn)
+
+            endNodes = []
+
+            for idx, turn in enumerate(turns):
+                maxCurvature = 0
+                excentricNode = None
+                endNodes = []
+                minCurvatureNodes = []
+                minHierarchyTurn = 10000
+                maxHierarchyTurn = 0
+                for node in turn:
+                    if not turn.degree(node) == 1 and turn.nodes[node]["features femoral"]["Curvature"] > maxCurvature and node not in minCurvatureNodes:
+                        excentricNode = node
+                        maxCurvature = turn.nodes[node]["features femoral"]["Curvature"]
+                        excentricHierarchy = turn.nodes[node]["hierarchy femoral"]
+                        minCurvatureNodes.append(node)
+                    if turn.nodes[node]["hierarchy femoral"] < minHierarchyTurn:
+                        minHierarchyTurn = turn.nodes[node]["hierarchy femoral"]
+                    if turn.nodes[node]["hierarchy femoral"] > maxHierarchyTurn:
+                        maxHierarchyTurn = turn.nodes[node]["hierarchy femoral"]
+
+                try:
+                    # Compute mean radius of curvature for the three most excentric nodes
+                    radiusOfCurvature = [2 / turn.nodes[excentricNode]["features femoral"]["Curvature"]]
+                    for neighbor in turn.neighbors(excentricNode):
+                        radiusOfCurvature.append(2 / turn.nodes[neighbor]["features femoral"]["Curvature"])
+
+                    priorNodes = []
+                    priorDistances = []
+                    posteriorNodes = []
+                    posteriorDistances = []
+
+                    for node in turn:
+                        if turn.nodes[node]["hierarchy femoral"] < excentricHierarchy:
+                            priorNodes.append(node)
+                            priorDistances.append(np.linalg.norm(turn.nodes[node]["pos"] - turn.nodes[excentricNode]["pos"]))
+                        elif turn.nodes[node]["hierarchy femoral"] > excentricHierarchy:
+                            posteriorNodes.append(node)
+                            posteriorDistances.append(np.linalg.norm(turn.nodes[node]["pos"] - turn.nodes[excentricNode]["pos"]))
+
+                    endNodes = [priorNodes[np.argmin(np.abs(priorDistances - np.mean(radiusOfCurvature)))], 
+                                posteriorNodes[np.argmin(np.abs(posteriorDistances - np.mean(radiusOfCurvature)))]]
+
+                    assert len(endNodes) == 2
+
+                    A = turn.nodes[endNodes[0]]["pos"] - turn.nodes[excentricNode]["pos"]
+                    B = turn.nodes[endNodes[1]]["pos"] - turn.nodes[excentricNode]["pos"]
+
+                    angulations.append(np.arccos(np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))) * 180 / math.pi)
+                except:
+                    angulations.append(180.0)
+        else:
+            angulations.append(180.0)
+        return np.amin(angulations)
+
+    def cumulativeCurvature(segment):
+        cumulativeCurvature = 0
+        for node in segment:
+            cumulativeCurvature += segment.nodes[node]["features femoral"]["Curvature"]
+
+        return cumulativeCurvature
+    
+    for src, dst in self.simpleCenterlineGraph.edges:
+        cellId = self.simpleCenterlineGraph[src][dst]["cellId"]
+
+        segment = self.singleSegments[cellId]
+
+        self.simpleCenterlineGraph[src][dst]["features"]["Bending length"] = bendingLength(segment)
+        self.simpleCenterlineGraph[src][dst]["features"]["Most significant angle"] = minAngleCurve(segment)
+        self.simpleCenterlineGraph[src][dst]["features"]["Cumulative curvature"] = cumulativeCurvature(segment)
+        self.simpleCenterlineGraph[src][dst].pop("segmentsCoordinateArray")
+        self.simpleCenterlineGraph[src][dst].pop("segmentsRadiusArray")
+
+    return self
+
 def getHierarchicalOrderingDense(G, access = "femoral", startNode = 0):
     ''' Computes hierarchization of graph. Associates each node to an index that
     indicates the number of nodes to the closest startpoint.
@@ -79,357 +331,7 @@ def getHierarchicalOrderingDense(G, access = "femoral", startNode = 0):
 
     return G
 
-# def extractEdgeFeatures(G, niftiCTA, access = "femoral", edgesToRemove = None, cellIdToVesselType = None, featureExtractionForVesselLabelling = False):
-
-#     # Get CTA data from nifti
-#     arrayCTA = niftiCTA.get_fdata()
-
-#     # If edges were artificially added for hierarchical ordering, remove them before feature extraction
-#     if edgesToRemove is not None:
-#         removedEdgesAttributes = []
-#         for src, dst in edgesToRemove:
-#             auxDict = {}
-#             for key in G[src][dst].keys():
-#                 auxDict[key] = G[src][dst][key]
-#             removedEdgesAttributes.append(auxDict)
-#             G.remove_edge(src, dst)
-
-#     for src, dst in G.edges:
-#         G[src][dst]["isArtificial"] = False
-#         # Define empty feature array
-#         G[src][dst][f"features {access}"] = {}
-#         # Get positions and radius information for centerline points over graph edge
-#         segmentPoints = G[src][dst]["segmentsCoordinateArray"]
-#         # Eliminate repeated points
-#         segmentPoints, indices = np.unique(segmentPoints, axis = 0, return_index=True)
-#         segmentRadius = G[src][dst]["segmentsRadiusArray"][indices]
-#         # If hierarchy does not flow in the direction of node placement, flip segment arrays
-#         if np.sign(src - dst) != np.sign(G.nodes[src][f"hierarchy {access}"] - G.nodes[dst][f"hierarchy {access}"]):
-#             segmentPoints = np.flip(segmentPoints, axis = 0)
-#             segmentRadius = np.flip(segmentRadius)
-
-#         # Mean radius
-#         G[src][dst][f"features {access}"]["Mean radius"] = np.mean(segmentRadius)
-#         # Maximum radius 
-#         G[src][dst][f"features {access}"]["Maximum radius"] = np.max(segmentRadius)
-#         # Minimum radius
-#         G[src][dst][f"features {access}"]["Minimum radius"] = np.min(segmentRadius)
-#         # Min/Max radius ratio
-#         G[src][dst][f"features {access}"]["Min/Max radius ratio"] = G[src][dst][f"features {access}"]["Minimum radius"] / G[src][dst][f"features {access}"]["Maximum radius"]
-
-#         # Curvature
-#         try:
-#             radiusOfCurvatureArray = computeCurvature(segmentPoints)
-#             if len(radiusOfCurvatureArray) > 7:
-#                 G[src][dst][f"features {access}"]["Maximum curvature"] = 1 / np.amin(radiusOfCurvatureArray[2:-2])
-#             else:
-#                 G[src][dst][f"features {access}"]["Maximum curvature"] = 1 / np.amin(radiusOfCurvatureArray)
-#         except:
-#             # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest edge value
-#             G[src][dst][f"features {access}"]["Maximum curvature"] = math.nan
-
-#         # Segment length
-#         G[src][dst][f"features {access}"]["Segment length"] = sum([np.linalg.norm(segmentPoints[idx - 1] - segmentPoints[idx]) for idx in range(1, len(segmentPoints))])
-#         # Number of points
-#         G[src][dst][f"features {access}"]["Number of points"] = len(segmentPoints)
-#         # Average distance between points
-#         G[src][dst][f"features {access}"]["Average distance between points"] = G[src][dst][f"features {access}"]["Segment length"] / len(segmentPoints)
-#         # Relative length
-#         G[src][dst][f"features {access}"]["Relative length"] = np.linalg.norm(segmentPoints[-1] - segmentPoints[0]) / G[src][dst][f"features {access}"]["Segment length"]
-
-#         # Directional features
-#         segmentDirection = segmentPoints[-1] - segmentPoints[0]
-#         module, polar, azimuth = sphericalAnglesFrom3DCartesian(segmentDirection)
-#         # Module
-#         G[src][dst][f"features {access}"]["Direction module"] = module
-#         # Polar
-#         G[src][dst][f"features {access}"]["Direction polar"] = polar
-#         # Azimuth
-#         G[src][dst][f"features {access}"]["Direction azimuth"] = azimuth
-
-#         segmentHU = []
-#         for pointPosition in segmentPoints:
-#             segmentHU.append(arrayCTA[np.round(pointPosition).astype(int)[0], np.round(pointPosition).astype(int)[1], np.round(pointPosition).astype(int)[2]])
-#         G[src][dst][f"features {access}"]["Min HU in segment"] = min(segmentHU)
-#         G[src][dst][f"features {access}"]["Max HU in segment"] = max(segmentHU)
-
-#         # When available, we also add the vessel label as node feature
-#         if cellIdToVesselType is not None:
-#             G[src][dst][f"features {access}"]["Vessel type"] = cellIdToVesselType[G[src][dst]["cellId"]]
-            
-#     # We finally check all edges not to have any nan or inf values
-#     # If present, we choose the value from the neighboring edges
-#     # We first check fist node (there is only one node with hierarchy equal to 0). This way, we ensure no error propagation and
-#     # that all edges will not have nan or inf feature values:
-#     for src, dst in G.edges:
-#         if G[src][dst][f"hierarchy {access}"] == 0:
-#             break
-#     for featureKey in G[src][dst][f"features {access}"].keys():
-#         # We create auxiliary node variables in case we have to look further than the first-degree neighborhood 
-#         currentSrc = src
-#         currentDst = dst
-#         while math.isnan(G[currentSrc][currentDst][f"features {access}"][featureKey]) or math.isinf(G[currentSrc][currentDst][f"features {access}"][featureKey]):
-#             for neighbor in G.neighbors(currentSrc):
-#                 if neighbor != currentDst:
-#                     # Now we choose first following node to also include first node
-#                     if G[currentSrc][neighbor][f"hierarchy {access}"] > G[currentSrc][currentDst][f"hierarchy {access}"] and not math.isnan(G[currentSrc][neighbor][f"features {access}"][featureKey]) and not math.isinf(G[currentSrc][neighbor][f"features {access}"][featureKey]):
-#                         print("        ", featureKey, currentSrc, neighbor, G[currentSrc][neighbor][f"features {access}"][featureKey])
-#                         G[src][dst][f"features {access}"][featureKey] = G[currentSrc][neighbor][f"features {access}"][featureKey]
-#                         break
-
-#             # We update currentDst and currentSrc in case we do not find valid values for the nan or inf features. Search will continue from edge to edge until we find closest edge with valid values
-#             # This is very unlikely to continue further than one iteration due to the low frequency of nan or inf values, but we are inclusive just in case
-#             currentDst = currentSrc
-#             currentSrc = neighbor
-    
-#     # Now we check all other edges (differently from looking at the first edge, we look at nodes with lower hierarchy)
-#     for src, dst in G.edges:
-#         if G[src][dst][f"hierarchy {access}"] > 0:
-#             for featureKey in G[src][dst][f"features {access}"].keys():
-#                 # We create auxiliary node variables in case we have to look further than the first-degree neighborhood 
-#                 currentSrc = src
-#                 currentDst = dst
-#                 while math.isnan(G[src][dst][f"features {access}"][featureKey]) or math.isinf(G[src][dst][f"features {access}"][featureKey]):
-#                     for neighbor in G.neighbors(currentSrc):
-#                         # Now we choose first following node to also include first node
-#                         if G[currentSrc][neighbor][f"hierarchy {access}"] <= G[currentSrc][currentDst][f"hierarchy {access}"] and not math.isnan(G[currentSrc][neighbor][f"features {access}"][featureKey]) and not math.isinf(G[currentSrc][neighbor][f"features {access}"][featureKey]):
-#                             print("        ", featureKey, currentSrc, neighbor, G[currentSrc][neighbor][f"features {access}"][featureKey])
-#                             G[src][dst][f"features {access}"][featureKey] = G[currentSrc][neighbor][f"features {access}"][featureKey]
-#                             break
-#                     # We update currentDst and currentSrc in case we do not find valid values for the nan or inf features. Search will continue from edge to edge until we find closest edge with valid values
-#                     # This is very unlikely to continue further than one iteration due to the low frequency of nan or inf values, but we are inclusive just in case
-#                     currentDst = currentSrc
-#                     currentSrc = neighbor
-
-#     # Add removed edges back
-#     if edgesToRemove is not None:
-#         for idx, edge in enumerate(edgesToRemove):
-#             src, dst = edge
-#             G.add_edge(src, dst, cellId = G.nodes[dst]["cellId"])
-#             G[src][dst]["isArtificial"] = True
-#             for key in removedEdgesAttributes[idx].keys():
-#                 G[src][dst][key] = removedEdgesAttributes[idx][key]
-#             G[src][dst][f"features {access}"] = {}
-#             G[src][dst][f"features {access}"]["Segment length"] = np.linalg.norm(G.nodes[src]["pos"] - G.nodes[dst]["pos"])
-
-#     if featureExtractionForVesselLabelling:
-#         for src, dst in G.edges:
-#             G[src][dst]["features"] = []
-#             for key in G[src][dst]["features femoral"]:
-#                  G[src][dst]["features"].append(G[src][dst]["features femoral"][key])
-#             G[src][dst]["features"] = np.array(G[src][dst]["features"])
-#             G[src][dst].pop("hierarchy femoral")
-#             G[src][dst].pop("features femoral")
-
-#     return G
-
-# def extractNodeFeatures(G, niftiCTA, branchModel, access = "femoral", edgesToRemove = None, featureExtractionForVesselLabelling = False):
-#     # Get CTA data from nifti
-#     arrayCTA = niftiCTA.get_fdata()
-#     # Translation
-#     aff = niftiCTA.affine
-#     translation = np.transpose(aff[:3, 3])
-
-#     # Pool branchModel point coordinates. Get blanking for each point
-#     branchModelCoordinates = np.ndarray([branchModel.GetNumberOfPoints(), 3])
-#     blanking = np.ndarray([branchModel.GetNumberOfPoints()])
-#     accumulatedNumberOfPoints = 0
-#     for idx in range(branchModel.GetNumberOfCells()):         
-#         for idx2 in range(branchModel.GetCell(idx).GetNumberOfPoints()):
-#             branchModelCoordinates[idx2 + accumulatedNumberOfPoints] = branchModel.GetCell(idx).GetPoints().GetPoint(idx2) - translation
-#             branchModelCoordinates[idx2 + accumulatedNumberOfPoints][0] = - branchModelCoordinates[idx2 + accumulatedNumberOfPoints][0]
-#             blanking[idx2 + accumulatedNumberOfPoints] = vtk_to_numpy(branchModel.GetCellData().GetArray("Blanking"))[idx]
-#         accumulatedNumberOfPoints += branchModel.GetCell(idx).GetNumberOfPoints()
-
-#     # If edges were artificially added for hierarchical ordering, remove them before feature extraction
-#     if edgesToRemove is not None:
-#         removedEdgesAttributes = []
-#         for src, dst in edgesToRemove:
-#             auxDict = {}
-#             for key in G[src][dst].keys():
-#                 auxDict[key] = G[src][dst][key]
-#             removedEdgesAttributes.append(auxDict)
-#             G.remove_edge(src, dst)
-
-#     for node in G:
-#         # Define empty feature array
-#         G.nodes[node][f"features {access}"] = {}
-
-#         # Hierarchy
-#         G.nodes[node][f"features {access}"]["Hierarchy"] = G.nodes[node][f"hierarchy {access}"]
-#         # Node position
-#         G.nodes[node][f"features {access}"]["Node position i"] = G.nodes[node]["pos"][0]
-#         G.nodes[node][f"features {access}"]["Node position j"] = G.nodes[node]["pos"][1]
-#         G.nodes[node][f"features {access}"]["Node position k"] = G.nodes[node]["pos"][2]
-#         # Degree
-#         G.nodes[node][f"features {access}"]["Degree"] = G.degree(node)
-#         # Radius
-#         G.nodes[node][f"features {access}"]["Radius"] = G.nodes[node]["radius"]
-
-#         # Curvature
-#         if G.degree(node) == 1:
-#             for nodeEnd in G.neighbors(node):
-#                 # During the graph building phase, we stored the centerline points between each graph node
-#                 # We only want to keep those closer to the node as part of the feature computations
-#                 segmentPoints = G[node][nodeEnd]["segmentsCoordinateArray"]
-#                 # Eliminate repeated points
-#                 segmentPoints = np.unique(segmentPoints, axis = 0)
-#                 # Compute curvature
-#                 try:
-#                     radiusOfCurvatureArray = computeCurvature(segmentPoints)
-#                     G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[len(radiusOfCurvatureArray) // 2]
-#                 except:
-#                     # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest node value
-#                     G.nodes[node][f"features {access}"]["Curvature at node"] = math.nan
-#         elif G.degree(node) == 2:
-#             # We define these empty arrays in case there is a rare event like a startpoint originating two centerlines (extremely rare)
-#             segmentPointsProx = np.ndarray([0, 3])
-#             segmentPointsDist = np.ndarray([0, 3])
-#             for nodeAux in G.neighbors(node):
-#                 if G.nodes[nodeAux][f"hierarchy {access}"] < G.nodes[node][f"hierarchy {access}"]:
-#                     nodeProx = nodeAux
-#                     # During the graph building phase, we stored the centerline points between each graph node
-#                     # We only want to keep those closer to the node as part of the feature computations
-#                     segmentPointsProx = G[node][nodeProx]["segmentsCoordinateArray"]
-#                     # We have to see the direction for the hierarchization in comparison to the centerline to see if we have to flip the position and radius arrays 
-#                     # for a correct computation of the directional features
-#                     if np.sign(node - nodeProx) != np.sign(G.nodes[node][f"hierarchy {access}"] - G.nodes[nodeProx][f"hierarchy {access}"]):
-#                         segmentPointsProx = np.flip(segmentPointsProx, axis = 0)
-#                 elif G.nodes[nodeAux][f"hierarchy {access}"] > G.nodes[node][f"hierarchy {access}"]:
-#                     nodeDist = nodeAux
-#                     # During the graph building phase, we stored the centerline points between each graph node
-#                     # We only want to keep those closer to the node as part of the feature computations
-#                     segmentPointsDist = G[node][nodeDist]["segmentsCoordinateArray"]
-#                     # We have to see the direction for the hierarchization in comparison to the centerline to see if we have to flip the position and radius arrays 
-#                     # for a correct computation of the directional features
-#                     if np.sign(node - nodeDist) != np.sign(G.nodes[node][f"hierarchy {access}"] - G.nodes[nodeDist][f"hierarchy {access}"]):
-#                         segmentPointsDist = np.flip(segmentPointsDist, axis = 0)
-#             # Finally we concatenate both the coordinates and radius of both ends of the segment
-#             segmentPoints = np.append(segmentPointsProx, segmentPointsDist, axis = 0)
-#             # Eliminate repeated points
-#             segmentPoints = np.unique(segmentPoints, axis = 0)
-#                 # Compute curvature
-#             try:
-#                 radiusOfCurvatureArray = computeCurvature(segmentPoints)
-#                 G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[np.argmin(np.linalg.norm(segmentPoints - G.nodes[node]["pos"], axis = 1))]
-#             except:
-#                 # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest node value
-#                 G.nodes[node][f"features {access}"]["Curvature at node"] = math.nan
-#         # Multi-furcations (degree > 2)
-#         elif G.degree[node] > 2:
-#             # We treat multi-furcation as endpoints (since there is no preference a priori for the path that needs to be taken). We only look at the preceeding node
-#             # First we search the neighboring nodes and we get the candidate centerline points for segment feature extraction from the preceeding node
-#             # To find the preceeding node, we check the hierarchical order (there should be one node with a lower hierarchical index than the bifurcation point)
-#             # We have to initialize the segment arrays just in case we are in the rare event of a multifurcation with hierarchy = 0
-#             segmentPoints = np.ndarray([0, 3])
-#             for nodeAux in G.neighbors(node):
-#                 if G.nodes[nodeAux][f"hierarchy {access}"] < G.nodes[node][f"hierarchy {access}"]:
-#                     nodeProx = nodeAux
-#                     # During the graph building phase, we stored the centerline points between each graph node
-#                     # We only want to keep those closer to the node as part of the feature computations
-#                     segmentPoints = G[node][nodeProx]["segmentsCoordinateArray"]
-#                     # We have to see the direction for the hierarchization in comparison to the centerline to see if we have to flip the position and radius arrays 
-#                     # for a correct computation of the directional features
-#                     if np.sign(node - nodeProx) != np.sign(G.nodes[node][f"hierarchy {access}"] - G.nodes[nodeProx][f"hierarchy {access}"]):
-#                         segmentPoints = np.flip(segmentPoints, axis = 0)
-#             # Multi-furcation as start node. We just take the first neighbor to compute all variables. In this case, we invert the roles of node and nodeProx
-#             if len(segmentPoints) == 0:
-#                 originalNode = node
-#                 for nodeAux in G.neighbors(node):
-#                     # During the graph building phase, we stored the centerline points between each graph node
-#                     # We only want to keep those closer to the node as part of the feature computations
-#                     segmentPoints = G[node][nodeAux]["segmentsCoordinateArray"]
-#                     break
-
-#             # Eliminate repeated points
-#             segmentPoints = np.unique(segmentPoints, axis = 0)
-#             # Compute curvature
-#             try:
-#                 radiusOfCurvatureArray = computeCurvature(segmentPoints)
-#                 G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[len(radiusOfCurvatureArray) // 2]
-#             except:
-#                 # If not enough points are found within the edge to compute gradients, set to nan and it will automatically set the closest node value
-#                 G.nodes[node][f"features {access}"]["Curvature at node"] = math.nan
-
-#         # Blanking
-#         G.nodes[node][f"features {access}"]["Blanking"] = blanking[findPointId(G.nodes[node]["pos"], branchModelCoordinates)]
-#         # HU at node
-#         G.nodes[node][f"features {access}"]["HU at node"] = arrayCTA[np.round(G.nodes[node]["pos"]).astype(int)[0], np.round(G.nodes[node]["pos"]).astype(int)[1], np.round(G.nodes[node]["pos"]).astype(int)[2]]
-
-#     # Add removed edges back
-#     if edgesToRemove is not None:
-#         for idx, edge in enumerate(edgesToRemove):
-#             src, dst = edge
-#             G.add_edge(src, dst, cellId = G.nodes[dst]["cellId"])
-#             G[src][dst]["isArtificial"] = True
-#             for key in removedEdgesAttributes[idx].keys():
-#                 G[src][dst][key] = removedEdgesAttributes[idx][key]
-
-#     # We finally check all nodes not to have any nan or inf values
-#     # If present, we choose the value from the neighboring nodes
-#     # We first check fist node (there is only one node with hierarchy equal to 0). This way, we ensure no error propagation and
-#     # that all nodes will not have nan or inf feature values:
-#     for node in G:
-#         if G.nodes[node][f"hierarchy {access}"] == 0:
-#             break
-#     for featureKey in G.nodes[node][f"features {access}"].keys():
-#         # We create an auxiliary node variable in case we have to look further than the first-degree neighborhood 
-#         currentNode = node
-#         while math.isnan(G.nodes[node][f"features {access}"][featureKey]) or math.isinf(G.nodes[node][f"features {access}"][featureKey]):
-#             for neighbor in G.neighbors(currentNode):
-#                 # Now we choose first following node to also include first node
-#                 if G.nodes[currentNode][f"hierarchy {access}"] < G.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(G.nodes[neighbor][f"features {access}"][featureKey]) and not math.isinf(G.nodes[neighbor][f"features {access}"][featureKey]):
-#                     # print("        ", featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
-#                     G.nodes[node][f"features {access}"][featureKey] = G.nodes[neighbor][f"features {access}"][featureKey]
-#                     break
-
-#             # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
-#             # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
-#             currentNode = neighbor
-    
-#     # Now we check all other nodes (differently from looking at the first node, we look at nodes with lower hierarchy)
-#     for node in G:
-#         if G.nodes[node][f"hierarchy {access}"] > 0:
-#             for featureKey in G.nodes[node][f"features {access}"].keys():
-#                 # We create an auxiliary node variable in case we have to look further than the first-degree neighborhood 
-#                 currentNode = node
-#                 while math.isnan(G.nodes[node][f"features {access}"][featureKey]) or math.isinf(G.nodes[node][f"features {access}"][featureKey]):
-#                     for neighbor in G.neighbors(currentNode):
-#                         # Now we choose first following node to also include first node
-#                         if G.nodes[currentNode][f"hierarchy {access}"] > G.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(G.nodes[neighbor][f"features {access}"][featureKey]) and not math.isinf(G.nodes[neighbor][f"features {access}"][featureKey]):
-#                             # print("        ", featureKey, node, neighbor, G.nodes[neighbor][f"features {access}"][featureKey])
-#                             G.nodes[node][f"features {access}"][featureKey] = G.nodes[neighbor][f"features {access}"][featureKey]
-#                         # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
-#                         # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
-#                         elif G.nodes[currentNode][f"hierarchy {access}"] > G.nodes[neighbor][f"hierarchy {access}"]:
-#                             currentNode = neighbor
-
-#     if not featureExtractionForVesselLabelling:
-#         # Accumulative features
-#         for hierarchy in range(getMaxHierarchy(G, access) + 1):
-#             for node in G:
-#                 if G.nodes[node][f"hierarchy {access}"] == hierarchy:
-#                     # For the first node, it is just 0
-#                     if hierarchy == 0:
-#                         G.nodes[node][f"features {access}"]["Accumulated length from access"] = 0.0
-#                     else:
-#                         for nodeAux in G.neighbors(node):
-#                             # For successive nodes, we add the segment lenght to the previously accumulated length from access
-#                             if G.nodes[node][f"hierarchy {access}"] > G.nodes[nodeAux][f"hierarchy {access}"]:
-#                                 G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[nodeAux][f"features {access}"]["Accumulated length from access"] + G[node][nodeAux][f"features {access}"]["Segment length"]
-#     # If we are preparing the graph for labelling, pop hierarchy and make feature array for GNN processing
-#     else:
-#         for node in G:
-#             G.nodes[node]["features"] = []
-#             for key in G.nodes[node]["features femoral"]:
-#                 G.nodes[node]["features"].append(G.nodes[node]["features femoral"][key])
-#             G.nodes[node]["features"] = np.array(G.nodes[node]["features"])
-#             G.nodes[node].pop("hierarchy femoral")
-#             G.nodes[node].pop("features femoral")
-
-#     return G
-
-def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCTA, branchModel, access = "femoral", edgesToRemove = None, featureExtractionForVesselLabelling = False):
+def extractNodeFeaturesDenseGraph(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCTA, branchModel, access = "femoral", edgesToRemove = None):
     ''' Feature extractor method for graph featurization. Inputs a networkx graph as well as the segmentsArray
     and the CTA nifti from a case and returns the same graph with node attributes.
 
@@ -455,8 +357,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
         - edgesToRemove <None or list>: if not None (then list), represents artificial edges of G that were added for a
         correct hierarchical ordering. These are removed for feature extraction (to respect node degree of original G),
         and are finally added for accumulative features computation. Output graph keeps these edges.
-        - featureExtractionForVesselLabelling <bool>: if True, hierarchical ordering is not reliable and features are only used for vessel labelling.
-        If False, then hierarchical ordering is reliable and features are extracted for the final characterization of G.
 
     Returns:
         - G <nx.Graph>: featurized G with node attributes.
@@ -491,7 +391,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
     for node in G:
         # We accumulate the distance to every neighbor node to compute the average distance to neighboring nodes
         distanceToNeighborNodes = []
-
         # Endpoints (degree == 1)
         # For endpoints, we gather information from the endpoint node's relationship to its neighbor (nodeEnd)
         if G.degree[node] == 1:
@@ -528,9 +427,7 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                 if len(segmentPoints) < 3:
                     segmentPoints = segmentPointsCandidates[-3:, :]
                     segmentRadius = segmentRadiusCandidates[-3:]
-                # We also keep the proximal and distance vectors from node to node
-                proxDirectionCartesian = nodeEndPos - nodePos
-                distDirectionCartesian = nodePos - nodeEndPos
+
                 # To compute the curvature, we take the position of the last three nodes (we compute curvature at a scale of node distances)
                 for nodeEnd2 in G.neighbors(nodeEnd):
                     if nodeEnd2 != node:
@@ -539,7 +436,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                     G.nodes[nodeEnd2]["pos"],
                     G.nodes[nodeEnd]["pos"],
                     G.nodes[node]["pos"]
-                    
                 ])
             # Otherwise (it is a startpoint), we keep the proximal part
             else:
@@ -549,9 +445,7 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                 if len(segmentPoints) < 3:
                     segmentPoints = segmentPointsCandidates[:3, :]
                     segmentRadius = segmentRadiusCandidates[:3]
-                # We also keep the proximal and distance vectors from node to node
-                proxDirectionCartesian = nodePos - nodeEndPos
-                distDirectionCartesian = nodeEndPos - nodePos
+
                 # To compute the curvature, we take the position of the first three nodes (we compute curvature at a scale of node distances)
                 for nodeEnd2 in G.neighbors(nodeEnd):
                     if nodeEnd2 != node and G.nodes[nodeEnd2][f"hierarchy {access}"] < G.nodes[nodeEnd][f"hierarchy {access}"]:
@@ -560,7 +454,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                     G.nodes[node]["pos"],
                     G.nodes[nodeEnd]["pos"],
                     G.nodes[nodeEnd2]["pos"]
-                    
                 ])
 
         # Normal segment (degree == 2)
@@ -663,8 +556,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
             segmentPoints = np.append(segmentPointsProx, segmentPointsDist, axis = 0)
             segmentRadius = np.append(segmentRadiusProx, segmentRadiusDist)
             # We also keep the proximal and distance vectors from node to node
-            proxDirectionCartesian = nodeProxPos - nodePos
-            distDirectionCartesian = nodeDistPos - nodePos
 
         # Multi-furcations (degree > 2)
         elif G.degree[node] > 2:
@@ -727,9 +618,7 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                 if len(segmentPoints) < 3:
                     segmentPoints = segmentPointsCandidates[-3:, :]
                     segmentRadius = segmentRadiusCandidates[-3:]
-                # We also keep the proximal and distance vectors from node to node
-                proxDirectionCartesian = nodeProxPos - nodePos
-                distDirectionCartesian = nodePos - nodeProxPos
+
                 # To compute the curvature, we take the position of the first three nodes (we compute curvature at a scale of node distances)
                 for nodeAux2 in G.neighbors(nodeAux):
                     if nodeAux2 != node:
@@ -738,7 +627,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                     G.nodes[node]["pos"],
                     G.nodes[nodeAux]["pos"],
                     G.nodes[nodeAux2]["pos"]
-                    
                 ])
 
                 # At the end, we set node and nodePos back to their original value
@@ -761,9 +649,7 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                 if len(segmentPoints) < 3:
                     segmentPoints = segmentPointsCandidates[-3:, :]
                     segmentRadius = segmentRadiusCandidates[-3:]
-                # We also keep the proximal and distance vectors from node to node
-                proxDirectionCartesian = nodeProxPos - nodePos
-                distDirectionCartesian = nodePos - nodeProxPos
+
                 # To compute the curvature, we take the position of the first three nodes (we compute curvature at a scale of node distances)
                 for nodeAux2 in G.neighbors(nodeAux):
                     if nodeAux2 != node and G.nodes[nodeAux2][f"hierarchy {access}"] < G.nodes[nodeAux][f"hierarchy {access}"]:
@@ -772,7 +658,6 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                     G.nodes[node]["pos"],
                     G.nodes[nodeAux]["pos"],
                     G.nodes[nodeAux2]["pos"]
-                    
                 ])
             
         # Eliminate repeated points
@@ -781,72 +666,31 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
 
         # Feature extraction           
         G.nodes[node][f"features {access}"] = {}
-
-        # Hierarchy
-        G.nodes[node][f"features {access}"]["Hierarchy"] = G.nodes[node][f"hierarchy {access}"]
         
         # Node position
         # We have to compute the ijk positions for normalization purposes (either this or subtract the translation from the affine matrix)
-        # nodePosIJK = np.matmul(np.linalg.inv(aff), np.append(nodePos, 1.0))[:3]
-        G.nodes[node][f"features {access}"]["Node position i"] = nodePos[0]
-        G.nodes[node][f"features {access}"]["Node position j"] = nodePos[1]
-        G.nodes[node][f"features {access}"]["Node position k"] = nodePos[2]
+        G.nodes[node][f"features {access}"]["Node pos i"] = nodePos[0]
+        G.nodes[node][f"features {access}"]["Node pos j"] = nodePos[1]
+        G.nodes[node][f"features {access}"]["Node pos k"] = nodePos[2]
         
         # Radius features
-        G.nodes[node][f"features {access}"]["Mean radius"] = np.mean(segmentRadius)
-        G.nodes[node][f"features {access}"]["Proximal radius"] = segmentRadius[0]
-        G.nodes[node][f"features {access}"]["Middle radius"] = segmentRadius[len(segmentRadius) // 2]
-        G.nodes[node][f"features {access}"]["Distal radius"] = segmentRadius[-1]
-        G.nodes[node][f"features {access}"]["Maximum radius"] = np.amax(segmentRadius)
-        G.nodes[node][f"features {access}"]["Minimum radius"] = np.amin(segmentRadius)
-        G.nodes[node][f"features {access}"]["Min/Max radius ratio"] = np.amin(segmentRadius) / np.amax(segmentRadius)
-        
+        G.nodes[node][f"features {access}"]["Radius"] = np.mean(segmentRadius)
+        # Segment length
+        G.nodes[node][f"features {access}"]["Segment length"] = sum([np.linalg.norm(segmentPoints[idx - 1] - segmentPoints[idx]) for idx in range(1, len(segmentPoints))])
         # Curvature
         radiusOfCurvatureArray = computeCurvature(segmentPointsCurvature)
         if len(radiusOfCurvatureArray) == 3:
-            G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[1]
-            G.nodes[node][f"features {access}"]["Maximum curvature in segment"] = 1 / radiusOfCurvatureArray[1]
-            # G.nodes[node][f"features {access}"]["Radius of curvature at node"] = radiusOfCurvatureArray[1]
-            # G.nodes[node][f"features {access}"]["Minimum radius of curvature in segment"] = radiusOfCurvatureArray[1]
+            G.nodes[node][f"features {access}"]["Curvature"] = 1 / radiusOfCurvatureArray[1]
         else:
-            G.nodes[node][f"features {access}"]["Curvature at node"] = 1 / radiusOfCurvatureArray[np.argmin(np.linalg.norm(segmentPointsCurvature - nodePos, axis = 1))]
-            G.nodes[node][f"features {access}"]["Maximum curvature in segment"] = 1 / np.amin(radiusOfCurvatureArray)
-            # G.nodes[node][f"features {access}"]["Radius of curvature at node"] = radiusOfCurvatureArray[np.argmin(np.linalg.norm(segmentPointsCurvature - nodePos, axis = 1))]
-            # G.nodes[node][f"features {access}"]["Minimum radius of curvature in segment"] = np.amin(radiusOfCurvatureArray)
-        
-        # Neighbor nodes features
-        G.nodes[node][f"features {access}"]["Degree"] = G.degree[node]
-        G.nodes[node][f"features {access}"]["Average distance to neighbor nodes"] = np.mean(distanceToNeighborNodes)
-        
-        # Segment distance features
-        G.nodes[node][f"features {access}"]["Segment length"] = sum([np.linalg.norm(segmentPoints[idx - 1] - segmentPoints[idx]) for idx in range(1, len(segmentPoints))])
-        G.nodes[node][f"features {access}"]["Number of points"] = len(segmentPoints)
-        G.nodes[node][f"features {access}"]["Average distance between points"] = G.nodes[node][f"features {access}"]["Segment length"] / len(segmentPoints)
-        G.nodes[node][f"features {access}"]["Relative length"] = np.linalg.norm(segmentPoints[-1] - segmentPoints[0]) / G.nodes[node][f"features {access}"]["Segment length"]
-
+            G.nodes[node][f"features {access}"]["Curvature"] = 1 / radiusOfCurvatureArray[np.argmin(np.linalg.norm(segmentPointsCurvature - nodePos, axis = 1))]
         # Directional features
-        segmentDirection = segmentPoints[-1] - segmentPoints[0]
-        module, polar, azimuth = sphericalAnglesFrom3DCartesian(segmentDirection)
-        moduleProx, polarProx, azimuthProx = sphericalAnglesFrom3DCartesian(proxDirectionCartesian)
-        moduleDist, polarDist, azimuthDist = sphericalAnglesFrom3DCartesian(distDirectionCartesian)
+        module, polar, azimuth = sphericalAnglesFrom3DCartesian(segmentPoints[-1] - segmentPoints[0])
         G.nodes[node][f"features {access}"]["Direction module"] = module
         G.nodes[node][f"features {access}"]["Direction polar"] = polar
         G.nodes[node][f"features {access}"]["Direction azimuth"] = azimuth
-        G.nodes[node][f"features {access}"]["Proximal direction module"] = moduleProx
-        G.nodes[node][f"features {access}"]["Proximal direction polar"] = polarProx
-        G.nodes[node][f"features {access}"]["Proximal direction azimuth"] = azimuthProx
-        G.nodes[node][f"features {access}"]["Distal direction module"] = moduleDist
-        G.nodes[node][f"features {access}"]["Distal direction polar"] = polarDist
-        G.nodes[node][f"features {access}"]["Distal direction azimuth"] = azimuthDist
-        
         # Other features
         G.nodes[node][f"features {access}"]["Blanking"] = blanking[findPointId(nodePos, branchModelCoordinates)]
-        G.nodes[node][f"features {access}"]["HU at node position"] = arrayCTA[np.round(nodePos).astype(int)[0], np.round(nodePos).astype(int)[1], np.round(nodePos).astype(int)[2]]
-        segmentHU = []
-        for idx, pointPosition in enumerate(segmentPoints):
-            segmentHU.append(arrayCTA[np.round(pointPosition).astype(int)[0], np.round(pointPosition).astype(int)[1], np.round(pointPosition).astype(int)[2]])
-        G.nodes[node][f"features {access}"]["Min HU in segment"] = min(segmentHU)
-        G.nodes[node][f"features {access}"]["Max HU in segment"] = max(segmentHU)
+        # G.nodes[node][f"features {access}"]["HU intensity"] = arrayCTA[np.round(nodePos).astype(int)[0], np.round(nodePos).astype(int)[1], np.round(nodePos).astype(int)[2]]
 
     # If we had removed edges in the beggining, we add them again to compute accumulated features
     if edgesToRemove is not None:
@@ -895,35 +739,25 @@ def extractNodeFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCT
                     currentNode = neighbor
 
     # If we are now performing final feature extraction for supersegment treatment, we compute accumulative features that rely on a proper hierarchical ordering (need subgraph union)
-    if not featureExtractionForVesselLabelling:
-        # Accumulative features
-        for hierarchy in range(getMaxHierarchy(G, access) + 1):
-            for node in G:
-                if G.nodes[node][f"hierarchy {access}"] == hierarchy:
-                    # For the first node, we just compute the segment length
-                    if hierarchy == 0:
-                        G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[node][f"features {access}"]["Segment length"]
-                    else:
-                        for nodeAux in G.neighbors(node):
-                            # For successive nodes, we addthe segment lenght to the previously accumulated length from access
-                            if G.nodes[node][f"hierarchy {access}"] > G.nodes[nodeAux][f"hierarchy {access}"]:
-                                # For artificial nodes, we add the distance between nodes instead (marked by empty segmentsArrayIndices vector in edge features)
-                                if len(G[node][nodeAux]["segmentsArrayIndices"]) > 0:
-                                    G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[node][f"features {access}"]["Segment length"] + G.nodes[nodeAux][f"features {access}"]["Accumulated length from access"]
-                                else:
-                                    G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[nodeAux][f"features {access}"]["Accumulated length from access"] + np.linalg.norm(G.nodes[node]["pos"] - G.nodes[nodeAux]["pos"])
-        # When available, we also add the vessel label as node feature
+    # Accumulative features
+    for hierarchy in range(getMaxHierarchy(G, access) + 1):
         for node in G:
-            G.nodes[node][f"features {access}"]["Vessel type"] = G.nodes[node]["Vessel type"]
-    # If we are preparing the graph for labelling, pop hierarchy and make feature array for GNN processing
-    else:
-        for node in G:
-            G.nodes[node].pop("hierarchy femoral")
-            G.nodes[node]["features"] = []
-            for key in G.nodes[node]["features femoral"]:
-                G.nodes[node]["features"].append(G.nodes[node]["features femoral"][key])
-            G.nodes[node]["features"] = np.array(G.nodes[node]["features"])
-            G.nodes[node].pop("features femoral")
+            if G.nodes[node][f"hierarchy {access}"] == hierarchy:
+                # For the first node, we just compute the segment length
+                if hierarchy == 0:
+                    G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[node][f"features {access}"]["Segment length"]
+                else:
+                    for nodeAux in G.neighbors(node):
+                        # For successive nodes, we addthe segment lenght to the previously accumulated length from access
+                        if G.nodes[node][f"hierarchy {access}"] > G.nodes[nodeAux][f"hierarchy {access}"]:
+                            # For artificial nodes, we add the distance between nodes instead (marked by empty segmentsArrayIndices vector in edge features)
+                            if len(G[node][nodeAux]["segmentsArrayIndices"]) > 0:
+                                G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[node][f"features {access}"]["Segment length"] + G.nodes[nodeAux][f"features {access}"]["Accumulated length from access"]
+                            else:
+                                G.nodes[node][f"features {access}"]["Accumulated length from access"] = G.nodes[nodeAux][f"features {access}"]["Accumulated length from access"] + np.linalg.norm(G.nodes[node]["pos"] - G.nodes[nodeAux]["pos"])
+    # When available, we also add the vessel label as node feature
+    for node in G:
+        G.nodes[node][f"features {access}"]["Vessel type"] = G.nodes[node]["Vessel type"]
 
     return G
 
@@ -1035,48 +869,8 @@ def extractGlobalFeatures(G):
     G.graph["ARSA"] = getARSA(G)
 
     return G
-    
-    # def getARSA(G):
-    #     # Add extra criteria to make it more reliable. 
-    #     # RSA linked to an AA point closer to feamoral startpoint than LSA?
-    #         # Get AA closest node: point A
-    #         # Get point A hierarchy
-    #         # Repeat computation with LSA: point B
-    #         # Get pointy B hierarchy
-    #         # If hierarchy B > hierarchy A, and AA in vesselTypeNamesInContact, ARSA. Else, not ARSA
 
-    #     AApositions = getAANodeGoordinates(G)
-    #     closestRSANodeDistance = 100
-    #     closestRSANode = None
-
-    #     for node in G:
-    #         if G.nodes[node]["Vessel type name"] == "RSA" and np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1)) < closestRSANodeDistance:
-    #             closestRSANode = node
-    #             closestRSANodeDistance = np.amin(np.linalg.norm(AApositions - G.nodes[node]["pos"], axis = 1))
-
-    #     if closestRSANode is not None:
-    #         vesselTypeNamesInContact = []
-    #         for neighbor in G.neighbors(closestRSANode):
-    #             for src, dst in G.edges(neighbor):
-    #                 if not G[src][dst]["isArtificial"]:
-    #                     vesselTypeNamesInContact.append(G[src][dst]["Vessel type name"])
-
-    #         if "AA" in vesselTypeNamesInContact:
-    #             ARSA = 1
-    #         else:
-    #             ARSA = 0
-    #     else:
-    #         ARSA = 0
-
-    #     return ARSA
-
-    # G.graph["AA type"] = getAAType(G)
-    # G.graph["Bovine arch"] = getBovineArch(G)
-    # G.graph["ARSA"] = getARSA(G)
-
-    # return G
-
-def extractFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCTA, branchModel, access = "femoral", edgesToRemove = None, cellIdToVesselType = None, featureExtractionForVesselLabelling = False):
+def extractFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCTA, branchModel, access = "femoral", edgesToRemove = None, cellIdToVesselType = None):
     ''' Feature extractor method for graph featurization. Inputs a networkx graph as well as the segmentsArray
     and the CTA nifti from a case and returns the same graph with node attributes.
 
@@ -1110,10 +904,8 @@ def extractFeatures(G, segmentsCoordinateArray, segmentsRadiusArray, niftiCTA, b
 
     '''
 
-    # G = extractEdgeFeatures(G, niftiCTA = niftiCTA, access = access, edgesToRemove = edgesToRemove, cellIdToVesselType = cellIdToVesselType, featureExtractionForVesselLabelling = featureExtractionForVesselLabelling)
-    G = extractNodeFeatures(G, segmentsCoordinateArray = segmentsCoordinateArray, segmentsRadiusArray = segmentsRadiusArray, niftiCTA = niftiCTA, branchModel = branchModel, access = access, edgesToRemove = edgesToRemove, featureExtractionForVesselLabelling = featureExtractionForVesselLabelling)
-    if not featureExtractionForVesselLabelling:
-        G = extractGlobalFeatures(G)
+    G = extractNodeFeaturesDenseGraph(G, segmentsCoordinateArray = segmentsCoordinateArray, segmentsRadiusArray = segmentsRadiusArray, niftiCTA = niftiCTA, branchModel = branchModel, access = access, edgesToRemove = edgesToRemove)
+    G = extractGlobalFeatures(G)
 
     return G
 
@@ -1272,7 +1064,7 @@ def makeGraphPlot(caseDir, G, filename, label = None):
     plt.savefig(os.path.join(caseDir, filename))
     plt.close()
 
-def makeSupersegmentPlots(caseDir, supersegments):
+def makeSupersegmentPlots(caseDir, supersegments, isSimple = False):
     # We can visualize first the original hierarchic dense graph
     configurationTitles = ["Femoral + right + anterior",
                         "Femoral + right + posterior",
@@ -1293,8 +1085,9 @@ def makeSupersegmentPlots(caseDir, supersegments):
             highlightNode = None
 
             for node in supersegment:
-                if supersegment.nodes[node]["hierarchy"] == 0:
-                    highlightNode = node
+                if "hierarchy" in supersegment.nodes[node].keys():
+                    if supersegment.nodes[node]["hierarchy"] == 0:
+                        highlightNode = node
                 
             colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
             colorMap = [colorPalette[not supersegment.nodes[node]["isSupersegment"]] for node in supersegment] 
@@ -1312,17 +1105,21 @@ def makeSupersegmentPlots(caseDir, supersegments):
             ax[(4 * idxAccess + idx) // columns, (4 * idxAccess + idx) % columns].set_xlim([8, 200])
             ax[(4 * idxAccess + idx) // columns, (4 * idxAccess + idx) % columns].set_ylim([-10, 280])
         
-    plt.savefig(os.path.join(caseDir, "supersegments.png"))
+    if not isSimple:
+        plt.savefig(os.path.join(caseDir, "supersegments.png"))
+    else:
+        plt.savefig(os.path.join(caseDir, "simpleSupersegments.png"))
 
-def makeSupersegmentPlot(caseDir, supersegment, patientConfiguration):
+def makeSupersegmentPlot(caseDir, supersegment, patientConfiguration, isSimple = False):
 
     _ = plt.figure(figsize = [5, 10])
     ax = plt.gca()
 
     highlightNode = None
     for node in supersegment:
-        if supersegment.nodes[node]["hierarchy"] == 0:
-            highlightNode = node
+        if "hierarchy" in supersegment.nodes[node].keys():
+            if supersegment.nodes[node]["hierarchy"] == 0:
+                highlightNode = node
         
     colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
     colorMap = [colorPalette[not supersegment.nodes[node]["isSupersegment"]] for node in supersegment] 
@@ -1340,7 +1137,10 @@ def makeSupersegmentPlot(caseDir, supersegment, patientConfiguration):
     ax.set_xlim([8, 200])
     ax.set_ylim([-10, 280])
         
-    plt.savefig(os.path.join(caseDir, "thrombectomyConfiguration", "supersegment.png"))
+    if not isSimple:
+        plt.savefig(os.path.join(caseDir, "thrombectomyConfiguration", "supersegment.png"))
+    else:
+        plt.savefig(os.path.join(caseDir, "thrombectomyConfiguration", "simpleSupersegment.png"))
 
 def addConfigurationFeatures(G, patientConfiguration):
     ''' Adds global features from patient configuration to graph.

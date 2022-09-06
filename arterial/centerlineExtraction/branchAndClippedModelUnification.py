@@ -127,80 +127,80 @@ def branchAndClippedModelUnification(caseDir):
             # Update total number of points from previous models
             pointsFromPreviousBranchModels += branchModel.GetNumberOfPoints()
 
-            print(f"Processing clipped model {centerlineModelId}...")
+            # print(f"Processing clipped model {centerlineModelId}...")
             
-            # Get point data (we only get groupId)
-            groupIdPointArrayClippedModel = vtk_to_numpy(clippedModel.GetPointData().GetArray("GroupIds"))
-            # Store max groupId
-            maxGroupId = np.amax(groupIdPointArrayClippedModel)
-            # Update groupIds of current clippedModel
-            groupIdPointArrayClippedModel = groupIdPointArrayClippedModel + accGroupIdClippedModel
-            # Update accumulated groupId
-            accGroupIdClippedModel += maxGroupId + 1
-            # Get number of points in each clipped model cell (= 3)
-            numberOfPointIds = clippedModel.GetCell(0).GetPointIds().GetNumberOfIds()
-            # Generally, points are placed as cell indices go up, but this is not always the case
-            # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
-            # But in the cases where a pointIdx has not been found, we search across all cells of the model, in order
-            # to ensure that no pointIdx is missed
-            lastCell = 0
-            # We iterate through every pointId
-            for pointIdx in range(clippedModel.GetNumberOfPoints()):
-                # We need a boolean variable to stop the iterative search when a point is found to speed up computations
-                foundPoint = False
-                # We primarily only search for cells with a cellId larger than the ones analyzed
-                # Limiting up the search dramatically speeds up computations
-                for cellIdx in range(max(0, lastCell - 1), clippedModel.GetNumberOfCells()):
-                    # Iterate over points in cell
-                    for idx in range(numberOfPointIds):
-                        # If a point is found with pointId equal to the next pointIdx
-                        if clippedModel.GetCell(cellIdx).GetPointId(idx) == pointIdx:
-                            # Keep cellIdx to limit cell of the next pointIdx
-                            lastCell = cellIdx
-                            # Insert next point in final clipped model point object and groupId point array
-                            pointsClippedModel.InsertNextPoint(clippedModel.GetCell(cellIdx).GetPoints().GetPoint(idx))
-                            finalGroupIdPointArrayClippedModel.InsertNextValue(groupIdPointArrayClippedModel[clippedModel.GetCell(cellIdx).GetPointId(idx)])
-                            # Update boolean marker to stop the search for the current pointidx
-                            foundPoint = True
-                            break
-                    # Break cell serach if point is found
-                    if foundPoint:
-                        break
-                # If point is not found, search all throughout the cell pool, including cells with a smaller cellIdx than lastCell
-                # These searches are significantly longer than the general case, but we only apply them when needed
-                # This is very rare but if not done, it will mess up the final model
-                if not foundPoint:
-                    # If pointIdx has not been found, we also look at the previous cells (rare but it happens)
-                    for cellIdx in range(clippedModel.GetNumberOfCells()):
-                        # Iterate over points in cell
-                        for idx in range(numberOfPointIds):
-                            # If a point is found with pointId equal to the next pointIdx
-                            if clippedModel.GetCell(cellIdx).GetPointId(idx) == pointIdx:
-                                # Keep cellIdx to limit cell of the next pointIdx
-                                lastCell = cellIdx
-                                # Insert next point in final clipped model point object and groupId point array
-                                pointsClippedModel.InsertNextPoint(clippedModel.GetCell(cellIdx).GetPoints().GetPoint(idx))
-                                finalGroupIdPointArrayClippedModel.InsertNextValue(groupIdPointArrayClippedModel[clippedModel.GetCell(cellIdx).GetPointId(idx)])
-                                # Update boolean marker to stop the search for the current pointidx
-                                foundPoint = True
-                        # Break cell serach if point is found
-                        if foundPoint:
-                            break
+            # # Get point data (we only get groupId)
+            # groupIdPointArrayClippedModel = vtk_to_numpy(clippedModel.GetPointData().GetArray("GroupIds"))
+            # # Store max groupId
+            # maxGroupId = np.amax(groupIdPointArrayClippedModel)
+            # # Update groupIds of current clippedModel
+            # groupIdPointArrayClippedModel = groupIdPointArrayClippedModel + accGroupIdClippedModel
+            # # Update accumulated groupId
+            # accGroupIdClippedModel += maxGroupId + 1
+            # # Get number of points in each clipped model cell (= 3)
+            # numberOfPointIds = clippedModel.GetCell(0).GetPointIds().GetNumberOfIds()
+            # # Generally, points are placed as cell indices go up, but this is not always the case
+            # # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
+            # # But in the cases where a pointIdx has not been found, we search across all cells of the model, in order
+            # # to ensure that no pointIdx is missed
+            # lastCell = 0
+            # # We iterate through every pointId
+            # for pointIdx in range(clippedModel.GetNumberOfPoints()):
+            #     # We need a boolean variable to stop the iterative search when a point is found to speed up computations
+            #     foundPoint = False
+            #     # We primarily only search for cells with a cellId larger than the ones analyzed
+            #     # Limiting up the search dramatically speeds up computations
+            #     for cellIdx in range(max(0, lastCell - 1), clippedModel.GetNumberOfCells()):
+            #         # Iterate over points in cell
+            #         for idx in range(numberOfPointIds):
+            #             # If a point is found with pointId equal to the next pointIdx
+            #             if clippedModel.GetCell(cellIdx).GetPointId(idx) == pointIdx:
+            #                 # Keep cellIdx to limit cell of the next pointIdx
+            #                 lastCell = cellIdx
+            #                 # Insert next point in final clipped model point object and groupId point array
+            #                 pointsClippedModel.InsertNextPoint(clippedModel.GetCell(cellIdx).GetPoints().GetPoint(idx))
+            #                 finalGroupIdPointArrayClippedModel.InsertNextValue(groupIdPointArrayClippedModel[clippedModel.GetCell(cellIdx).GetPointId(idx)])
+            #                 # Update boolean marker to stop the search for the current pointidx
+            #                 foundPoint = True
+            #                 break
+            #         # Break cell serach if point is found
+            #         if foundPoint:
+            #             break
+            #     # If point is not found, search all throughout the cell pool, including cells with a smaller cellIdx than lastCell
+            #     # These searches are significantly longer than the general case, but we only apply them when needed
+            #     # This is very rare but if not done, it will mess up the final model
+            #     if not foundPoint:
+            #         # If pointIdx has not been found, we also look at the previous cells (rare but it happens)
+            #         for cellIdx in range(clippedModel.GetNumberOfCells()):
+            #             # Iterate over points in cell
+            #             for idx in range(numberOfPointIds):
+            #                 # If a point is found with pointId equal to the next pointIdx
+            #                 if clippedModel.GetCell(cellIdx).GetPointId(idx) == pointIdx:
+            #                     # Keep cellIdx to limit cell of the next pointIdx
+            #                     lastCell = cellIdx
+            #                     # Insert next point in final clipped model point object and groupId point array
+            #                     pointsClippedModel.InsertNextPoint(clippedModel.GetCell(cellIdx).GetPoints().GetPoint(idx))
+            #                     finalGroupIdPointArrayClippedModel.InsertNextValue(groupIdPointArrayClippedModel[clippedModel.GetCell(cellIdx).GetPointId(idx)])
+            #                     # Update boolean marker to stop the search for the current pointidx
+            #                     foundPoint = True
+            #             # Break cell serach if point is found
+            #             if foundPoint:
+            #                 break
 
 
-            # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
-            # Insert the cells with the corresponding groupId to the new vtkCellArray
-            # for idx in cellIdArray:
-            for cellIdx in range(clippedModel.GetNumberOfCells()):
-                cell = vtk.vtkTriangle()
-                cell.GetPointIds().SetNumberOfIds(numberOfPointIds)
-                # print(cellIdx)
-                for idx in range(numberOfPointIds):
-                    cell.GetPointIds().SetId(idx, clippedModel.GetCell(cellIdx).GetPointId(idx) + pointsFromPreviousClippedModels)
-                cellArrayClippedModel.InsertNextCell(cell)
+            # # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
+            # # Insert the cells with the corresponding groupId to the new vtkCellArray
+            # # for idx in cellIdArray:
+            # for cellIdx in range(clippedModel.GetNumberOfCells()):
+            #     cell = vtk.vtkTriangle()
+            #     cell.GetPointIds().SetNumberOfIds(numberOfPointIds)
+            #     # print(cellIdx)
+            #     for idx in range(numberOfPointIds):
+            #         cell.GetPointIds().SetId(idx, clippedModel.GetCell(cellIdx).GetPointId(idx) + pointsFromPreviousClippedModels)
+            #     cellArrayClippedModel.InsertNextCell(cell)
             
-            # Update total number of points from previous models
-            pointsFromPreviousClippedModels += clippedModel.GetNumberOfPoints()
+            # # Update total number of points from previous models
+            # pointsFromPreviousClippedModels += clippedModel.GetNumberOfPoints()
             
     # Store all branch model data in new vtkPolyData
     finalBranchModel = vtk.vtkPolyData()
@@ -219,28 +219,28 @@ def branchAndClippedModelUnification(caseDir):
     writer.SetFileName(os.path.join(caseDir, "branchModel.vtk"))
     writer.Write()
 
-    # Store all clipped model data in new vtkPolyData
-    finalClippedModel = vtk.vtkPolyData()
-    finalClippedModel.SetPoints(pointsClippedModel)
-    finalClippedModel.SetPolys(cellArrayClippedModel)
-    finalClippedModel.GetPointData().AddArray(finalGroupIdPointArrayClippedModel)
+    # # Store all clipped model data in new vtkPolyData
+    # finalClippedModel = vtk.vtkPolyData()
+    # finalClippedModel.SetPoints(pointsClippedModel)
+    # finalClippedModel.SetPolys(cellArrayClippedModel)
+    # finalClippedModel.GetPointData().AddArray(finalGroupIdPointArrayClippedModel)
 
-    # We can to compute the normals for all mesh triangles
-    normals = vtk.vtkPolyDataNormals()
-    normals.SetInputData(finalClippedModel)
-    normals.SetFeatureAngle(80)
-    normals.AutoOrientNormalsOn()
-    normals.UpdateInformation()
-    normals.Update()
-    finalClippedModel = normals.GetOutput()
+    # # We can to compute the normals for all mesh triangles
+    # normals = vtk.vtkPolyDataNormals()
+    # normals.SetInputData(finalClippedModel)
+    # normals.SetFeatureAngle(80)
+    # normals.AutoOrientNormalsOn()
+    # normals.UpdateInformation()
+    # normals.Update()
+    # finalClippedModel = normals.GetOutput()
 
-    # We also pass a clean vtkPolyData filter for good measure
-    cleanPolyData = vtk.vtkCleanPolyData()
-    cleanPolyData.SetInputData(finalClippedModel)
-    cleanPolyData.Update()
-    finalClippedModel = cleanPolyData.GetOutput()
+    # # We also pass a clean vtkPolyData filter for good measure
+    # cleanPolyData = vtk.vtkCleanPolyData()
+    # cleanPolyData.SetInputData(finalClippedModel)
+    # cleanPolyData.Update()
+    # finalClippedModel = cleanPolyData.GetOutput()
 
-    writer = vtk.vtkPolyDataWriter()
-    writer.SetInputData(finalClippedModel)
-    writer.SetFileName(os.path.join(caseDir, "clippedModel.vtk"))
-    writer.Write()
+    # writer = vtk.vtkPolyDataWriter()
+    # writer.SetInputData(finalClippedModel)
+    # writer.SetFileName(os.path.join(caseDir, "clippedModel.vtk"))
+    # writer.Write()
