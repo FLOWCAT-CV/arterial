@@ -203,7 +203,7 @@ class ArterialDatasetInference(InMemoryDataset):
             pos, x, cellIDs, edge_index = [], [], [], []
             for node in graphNx.nodes:
                 pos.append(graphNx.nodes[node]["pos"])
-                x.append(graphNx.nodes[node]["features"])
+                x.append([graphNx.nodes[node]["features"][feature] for feature in graphNx.nodes[node]["features"].keys()])
                 cellIDs.append(graphNx.nodes[node]["cellId"])
             for n0, n1 in graphNx.edges:
                 edge_index.append([n0, n1])

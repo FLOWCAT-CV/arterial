@@ -22,9 +22,7 @@ def predictGraph(caseDir):
     '''
 
     # Load the edge form graph (graph.pickle) created at centerlineGraph.py
-    edgeFormGraphNx = nx.read_gpickle(os.path.join(caseDir, "graph.pickle")) # For some reason this stopped working
-    # with open(os.path.join(caseDir, "graph.pickle"), "rb") as pklFile:
-    #     edgeFormGraphNx = pickle.load(pklFile)
+    edgeFormGraphNx = nx.read_gpickle(os.path.join(caseDir, "simpleGraph.pickle")) 
 
     # Pass the graph to node form
     graphNx = nodeTransform(edgeFormGraphNx)

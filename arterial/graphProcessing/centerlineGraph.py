@@ -9,7 +9,7 @@ import nibabel as nib
 
 import vtk
 
-from .centerlineGraphUtils import getHierarchicalOrderingDense, getMaxHierarchy, extractFeatures, vesselTypeSequenceToOneHot, cosineSimilarity, makeGraphPlot, makeSupersegmentPlots, makeSupersegmentPlot, addConfigurationFeatures, selectVertebrobasilarLaterality
+from .centerlineGraphUtils import *
 from .vesselLabelling.predictGraph import predictGraph
 
 import warnings
@@ -32,7 +32,7 @@ class centerlineGraphOperator:
         # Get segmentsArray
         self.segmentsArray = np.load(os.path.join(caseDir, "segmentsArray.npy"), allow_pickle = True)
         # Get affine matrix from nifti
-        self.aff = nib.load(os.path.join(self.caseDir, f"{self.caseId}_CTA.nii.gz")).affine
+        self.aff = nib.load(os.path.join(self.caseDir, f"{self.caseId}.nii.gz")).affine
         # Change sign of first component (change transformation from LAS to RAS)
         self.aff[0, 0] = - self.aff[0, 0]
         # Set translation from affine matrix to 0
@@ -58,7 +58,7 @@ class centerlineGraphOperator:
         self.sampleNodeEvery = 5
 
         # Get CTA data from nifti
-        self.niftiCTA = nib.load(os.path.join(self.caseDir, f"{os.path.basename(self.caseDir)}_CTA.nii.gz"))
+        self.niftiCTA = nib.load(os.path.join(self.caseDir, f"{os.path.basename(self.caseDir)}.nii.gz"))
 
         # Load branchModel
         vtkPolyDataReader = vtk.vtkPolyDataReader()
@@ -135,6 +135,162 @@ class centerlineGraphOperator:
         self.predictedConfigurations = {}
         # Define supersegments dict
         self.supersegments = {}
+        # Define simpleSupersegments dict
+        self.simpleSupersegments = {}
+
+    def makeSimpleCenterlineGraph(self):
+        ''' Elaborate simplified graph (each segmnet from the segmentsArray corresponds to each graph edge).
+
+        Creates self.simpleCenterlineGraph.
+
+        Stores simpleGraph.pickle and simpleGraph.png.
+        
+        '''
+        # Initialize simplified graph with networkx
+        self.simpleCenterlineGraph = nx.Graph()
+
+        # Only taking first and last positions of the curves arrays
+        totalNodes = 0 # We only link nodes from the same centerline
+        for cellId in range(len(self.segmentsCoordinateArray)):
+            if len(self.segmentsCoordinateArray[cellId]) > 1 and len(self.segmentsRadiusArray[cellId]) > 1:
+                # Add nodes
+                # First node of cell (startpoint)
+                self.simpleCenterlineGraph.add_node(totalNodes + 0, pos=self.segmentsCoordinateArray[cellId][0])
+                self.simpleCenterlineGraph.nodes[totalNodes + 0]["Radius"] = self.segmentsRadiusArray[cellId][0]
+                # Last node of cell (endpoint)
+                self.simpleCenterlineGraph.add_node(totalNodes + 1, pos=self.segmentsCoordinateArray[cellId][-1])
+                self.simpleCenterlineGraph.nodes[totalNodes + 1]["Radius"] = self.segmentsRadiusArray[cellId][-1]
+
+                # Add edges
+                self.simpleCenterlineGraph.add_edge(totalNodes, totalNodes + 1, cellId = cellId)
+                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["segmentsCoordinateArray"] = self.segmentsCoordinateArray[cellId]
+                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["segmentsRadiusArray"] = self.segmentsRadiusArray[cellId]
+
+                totalNodes += 2
+
+        # Merge nodes that share the same RAS coordinate (bifurcation spots)
+        # First get all nodes that have a degree of 1 (start- and endpoints)
+        deg1Nodes = []
+        for node, deg in self.simpleCenterlineGraph.degree:
+            if deg == 1:
+                deg1Nodes.append(node)
+                
+        # For all degree 1 nodes, we check position to join corresponding start- and enpoints, as well as bifurcations
+        removedNodes = []
+        for _, node in enumerate(deg1Nodes):
+            if node not in removedNodes:
+                aux = deg1Nodes.copy()
+                aux.remove(node)
+                for auxNodes in removedNodes:
+                    aux.remove(auxNodes)
+                for _, node2 in enumerate(aux):
+                    C1 = self.simpleCenterlineGraph.nodes[node]["pos"]
+                    C2 = self.simpleCenterlineGraph.nodes[node2]["pos"]
+                    if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
+                        self.simpleCenterlineGraph = nx.contracted_nodes(self.simpleCenterlineGraph, node, node2)
+                        removedNodes.append(node2)
+                        self.simpleCenterlineGraph.nodes[node].pop("contraction")
+
+        # Relabel nodes as sequential labels
+        mapping = {}
+        newNode = 0
+        for oldNode in self.simpleCenterlineGraph.nodes():
+            mapping[oldNode] = newNode
+            newNode += 1
+        self.simpleCenterlineGraph = nx.relabel.relabel_nodes(self.simpleCenterlineGraph, mapping)
+
+        # Featurizes self.simpleCenterlineGraph
+        if len(self.cellIdToVesselType) == 0:
+            self.simpleCenterlineGraph = extractSegmentLevelFeatures(self, forLabelling = True)
+            # Save simplified graph
+            nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "simpleGraph.pickle"), protocol = 4)
+            # Make quick plot for easy visualization
+            makeGraphPlot(self.caseDir, self.simpleCenterlineGraph, "simpleGraph.png", label = "cellId")
+        else:
+            self.getSingleSegments()
+
+            self.simpleCenterlineGraph = extractSegmentLevelFeatures(self, forLabelling = False)
+            # Save simplified graph
+            nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "unifiedSmpleGraph.pickle"), protocol = 4)
+            # Make quick plot for easy visualization
+            makeGraphPlot(self.caseDir, self.simpleCenterlineGraph, "unifiedsSmpleGraph.png", label = "cellId")
+
+    def predictVesselTypes(self):
+        ''' Performs graph U-Net inference with simplified graph and creates self.cellIdToVesselTypeName.
+
+        Creates self.predictedSimpleCenterlineGraph and self.cellIdToVesselTypeName.
+        
+        '''
+        # Perform vesselType prediction
+        self.predictedSimpleCenterlineGraph = predictGraph(self.caseDir)
+        # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_pred.pickle"))
+        # If manually labelled are to be used for labelling of dense graphs
+        # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_label.pickle"))
+        # Get cellId to vesselType dict from predicted graph
+        for n0, n1 in self.predictedSimpleCenterlineGraph.edges:
+            self.cellIdToVesselType[self.predictedSimpleCenterlineGraph[n0][n1]["cellId"]] = self.predictedSimpleCenterlineGraph[n0][n1]["Vessel type"]
+            self.cellIdToVesselTypeName[self.predictedSimpleCenterlineGraph[n0][n1]["cellId"]] = self.predictedSimpleCenterlineGraph[n0][n1]["Vessel type name"]
+
+        # for node in self.centerlineGraph:
+        #     self.centerlineGraph.nodes[node]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph.nodes[node]["cellId"]]
+        #     self.centerlineGraph.nodes[node]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph.nodes[node]["cellId"]]
+
+        # for src, dst in self.centerlineGraph.edges:
+        #     self.centerlineGraph[src][dst]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph[src][dst]["cellId"]]
+        #     self.centerlineGraph[src][dst]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph[src][dst]["cellId"]]
+
+        # Save graph with predicted edge types
+        nx.readwrite.gpickle.write_gpickle(self.centerlineGraph, os.path.join(self.caseDir, "centerlineGraph.pickle"), protocol = 4)
+
+    def sanityCheckForRandomIslands(self):
+        # Search for potentially randomly segmented islands depending on the distance between centers of mass 
+        # Compute the center of mass of each of the subgraphs, as well as the overall center of mass
+        globalCenterOfMass = np.ndarray([0, 3])
+        centersOfMass = []
+        for subgraph in self.subgraphs:
+            centerOfMass = np.ndarray([0, 3])
+            for node in subgraph:
+                centerOfMass = np.append(centerOfMass, [subgraph.nodes[node]["pos"]], axis = 0)
+                globalCenterOfMass = np.append(globalCenterOfMass, [subgraph.nodes[node]["pos"]], axis = 0)
+            centerOfMass = np.mean(centerOfMass, axis = 0)
+            # Store the center of mass of each subgraph
+            centersOfMass.append(centerOfMass)
+        # Compute global center of mass
+        globalCenterOfMass = np.mean(globalCenterOfMass, axis = 0)
+        # Compute distance from all subgraph's center of mass to the global center of mass
+        distances = np.linalg.norm(np.array(centersOfMass) - np.array([globalCenterOfMass]), axis = 1)
+        
+        deleteSubgraphs = []
+        deleteCellIds = []
+        for idx, distance in enumerate(distances):
+            if distance > 2.5 * np.mean(distances):
+                deleteSubgraphs.append(idx)
+                for node in self.subgraphs[idx]:
+                    if self.subgraphs[idx].nodes[node]["cellId"] not in deleteCellIds:
+                        deleteCellIds.append(self.subgraphs[idx].nodes[node]["cellId"])
+
+        if len(deleteCellIds) > 0:
+            print("     Found random islands containing the following cellId:", deleteCellIds)
+            # Delete subgraphs from random islands
+            self.subgraphs = list(np.delete(self.subgraphs, deleteSubgraphs))
+            # Correcting position shift due to presence of random island
+            newCenterOfMass = np.mean(np.delete(centersOfMass, deleteSubgraphs), axis = 0)
+            # Compute translation correction
+            correctionRAS = globalCenterOfMass - newCenterOfMass
+            # Pass to IJK coordinates
+            correction = np.matmul(np.linalg.inv(self.aff), np.append(correctionRAS, 1.0))[:3]
+            # Apply correction to segmentsArray
+            self.segmentsArray = np.delete(self.segmentsArray, deleteCellIds, axis = 0)
+            for idx in range(len(self.segmentsArray)):
+                for idx2 in range(len(self.segmentsArray[idx][0])):
+                    self.segmentsArray[idx][0][idx2] = self.segmentsArray[idx][0][idx2] - 1.25 * correction
+            # Saving new segmentsArray
+            np.save(os.path.join(self.caseDir, "segmentsArray.npy"), self.segmentsArray)
+            # Reinitializing class and generating new dense graph
+            self.__init__(self.caseDir) 
+            self.makeCenterlineGraph()
+        else:
+            pass
 
     def makeCenterlineGraph(self):
         ''' Elaborate dense graph from segmentsArray (dense node sampling).
@@ -255,6 +411,14 @@ class centerlineGraphOperator:
                 self.rightmostNode = node
                 rightmostNodePosition = self.centerlineGraph.nodes[node]["pos"]
 
+        for node in self.centerlineGraph:
+            self.centerlineGraph.nodes[node]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph.nodes[node]["cellId"]]
+            self.centerlineGraph.nodes[node]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph.nodes[node]["cellId"]]
+
+        for src, dst in self.centerlineGraph.edges:
+            self.centerlineGraph[src][dst]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph[src][dst]["cellId"]]
+            self.centerlineGraph[src][dst]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph[src][dst]["cellId"]]
+
         # Divide the dense graph into disconnected subgraphs
         self.subgraphs = [self.centerlineGraph.subgraph(components) for components in nx.connected_components(self.centerlineGraph)]
 
@@ -282,7 +446,6 @@ class centerlineGraphOperator:
                         minS = subgraph.nodes[node]["pos"][2]
                         startNode = node
             subgraph = getHierarchicalOrderingDense(subgraph, "femoral", startNode)
-            subgraph = extractFeatures(subgraph, segmentsCoordinateArray = self.segmentsCoordinateArray, segmentsRadiusArray = self.segmentsRadiusArray, niftiCTA = self.niftiCTA, branchModel = self.branchModel, access = "femoral", featureExtractionForVesselLabelling = True)
             self.subgraphs[idx] = subgraph
 
         # Now join all subgraphs for labelling
@@ -296,256 +459,7 @@ class centerlineGraphOperator:
         # Generate plot of dense graph for quick visualization
         makeGraphPlot(self.caseDir, self.centerlineGraph, "centerlineGraph.png")
 
-    def sanityCheckForRandomIslands(self):
-        # Search for potentially randomly segmented islands depending on the distance between centers of mass 
-        # Compute the center of mass of each of the subgraphs, as well as the overall center of mass
-        globalCenterOfMass = np.ndarray([0, 3])
-        centersOfMass = []
-        for subgraph in self.subgraphs:
-            centerOfMass = np.ndarray([0, 3])
-            for node in subgraph:
-                centerOfMass = np.append(centerOfMass, [subgraph.nodes[node]["pos"]], axis = 0)
-                globalCenterOfMass = np.append(globalCenterOfMass, [subgraph.nodes[node]["pos"]], axis = 0)
-            centerOfMass = np.mean(centerOfMass, axis = 0)
-            # Store the center of mass of each subgraph
-            centersOfMass.append(centerOfMass)
-        # Compute global center of mass
-        globalCenterOfMass = np.mean(globalCenterOfMass, axis = 0)
-        # Compute distance from all subgraph's center of mass to the global center of mass
-        distances = np.linalg.norm(np.array(centersOfMass) - np.array([globalCenterOfMass]), axis = 1)
-        
-        deleteSubgraphs = []
-        deleteCellIds = []
-        for idx, distance in enumerate(distances):
-            if distance > 2.5 * np.mean(distances):
-                deleteSubgraphs.append(idx)
-                for node in self.subgraphs[idx]:
-                    if self.subgraphs[idx].nodes[node]["cellId"] not in deleteCellIds:
-                        deleteCellIds.append(self.subgraphs[idx].nodes[node]["cellId"])
-
-        if len(deleteCellIds) > 0:
-            print("     Found random islands containing the follwing cellId:", deleteCellIds)
-            # Delete subgraphs from random islands
-            self.subgraphs = list(np.delete(self.subgraphs, deleteSubgraphs))
-            # Correcting position shift due to presence of random island
-            newCenterOfMass = np.mean(np.delete(centersOfMass, deleteSubgraphs), axis = 0)
-            # Compute translation correction
-            correctionRAS = globalCenterOfMass - newCenterOfMass
-            # Pass to IJK coordinates
-            correction = np.matmul(np.linalg.inv(self.aff), np.append(correctionRAS, 1.0))[:3]
-            # Apply correction to segmentsArray
-            self.segmentsArray = np.delete(self.segmentsArray, deleteCellIds, axis = 0)
-            for idx in range(len(self.segmentsArray)):
-                for idx2 in range(len(self.segmentsArray[idx][0])):
-                    self.segmentsArray[idx][0][idx2] = self.segmentsArray[idx][0][idx2] - 1.25 * correction
-            # Saving new segmentsArray
-            np.save(os.path.join(self.caseDir, "segmentsArray.npy"), self.segmentsArray)
-            # Reinitializing class and generating new dense graph
-            self.__init__(self.caseDir) 
-            self.makeCenterlineGraph()
-        else:
-            pass
-
-    def makeSimpleCenterlineGraph(self):
-        ''' Elaborate simplified graph (each segmnet from the segmentsArray corresponds to each graph edge).
-
-        Creates self.simpleCenterlineGraph.
-
-        Stores graph.pickle and graph.png.
-        
-        '''
-
-        def directionalEmbeddings(G, node):
-            ''' Computes the major directions one-hot vector associated with the inward directions of the 
-            edges parting off an node. Serves as a node features for the GNN.
-
-            Arguments:
-                - G <networkx graph>: networkx graph derived from segmentsArray.
-                - node <int>: node id.
-
-            Returns:
-                - projectedMajorDirections <numpy array>: numpy array of dimensions [26] with ones
-                at the positions corresponding with the edge directions parting from the node, and 
-                zeros in the rest of positions.
-
-            '''
-            import math
-
-            projectedMajorDirections = np.zeros([26])
-            majorDirections = np.ndarray([0, 3])
-            for a in range(8):
-                for b in range(-2, 3):
-                    majorDirections = np.append(majorDirections, [
-                            [math.sin(math.pi * a / 4) * math.cos(math.pi * b / 4), 
-                            math.cos(math.pi * a / 4) * math.cos(math.pi * b / 4), 
-                            math.sin(math.pi * b / 4)]], axis=0)
-            majorDirections[np.abs(majorDirections) < 0.01] = 0.
-            majorDirections = np.unique(np.around(majorDirections, 10), axis=0)
-            
-            for edge in G.edges(node):
-                direction = G.edges[edge]["direction"]
-                projectedMajorDirections[np.argmax(np.abs(np.matmul(majorDirections, direction)))] += 1
-                
-            return projectedMajorDirections
-
-        def relativeLength(segmentCoordinates):
-            ''' Computes relative length for a given segment.
-
-            Arguments:
-                - segmentCoordinates: coordinats for a given centerline segment.
-
-            Returns:
-                - RL: relative length.
-                
-            '''
-
-            def distanceAlongCenterline(centerline):
-                    distance = 0
-                    for idx in range(1, len(centerline)):
-                        distance += np.linalg.norm(centerline[idx] - centerline[idx - 1])
-                        
-                    return distance
-                
-            euclideanDistance = np.linalg.norm(segmentCoordinates[-1] - segmentCoordinates[0])
-            centerlineDistance = distanceAlongCenterline(segmentCoordinates)
-
-            return euclideanDistance / centerlineDistance
-
-        # We can make a simplified version of the graph for visualization purposes (cellId easy visualization)
-       
-        # Only taking first and last positions of the curves arrays
-        totalNodes = 0 # We only link nodes from the same centerline
-        for cellId, curve in enumerate(self.segmentsCoordinateArray):
-            if len(curve) > 1 and len(self.segmentsRadiusArray[cellId]) > 1:
-                # Add nodes
-                # First node of cell (startpoint)
-                self.simpleCenterlineGraph.add_node(totalNodes + 0, pos=curve[0])
-                self.simpleCenterlineGraph.nodes[totalNodes + 0]["deg"] = self.simpleCenterlineGraph.degree[totalNodes + 0]
-                self.simpleCenterlineGraph.nodes[totalNodes + 0]["rad"] = self.segmentsRadiusArray[cellId][0]
-                # Build features array
-                self.simpleCenterlineGraph.nodes[totalNodes + 0]["features"] = np.array([curve[0][0], curve[0][1], curve[0][2], self.segmentsRadiusArray[cellId][0], self.simpleCenterlineGraph.degree[totalNodes + 0]])
-
-                # Last node of cell (endpoint)
-                self.simpleCenterlineGraph.add_node(totalNodes + 1, pos=curve[-1])
-                self.simpleCenterlineGraph.nodes[totalNodes + 1]["deg"] = self.simpleCenterlineGraph.degree[totalNodes + 1]
-                self.simpleCenterlineGraph.nodes[totalNodes + 1]["rad"] = self.segmentsRadiusArray[cellId][-1]
-                # Build node features array
-                self.simpleCenterlineGraph.nodes[totalNodes + 1]["features"] = np.array([curve[-1][0], curve[-1][1], curve[-1][2], self.segmentsRadiusArray[cellId][-1], self.simpleCenterlineGraph.degree[totalNodes + 1]])
-
-                # Add edges
-                self.simpleCenterlineGraph.add_edge(totalNodes, totalNodes + 1, cellId = cellId)
-                distance = np.linalg.norm(curve[-1] - curve[0])
-                direction = (curve[-1] - curve[0]) / distance
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["mean rad"] = np.mean(self.segmentsRadiusArray[cellId])
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal radius"] = self.segmentsRadiusArray[cellId][0]
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal radius"] = self.segmentsRadiusArray[cellId][-1]
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal/distal radius ratio"] = self.segmentsRadiusArray[cellId][0] / self.segmentsRadiusArray[cellId][-1]
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["minimum radius"] = np.amin(self.segmentsRadiusArray[cellId])
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["maximum radius"] = np.amax(self.segmentsRadiusArray[cellId])
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distance"] = distance
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["relative length"] = relativeLength(self.segmentsCoordinateArray[cellId])
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["direction"] = direction
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["departure angle"] = (self.segmentsCoordinateArray[cellId][1] - self.segmentsCoordinateArray[cellId][0]) / np.linalg.norm(self.segmentsCoordinateArray[cellId][1] - self.segmentsCoordinateArray[cellId][0])
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["number of points"] = len(self.segmentsCoordinateArray[cellId])
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal bifurcation position"] = self.segmentsCoordinateArray[cellId][0]
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"] = self.segmentsCoordinateArray[cellId][-1]
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"] = np.sum(self.segmentsCoordinateArray[cellId], axis = 0) / len(self.segmentsCoordinateArray[cellId])
-                # Build edge feature array
-                self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["features"] = np.array([self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["mean rad"], 
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal radius"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal radius"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal/distal radius ratio"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["minimum radius"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["maximum radius"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distance"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["relative length"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["direction"][0],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["direction"][1],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["direction"][2],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["departure angle"][0],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["departure angle"][1],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["departure angle"][2],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["number of points"],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal bifurcation position"][0],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal bifurcation position"][1],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["proximal bifurcation position"][2],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"][0],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"][1],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["distal bifurcation position"][2],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"][0],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"][1],
-                                                                        self.simpleCenterlineGraph[totalNodes][totalNodes + 1]["pos"][2]
-                ])
-                totalNodes += 2   
-
-        # Merge nodes that share the same RAS coordinate (bifurcation spots)
-        # First get all nodes that have a degree of 1 (start- and endpoints)
-        deg1Nodes = []
-        for node, deg in self.simpleCenterlineGraph.degree:
-            if deg == 1:
-                deg1Nodes.append(node)
-                
-        # For all degree 1 nodes, we check position to join corresponding start- and enpoints, as well as bifurcations
-        removedNodes = []
-        for _, node in enumerate(deg1Nodes):
-            if node not in removedNodes:
-                aux = deg1Nodes.copy()
-                aux.remove(node)
-                for auxNodes in removedNodes:
-                    aux.remove(auxNodes)
-                for _, node2 in enumerate(aux):
-                    C1 = self.simpleCenterlineGraph.nodes[node]["pos"]
-                    C2 = self.simpleCenterlineGraph.nodes[node2]["pos"]
-                    if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
-                        self.simpleCenterlineGraph = nx.contracted_nodes(self.simpleCenterlineGraph, node, node2)
-                        removedNodes.append(node2)
-                        self.simpleCenterlineGraph.nodes[node].pop("contraction")
-
-        # Relabel nodes as sequential labels
-        mapping = {}
-        newNode = 0
-        for oldNode in self.simpleCenterlineGraph.nodes():
-            mapping[oldNode] = newNode
-            newNode += 1
-        self.simpleCenterlineGraph = nx.relabel.relabel_nodes(self.simpleCenterlineGraph, mapping)
-
-        # Directional embeddings for node features have to be computed after all edge directions for the whole graph are computed
-        for node in self.simpleCenterlineGraph.nodes:
-            projectedMajorDirections = directionalEmbeddings(self.simpleCenterlineGraph, node)
-            self.simpleCenterlineGraph.nodes[node]["dir"] = projectedMajorDirections
-            self.simpleCenterlineGraph.nodes[node]["features"] = np.append(self.simpleCenterlineGraph.nodes[node]["features"], projectedMajorDirections)
-
-        # Save simplified graph
-        nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "graph.pickle"))
-        # Make quick plot for easy visualization
-        makeGraphPlot(self.caseDir, self.simpleCenterlineGraph, "simpleGraph.png", label = "cellId")
-
-    def predictVesselTypes(self):
-        ''' Performs graph U-Net inference with simplified graph and creates self.cellIdToVesselTypeName.
-
-        Creates self.predictedSimpleCenterlineGraph and self.cellIdToVesselTypeName.
-        
-        '''
-        # Perform vesselType prediction
-        self.predictedSimpleCenterlineGraph = predictGraph(self.caseDir)
-        # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_pred.pickle"))
-        # If manually labelled are to be used for labelling of dense graphs
-        # self.predictedSimpleCenterlineGraph = nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "graph_label.pickle"))
-        # Get cellId to vesselType dict from predicted graph
-        for n0, n1 in self.predictedSimpleCenterlineGraph.edges:
-            self.cellIdToVesselType[self.predictedSimpleCenterlineGraph[n0][n1]["cellId"]] = self.predictedSimpleCenterlineGraph[n0][n1]["Vessel type"]
-            self.cellIdToVesselTypeName[self.predictedSimpleCenterlineGraph[n0][n1]["cellId"]] = self.predictedSimpleCenterlineGraph[n0][n1]["Vessel type name"]
-
-        for node in self.centerlineGraph:
-            self.centerlineGraph.nodes[node]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph.nodes[node]["cellId"]]
-            self.centerlineGraph.nodes[node]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph.nodes[node]["cellId"]]
-
-        for src, dst in self.centerlineGraph.edges:
-            self.centerlineGraph[src][dst]["Vessel type"] = self.cellIdToVesselType[self.centerlineGraph[src][dst]["cellId"]]
-            self.centerlineGraph[src][dst]["Vessel type name"] = self.cellIdToVesselTypeName[self.centerlineGraph[src][dst]["cellId"]]
-
-        # Save graph with predicted edge types
-        nx.readwrite.gpickle.write_gpickle(self.centerlineGraph, os.path.join(self.caseDir, "centerlineGraph.pickle"), protocol = 4)
+        self.sanityCheckForRandomIslands()
 
     def unifySubgraphs(self):
         ''' The goal of this method is make one large connected graph resulting from the union between all subgraphs.
@@ -794,7 +708,7 @@ class centerlineGraphOperator:
                 downstream = False
                 for neighbor in self.centerlineGraph.neighbors(mainGraphNode):
                     # If neighbor with higher hierarchy has smaller segmentsArrayIndices indices than cutOffIdx, the segment is downstream. Otherwise it is not
-                    if self.centerlineGraph.nodes[mainGraphNode]["cellId"] == self.centerlineGraph.nodes[neighbor]["cellId"] and self.centerlineGraph.nodes[neighbor]["features"][0] > self.centerlineGraph.nodes[mainGraphNode]["features"][0] and np.mean(self.centerlineGraph[neighbor][mainGraphNode]["segmentsArrayIndices"]) < cutOffIdx:
+                    if self.centerlineGraph.nodes[mainGraphNode]["cellId"] == self.centerlineGraph.nodes[neighbor]["cellId"] and self.centerlineGraph.nodes[neighbor]["hierarchy femoral"] > self.centerlineGraph.nodes[mainGraphNode]["hierarchy femoral"] and np.mean(self.centerlineGraph[neighbor][mainGraphNode]["segmentsArrayIndices"]) < cutOffIdx:
                         downstream = True
                 # We keep mainGraphNode as initial previousNode for recursive node analysis
                 previousNode = mainGraphNode
@@ -806,7 +720,7 @@ class centerlineGraphOperator:
                     # Sweep through neighbors of previousNode
                     for neighbor in self.centerlineGraph.neighbors(previousNode):
                         # If not downstream and there is a node with the same cellId as the mainGraphNode and a higher hierarchy
-                        if not downstream and self.centerlineGraph.nodes[neighbor]["cellId"] == self.centerlineGraph.nodes[mainGraphNode]["cellId"] and self.centerlineGraph.nodes[neighbor]["features"][0] > self.centerlineGraph.nodes[previousNode]["features"][0]:
+                        if not downstream and self.centerlineGraph.nodes[neighbor]["cellId"] == self.centerlineGraph.nodes[mainGraphNode]["cellId"] and self.centerlineGraph.nodes[neighbor]["hierarchy femoral"] > self.centerlineGraph.nodes[previousNode]["hierarchy femoral"]:
                             # Update node cellId
                             self.centerlineGraph.nodes[neighbor]["cellId"] = nextCellId
                             # Update edge cellId
@@ -823,7 +737,7 @@ class centerlineGraphOperator:
                             # Check found neighbor
                             neighborFound = True
                         # If downstream and there is a node with the same cellId as the mainGraphNode and a lower hierarchy
-                        elif downstream and self.centerlineGraph.nodes[neighbor]["cellId"] == self.centerlineGraph.nodes[mainGraphNode]["cellId"] and self.centerlineGraph.nodes[neighbor]["features"][0] < self.centerlineGraph.nodes[previousNode]["features"][0]:
+                        elif downstream and self.centerlineGraph.nodes[neighbor]["cellId"] == self.centerlineGraph.nodes[mainGraphNode]["cellId"] and self.centerlineGraph.nodes[neighbor]["hierarchy femoral"] < self.centerlineGraph.nodes[previousNode]["hierarchy femoral"]:
                             # Update node cellId
                             self.centerlineGraph.nodes[neighbor]["cellId"] = nextCellId
                             # Update edge cellId
@@ -882,7 +796,195 @@ class centerlineGraphOperator:
         nx.readwrite.gpickle.write_gpickle(self.simpleCenterlineGraph, os.path.join(self.caseDir, "centerlineGraph.pickle"), protocol = 4)
         # Generate plot of dense graph for quick visualization
         makeGraphPlot(self.caseDir, self.centerlineGraph, "centerlineGraph.png")
+        
+    def getSingleSegments(self):
 
+        def rescaleHierarchy(graph):
+            minHierarchy = 1000
+            maxHierarchy = 0
+            for node in graph:
+                if graph.nodes[node]["hierarchy femoral"] < minHierarchy:
+                    minHierarchy = graph.nodes[node]["hierarchy femoral"]
+                if graph.nodes[node]["hierarchy femoral"] > maxHierarchy:
+                    maxHierarchy = graph.nodes[node]["hierarchy femoral"]
+
+            for node in graph:
+                graph.nodes[node]["hierarchy femoral"] = graph.nodes[node]["hierarchy femoral"] - minHierarchy
+
+            return graph, maxHierarchy - minHierarchy
+
+        def getCellIds(self):
+            # This should be extended to work with cellIds, so that
+            self.cellIds = []
+
+            for cellId in self.cellIdToVesselTypeName.keys():
+                self.cellIds.append(cellId)
+                
+            return self
+
+        def getOrientationReference(self):
+            AAcoordinatesArray = np.ndarray([0, 3])
+            for node in self.centerlineGraph:
+                if self.centerlineGraph.nodes[node]["Vessel type name"] == "AA":
+                    AAcoordinatesArray = np.append(AAcoordinatesArray, [self.centerlineGraph.nodes[node]["pos"]], axis = 0)
+
+            self.orientationReference = np.mean(AAcoordinatesArray, axis = 0)
+
+            return self
+
+        self = getCellIds(self)
+
+        self = getOrientationReference(self)
+        
+        self.singleSegments = {}
+
+        for cellId in self.cellIds:
+            vesselType = self.cellIdToVesselTypeName[cellId]
+            maskedCenterlineGraph = self.centerlineGraph.copy()
+
+            # We want to remove all nodes not connected to at least one edge of the explored vessel type
+            removeNodes = []
+            for node in maskedCenterlineGraph:
+                isVesselType = False
+                for neighbor in maskedCenterlineGraph.neighbors(node):
+                    if maskedCenterlineGraph[node][neighbor]["cellId"] == cellId:
+                        isVesselType = True
+                if not isVesselType:
+                    removeNodes.append(node)
+
+            for node in removeNodes:
+                maskedCenterlineGraph.remove_node(node)
+
+            subgraphs = [maskedCenterlineGraph.subgraph(components) for components in nx.connected_components(maskedCenterlineGraph)]
+
+            # Compute all 1D paths present in all subgraphs
+            segments1D = []
+            for subgraph in subgraphs:
+                subgraph, maxHierarchy = rescaleHierarchy(subgraph)
+                # Initialize list for supersegment depending on access
+                subgraphSegments1D = []
+                # This is used to avoid advancing over finished supersegments segments (supersegment candidates are added when an endnode is reached)
+                finishedPaths = []
+                for hierarchy in range(maxHierarchy + 1):
+                    for node in subgraph:
+                        if subgraph.nodes[node]["hierarchy femoral"] == hierarchy:
+                            # Store neighbor nodes
+                            neighborNodes = []
+                            for neighbor in subgraph.neighbors(node):
+                                neighborNodes.append(neighbor)
+                            # For startNode, just start a new supersegment candidate
+                            if len(subgraphSegments1D) == 0:
+                                subgraphSegments1D.append([node])
+                            # All other nodes
+                            else:
+                                # In every iteration, search for new segments
+                                newSegments = []
+                                for idx, pathAux in enumerate(subgraphSegments1D):
+                                    path = pathAux.copy()
+                                    if idx not in finishedPaths:
+                                        # Endpoints
+                                        # Since the startNode is treated differently, all nodes with degree == 0 are endpoints
+                                        if subgraph.degree(node) == 1 and path[-1] in neighborNodes:
+                                            subgraphSegments1D[idx].append(node)
+                                            # When an endpoint is reached, add the sequence to finishedPaths to discontinue attention over it
+                                            finishedPaths.append(idx)
+                                        # Normal node
+                                        # For nodes with degree == 2, just add to every active sequence
+                                        elif subgraph.degree(node) == 2 and path[-1] in neighborNodes:
+                                            subgraphSegments1D[idx].append(node)
+                                        # Multifurcations
+                                        # For multifurcations, create new segments for all bifurcations except for one (which can continue previously existing segment)
+                                        elif subgraph.degree(node) > 2 and path[-1] in neighborNodes:
+                                            # Auxiliar boolean variable
+                                            firstBifurcation = True
+                                            subgraphSegments1D[idx].append(node)
+                                            for _, neighbor in enumerate(neighborNodes):
+                                                if neighbor != path[-1] and neighbor not in subgraphSegments1D[idx]:
+                                                    # For the first neighbor, we add it to the the supersegment candidate
+                                                    if firstBifurcation:
+                                                        subgraphSegments1D[idx].append(neighbor)
+                                                        firstBifurcation = False
+                                                    # For the first neighbor, we add it to the the supersegment candidate
+                                                    # For all other neighbors, we create new segments
+                                                    else:
+                                                        newSegment = subgraphSegments1D[idx][:-1].copy()
+                                                        newSegment.append(neighbor)
+                                                        newSegments.append(newSegment)
+                                        # Special case: when two bifurcations come in consecutive nodes
+                                        # The second bifurcation will share hierarchy with the neighbors from the first bifurcation,
+                                        # and it will have already been added to one of the paths
+                                        elif subgraph.degree(node) > 2 and node == path[-1]:
+                                            firstBifurcation = True
+                                            for _, neighbor in enumerate(neighborNodes):
+                                                if neighbor != path[-1] and neighbor not in subgraphSegments1D[idx]:
+                                                    # For the first neighbor, we add it to the the supersegment candidate
+                                                    if firstBifurcation:
+                                                        subgraphSegments1D[idx].append(neighbor)
+                                                        firstBifurcation = False
+                                                    # For all other neighbors, we create new segments
+                                                    else:
+                                                        newSegment = subgraphSegments1D[idx][:-1].copy()
+                                                        newSegment.append(neighbor)
+                                                        newSegments.append(newSegment)
+                                # Once a hierarchy index is fully covered, add new segments to the supersegmentCandidates list
+                                if len(newSegments) > 0:
+                                    for segment in newSegments:
+                                        subgraphSegments1D.append(segment)
+                for subgraphSegment1D in subgraphSegments1D: 
+                    segments1D.append(subgraphSegment1D)
+
+            # Select longest segment (now it is computed from the number of nodes, but could really be computed by the overall actual distance of each segment)
+            lengthSegments1D = [len(segment1D) for segment1D in segments1D]
+            # Store all nodes not in longest segment
+            removeNodes = []
+            for node in maskedCenterlineGraph:
+                if node not in segments1D[np.argmax(lengthSegments1D)]:
+                    removeNodes.append(node)
+            # Remove all nodes not in longest segment
+            for node in removeNodes:
+                maskedCenterlineGraph.remove_node(node)
+
+            # Finally, orient segment. If it is AA, compare position of both endpoints and start hierarchy = 0 in the one closest to the RAS origin 
+            # (careful consideration of the LPS/RAS/ijk coordinates!)
+            # It it is not AA, compare distance between both endpoints
+
+            if vesselType == "AA":
+                endNodes = []
+                distanceEndNodes = []
+                for node in maskedCenterlineGraph:
+                    if maskedCenterlineGraph.degree(node) == 1:
+                        endNodes.append(node)
+                        # Compute distance to RAS origin
+                        distanceEndNodes.append(np.linalg.norm(maskedCenterlineGraph.nodes[node]["pos"] - [0., 0., 0.]))
+            else:
+                endNodes = []
+                distanceEndNodes = []
+                for node in maskedCenterlineGraph:
+                    if maskedCenterlineGraph.degree(node) == 1:
+                        endNodes.append(node)
+                        # Compute distance to AA center of mass
+                        distanceEndNodes.append(np.linalg.norm(maskedCenterlineGraph.nodes[node]["pos"] - self.orientationReference))
+
+            # Select closest node to reference
+            if len(distanceEndNodes) > 0:
+                startNode = endNodes[np.argmin(distanceEndNodes)]
+
+                maskedCenterlineGraph = getHierarchicalOrderingDense(maskedCenterlineGraph, startNode = startNode)
+
+                # Ensure right ordering of the segmentsArray values in the edges that might be used for feature computation
+                # To do that, compare the direction of the hierarchy values between nodes and the direction of the segmentsArrayIndices values
+                # If they are coherent (same direction), do nothing. If they are incoherent, flip the segmentsArray arrays
+                for src, dst in maskedCenterlineGraph.edges:
+                    if len(maskedCenterlineGraph[src][dst]["segmentsArrayIndices"]) > 0:
+                        if np.sign(maskedCenterlineGraph.nodes[src]["hierarchy femoral"] - maskedCenterlineGraph.nodes[dst]["hierarchy femoral"]) == np.sign(maskedCenterlineGraph[src][dst]["segmentsArrayIndices"][-1] - maskedCenterlineGraph[src][dst]["segmentsArrayIndices"][0]):
+                            pass
+                        else:
+                            maskedCenterlineGraph[src][dst]["segmentsArrayIndices"] = np.flip(maskedCenterlineGraph[src][dst]["segmentsArrayIndices"])
+                            maskedCenterlineGraph[src][dst]["segmentsCoordinateArray"] = np.flip(maskedCenterlineGraph[src][dst]["segmentsCoordinateArray"], axis = 0)
+                            maskedCenterlineGraph[src][dst]["segmentsRadiusArray"] = np.flip(maskedCenterlineGraph[src][dst]["segmentsRadiusArray"])
+
+#             if len(maskedCenterlineGraph) > 2:
+            self.singleSegments[cellId] = maskedCenterlineGraph
 
     def performFeatureExtraction(self):
         ''' Computes hierarchization and performs feature extraction for both accesses for the centerline graph.
@@ -1124,6 +1226,8 @@ class centerlineGraphOperator:
             '''
             # Make supersegment directory in case it is missing
             if not os.path.isdir(os.path.join(self.caseDir, "supersegments")): os.mkdir(os.path.join(self.caseDir, "supersegments"))
+            if not os.path.isdir(os.path.join(self.caseDir, "supersegments", "dense")): os.mkdir(os.path.join(self.caseDir, "supersegments", "dense"))
+            if not os.path.isdir(os.path.join(self.caseDir, "supersegments", "simple")): os.mkdir(os.path.join(self.caseDir, "supersegments", "simple"))
 
             # Specify the maximum length for a bifurcating segment
             limitBifurcationLength = 15
@@ -1132,6 +1236,8 @@ class centerlineGraphOperator:
             for access in self.accesses:
                 # Initiaize supersegment list for both accesses
                 self.supersegments[access] = []
+                # Initiaize simpleSupersegment list for both accesses
+                self.simpleSupersegments[access] = []
                 # Build supersegment for each of the existing reference configurations
                 for configIdx, predictedConfiguration in enumerate(self.predictedConfigurations[access]):
                     _, _, _, configurationName = self.configurations[access][configIdx]
@@ -1227,15 +1333,103 @@ class centerlineGraphOperator:
                         mapping[oldNode] = newNode
                         newNode += 1
                     supersegment = nx.relabel.relabel_nodes(supersegment, mapping)
-                    
-                    #### Only thing left would be to remove artificial edges (they do not have edge features)
 
                     # Add to the supersegments dict
                     self.supersegments[access].append(supersegment)
                     # Save supersegment as pickle
-                    nx.readwrite.gpickle.write_gpickle(supersegment, os.path.join(self.caseDir, "supersegments", f"{configurationName}.pickle"), protocol = 4)
+                    nx.readwrite.gpickle.write_gpickle(supersegment, os.path.join(self.caseDir, "supersegments", "dense", f"{configurationName}.pickle"), protocol = 4)
+
+                    # Initialize a graph with networkx for each supersegment 
+                    simpleSupersegment = self.simpleCenterlineGraph.copy()
+                    # Define empty list to store self.centerlineGraph nodes connected by edges with cellId in supersegmentSegments
+                    supersegmentNodes = []
+                    # Define empty list to store self.centerlineGraph edges with cellId in supersegmentSegments
+                    supersegmentEdges = []
+                    # Define empty list to store self.centerlineGraph nodes connected by edges with cellId in bifurcatingSegments up to the limitBifurcationLength
+                    bifurcatingNodes = []
+                    # Define empty list to store first self.centerlineGraph edges with cellId in bifurcatingSegments
+                    bifurcatingEdges = []
+                    
+                    # Store all corresponding nodes and edges in supersegmentNodes and supersegmentEdges
+                    for src, dst in simpleSupersegment.edges:
+                        if simpleSupersegment[src][dst]["cellId"] in supersegmentSegments:
+                            if src not in supersegmentNodes:
+                                supersegmentNodes.append(src)
+                            if dst not in supersegmentNodes:
+                                supersegmentNodes.append(dst)
+                            supersegmentEdges.append((src, dst))
+                            
+                    # Store all corresponding nodes and edges from immediate bfiurcating edges in bifurcatingNodes and bifurcatingEdges
+                    for src, dst in simpleSupersegment.edges:
+                        if (src, dst) not in supersegmentEdges and simpleSupersegment[src][dst]["cellId"] in bifurcatingSegments:
+                            if src in supersegmentNodes and dst not in supersegmentNodes:
+                                bifurcatingNodes.append(dst)
+                                bifurcatingEdges.append((src, dst))
+                            elif dst in supersegmentNodes and src not in supersegmentNodes:
+                                bifurcatingNodes.append(src)
+                                bifurcatingEdges.append((src, dst))
+                                
+                    # Store all corresponding nodes left in bifurcatingNodes and bifurcatingEdges
+                    for src, dst in bifurcatingEdges:
+                        if src in bifurcatingNodes:
+                            currentDst = src
+                        else:
+                            currentDst = dst
+                        distance = 0
+                        continueSearch = True
+                        check = True
+                        # We only include cases where first bifurcating edge is connected to a deg = 2 node. Else, we only include the first bifurcating node
+                        if simpleSupersegment.degree(currentDst) == 2:
+                            while distance < limitBifurcationLength and continueSearch and check:
+                                check = False
+                                for neighbor in simpleSupersegment.neighbors(currentDst):
+                                    if neighbor not in supersegmentNodes and neighbor not in bifurcatingNodes:
+                                        check = True
+                                        if simpleSupersegment.degree(neighbor) == 2:
+                                            bifurcatingNodes.append(neighbor)
+                                            distance += np.linalg.norm(simpleSupersegment.nodes[currentDst]["pos"] - simpleSupersegment.nodes[neighbor]["pos"])
+                                            currentDst = neighbor
+                                        else:
+                                            bifurcatingNodes.append(neighbor)
+                                            continueSearch = False
+
+                    # We now search for all non-included nodes from hierarchicDenseG, which will be masked out
+                    removeNodes = []
+                    for node in simpleSupersegment:
+                        if node not in supersegmentNodes and node not in bifurcatingNodes:
+                            removeNodes.append(node)
+                        else:
+                            if node in supersegmentNodes:
+                                simpleSupersegment.nodes[node]["isSupersegment"] = 1
+                            else:
+                                simpleSupersegment.nodes[node]["isSupersegment"] = 0
+
+                    for src, dst in simpleSupersegment.edges:
+                        if (src, dst) in supersegmentEdges:
+                            simpleSupersegment[src][dst]["isSupersegment"] = 1
+                        else:
+                            simpleSupersegment[src][dst]["isSupersegment"] = 0
+
+                    # Perform masking (remove non-included nodes)
+                    for node in removeNodes:
+                        simpleSupersegment.remove_node(node)
+                            
+                    # Relabel nodes as sequential labels
+                    mapping = {}
+                    newNode = 0
+                    for oldNode in simpleSupersegment.nodes():
+                        mapping[oldNode] = newNode
+                        newNode += 1
+                    simpleSupersegment = nx.relabel.relabel_nodes(simpleSupersegment, mapping)
+
+                    # Add to the supersegments dict
+                    self.simpleSupersegments[access].append(simpleSupersegment)
+                    # Save simpleSupersegment as pickle
+                    nx.readwrite.gpickle.write_gpickle(simpleSupersegment, os.path.join(self.caseDir, "supersegments", "simple", f"{configurationName}.pickle"), protocol = 4)
             # Make plot with all supersegments
-            makeSupersegmentPlots(self.caseDir, self.supersegments)
+            makeSupersegmentPlots(self.caseDir, self.supersegments, isSimple = False)
+            # Make plot with all supersegments
+            makeSupersegmentPlots(self.caseDir, self.simpleSupersegments, isSimple = True)
 
         def selectConfiguration(self):
             ''' Selects supersegment configuration if patientConfiguration.json is present in self.caseDir.
@@ -1275,12 +1469,17 @@ class centerlineGraphOperator:
 
                 if not os.path.isdir(os.path.join(self.caseDir, "thrombectomyConfiguration")): os.mkdir(os.path.join(self.caseDir, "thrombectomyConfiguration"))
 
-                for supersegment in [supersegment for supersegment in os.listdir(os.path.join(self.caseDir, "supersegments")) if supersegment.endswith(".pickle") and supersegment.startswith(str(configurationId))]:
+                for supersegment in [supersegment for supersegment in os.listdir(os.path.join(self.caseDir, "supersegments", "dense")) if supersegment.endswith(".pickle") and supersegment.startswith(str(configurationId))]:
                     print("         Selecting supersegment:", supersegment)
-                    shutil.copyfile(os.path.join(self.caseDir, "supersegments", supersegment), os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
-                    makeSupersegmentPlot(self.caseDir, nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle")), self.patientConfiguration)
+                    shutil.copyfile(os.path.join(self.caseDir, "supersegments", "dense", supersegment), os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
+                    makeSupersegmentPlot(self.caseDir, nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle")), self.patientConfiguration, isSimple = False)
+                for simpleSupersegment in [simpleSupersegment for simpleSupersegment in os.listdir(os.path.join(self.caseDir, "supersegments", "simple")) if simpleSupersegment.endswith(".pickle") and simpleSupersegment.startswith(str(configurationId))]:
+                    print("         Selecting supersegment:", simpleSupersegment)
+                    shutil.copyfile(os.path.join(self.caseDir, "supersegments", "simple", simpleSupersegment), os.path.join(self.caseDir, "thrombectomyConfiguration", "simpleSupersegment.pickle"))
+                    makeSupersegmentPlot(self.caseDir, nx.readwrite.gpickle.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "simpleSupersegment.pickle")), self.patientConfiguration, isSimple = True)
 
                 self.supersegment = nx.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
+                self.simpleSupersegment = nx.read_gpickle(os.path.join(self.caseDir, "thrombectomyConfiguration", "simpleSupersegment.pickle"))
                 self.supersegment = addConfigurationFeatures(self.supersegment, self.patientConfiguration)
 
                 self.supersegment.graph["features"] = {}
@@ -1296,7 +1495,10 @@ class centerlineGraphOperator:
                     self.supersegment.graph["Time to first series class"] = 1
 
                 nx.write_gpickle(self.supersegment, os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.pickle"))
-                nx.write_gpickle(self.supersegment, os.path.join("/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/onlyNodeFeaturesGraphDatabase", f"{self.caseId}.pickle"))
+                nx.write_gpickle(self.supersegment, os.path.join("/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/supersegments/dense/graphs", f"{self.caseId}.pickle"))
+                nx.write_gpickle(self.simpleSupersegment, os.path.join("/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/supersegments/simple/graphs", f"{self.caseId}.pickle"))
+                shutil.copyfile(os.path.join(self.caseDir, "thrombectomyConfiguration", "supersegment.png"), os.path.join("/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/supersegments/dense/images", f"{self.caseId}.png"))
+                shutil.copyfile(os.path.join(self.caseDir, "thrombectomyConfiguration", "simpleSupersegment.png"), os.path.join("/Users/pere/opt/anaconda3/envs/arterialenv/Data/Arterial/supersegments/simple/images", f"{self.caseId}.png"))
 
             else:
                 print("        Laterality is ambiguous:", self.patientConfiguration["Laterality"])

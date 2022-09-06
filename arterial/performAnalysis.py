@@ -58,10 +58,10 @@ print("                                    ")
 print("Starting segmentation and centerline extraction...")
 
 # Perform segmentation and centerline extraction. This generates decimatedSegmentations and centerlines in caseDir
-# if no_display: # Use if remote server is used, in combination with xvfb
-#     os.system(f"{slicerPath} --disable-terminal-outputs --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
-# else:
-#     os.system(f"{slicerPath} --no-main-window --no-splash  --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+if no_display: # Use if remote server is used, in combination with xvfb
+    os.system(f"{slicerPath} --disable-terminal-outputs --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
+else:
+    os.system(f"{slicerPath} --no-main-window --no-splash  --python-script {segmentationAndCenterlineCode} -casePath {casePath} --exit-after-startup")
 
 start2 = time.time()
 # Centerline extraction timestamp
@@ -88,7 +88,7 @@ for idx, _ in enumerate(centerlineList):
     clippedModel = os.path.join(caseDir, "clippedModels", f"clippedModel{idx}.vtk")
     radiusArrayName = "Radius"
 
-    # os.system(f"vmtkbranchextractor -ifile {centerlineModel} -ofile {branchModel} -radiusarray {radiusArrayName}")
+    os.system(f"vmtkbranchextractor -ifile {centerlineModel} -ofile {branchModel} -radiusarray {radiusArrayName}")
 
     start21 = time.time()
 
@@ -99,7 +99,7 @@ for idx, _ in enumerate(centerlineList):
 
     print("Clipping branch of decimated segmentation surface model...")
 
-    # os.system(f"vmtkbranchclipper -ifile {surfaceModel} -centerlinesfile {branchModel} -ofile {clippedModel} -radiusarray {radiusArrayName}")
+    os.system(f"vmtkbranchclipper -ifile {surfaceModel} -centerlinesfile {branchModel} -ofile {clippedModel} -radiusarray {radiusArrayName}")
 
     start22 = time.time()
 
@@ -113,7 +113,7 @@ times.append(start22 - start2)
 
 print("Unifying branch and clipped models...")
 
-# branchAndClippedModelUnification(caseDir)
+branchAndClippedModelUnification(caseDir)
 
 start3 = time.time()
 # Branch and clipped model unificaiton timestamp
@@ -140,7 +140,7 @@ print("                                    ")
 print("Generating graph...")
 
 # Generate segmentsArray
-# segmentsArray = centerlineSegmentsArray(caseDir, make_plot=False)
+segmentsArray = centerlineSegmentsArray(caseDir, make_plot=False)
 
 start5 = time.time()
 # Graph generation timestamp
@@ -155,17 +155,14 @@ print("Performing supersegment extraction...")
 
 # Supersegment extraction
 centerlineGraph = centerlineGraphOperator(caseDir)
-print("     Making centerline dense graph...")
-centerlineGraph.makeCenterlineGraph()
-print("     done")
-print("     Performing sanity check for random islands...")
-centerlineGraph.sanityCheckForRandomIslands()
-print("     done")
-print("     Making simple centerline dense graph...")
+print("     Making simple centerline graph...")
 centerlineGraph.makeSimpleCenterlineGraph()
 print("     done")
 print("     Predicting vessel types...")
 centerlineGraph.predictVesselTypes()
+print("     done")
+print("     Making dense centerline graph...")
+centerlineGraph.makeCenterlineGraph()
 print("     done")
 print("     Unifying subgraphs...")
 centerlineGraph.unifySubgraphs()
@@ -173,8 +170,12 @@ print("     done")
 print("     Performing feature extraction...")
 centerlineGraph.performFeatureExtraction()
 print("     done")
+print("     Making simple centerline graph...")
+centerlineGraph.makeSimpleCenterlineGraph()
+print("     done")
 print("     Extracting supersegments...")
-# centerlineGraph.supersegmentExtraction()
+if os.path.isfile(os.path.join(caseDir, "patientConfiguration.json")):
+    centerlineGraph.supersegmentExtraction()
 print("     done")
 print()
 
@@ -199,7 +200,7 @@ times.append(start7 - start6)
 # Total time
 times.append(start7 - start0)
 # Save time stamps in text file
-# np.savetxt(os.path.join(caseDir, "timeStamps.txt"), times)
+np.savetxt(os.path.join(caseDir, "timeStamps.txt"), times)
 
 print("Branch model link to vesselType prediction completed")
 print(f"Time (parcial): {start7 - start6} s                ")
