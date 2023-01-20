@@ -66,7 +66,7 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
             centerline_graph.graph["segment features"][vessel_type] = segments_cell_id[vessel_type].graph["features"]
 
     # Overwrite centerline graph
-    with open(os.path.join(case_dir, "graph.pickle"), "wb"):
+    with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
         pickle.dump(centerline_graph, f, protocol = 4)
  
     # Create single segments plot

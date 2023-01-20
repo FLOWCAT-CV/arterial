@@ -2,7 +2,7 @@
 
 import os
 
-import networkx as nx
+import pickle
 
 from arterial.feature_extraction.global_features.utils import get_aortic_arch_type, get_bovine_arch, get_arsa
 
@@ -43,6 +43,7 @@ def perform_global_feature_extraction(case_dir, centerline_graph):
     # Extract presence of aberrant RSA
     centerline_graph.graph["arsa"] = get_arsa(centerline_graph)
     # Overwrite centerline_graph
-    nx.write_gpickle(centerline_graph, os.path.join(case_dir, "graph.pickle"))
+    with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
+        pickle.dump(centerline_graph, f, protocol = 4)
 
     return centerline_graph
