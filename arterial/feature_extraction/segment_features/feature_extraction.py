@@ -42,7 +42,8 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
     """
 
     # Load simple graph
-    simple_centerline_graph = nx.read_gpickle(os.path.join(case_dir, "graph_pred.pickle"))
+    with open(os.path.join(case_dir, "graph_pred.pickle"), "rb") as f:
+        simple_centerline_graph = pickle.load(f)
     # Get featurized segment of the graph
     segments_cell_id = get_single_segments_cell_ids(centerline_graph)
     # Save features from segment to simple graph edges with the same cell id
