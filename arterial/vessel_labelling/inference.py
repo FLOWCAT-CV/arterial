@@ -1,9 +1,12 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
 import os
-import torch
 
 import networkx as nx
+
+import pickle
+
+import torch
 
 from arterial.vessel_labelling.utils import node_transform, predict_vessel_types, save_predicted_graph
 
@@ -34,6 +37,8 @@ def perform_inference(case_dir):
 
     # Load the edge form graph (graph.pickle) created at centerlineGraph.py
     graph = nx.read_gpickle(os.path.join(case_dir, "graph_simple.pickle")) 
+    with open(os.path.join(case_dir, "graph_simple.pickle"), "rb") as f:
+        graph = pickle.load(f)
 
     # Pass the graph to node form
     node_form_graph = node_transform(graph)

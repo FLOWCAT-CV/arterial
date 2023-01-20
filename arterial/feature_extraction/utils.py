@@ -5,6 +5,8 @@ import os
 import numpy as np
 import networkx as nx
 
+import pickle
+
 import matplotlib.pyplot as plt
 
 def predicted_vessels_dict(case_dir):
@@ -27,7 +29,8 @@ def predicted_vessels_dict(case_dir):
 
     """
     # Load predicted graph
-    graph_pred = nx.read_gpickle(os.path.join(case_dir, "graph_pred.pickle"))
+    with open(os.path.join(case_dir, "graph_pred.pickle"), "rb") as f:
+        graph_pred = pickle.load(f)
     # Declare empty dicts
     predicted_vessel_types, predicted_vessel_type_names = {}, {}
     # Build dicts from graph edges and their cell_ids, vessel types and vessel type names

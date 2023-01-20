@@ -5,8 +5,9 @@ import vtk
 import math
 
 import numpy as np
-import networkx as nx
 import nibabel as nib
+
+import pickle
 
 from vtk.util.numpy_support import vtk_to_numpy
 
@@ -299,6 +300,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
             centerline_graph.nodes[node][f"features {access}"]["vessel type"] = centerline_graph.nodes[node]["vessel type"]
 
     # Overwrite centerline_graph
-    nx.write_gpickle(centerline_graph, os.path.join(case_dir, "graph.pickle"))
+    with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
+        pickle.dump(centerline_graph, f, protocol = 4)
 
     return centerline_graph

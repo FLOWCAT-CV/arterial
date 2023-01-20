@@ -5,6 +5,8 @@ import os
 import numpy as np
 import networkx as nx
 
+import pickle
+
 from arterial.feature_extraction.utils import predicted_vessels_dict, get_hierarchical_order, unify_subgraphs, sanity_check_for_random_islands, make_graph_plot
 
 def build_centerline_graph(case_dir):
@@ -217,7 +219,8 @@ def build_centerline_graph(case_dir):
         centerline_graph = get_hierarchical_order(centerline_graph, "radial", centerline_graph.graph["rightmost"])    
 
         # Save resulting graph
-        nx.readwrite.gpickle.write_gpickle(centerline_graph, os.path.join(case_dir, "graph.pickle"), protocol = 4)
+        with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
+            pickle.dump(centerline_graph, f, protocol = 4)
         # Generate plot of dense graph for quick visualization
         make_graph_plot(case_dir, centerline_graph, "graph.png")
 

@@ -4,6 +4,8 @@ import os
 
 import networkx as nx
 
+import pickle
+
 from arterial.feature_extraction.segment_features.utils import get_single_segments_cell_ids, get_single_segments_vessel_type, plot_single_segments
 
 def perform_segment_feature_extraction(case_dir, centerline_graph):
@@ -51,7 +53,8 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
                     simple_centerline_graph[src][dst]["segment features"] = segments_cell_id[cell_id].graph["features"]
 
     # Overwrite simple graph
-    nx.write_gpickle(simple_centerline_graph, os.path.join(case_dir, "graph_pred.pickle"))
+    with open(os.path.join(case_dir, "graph_pred.pickle"), "wb") as f:
+        pickle.dump(os.path.join(case_dir, "graph_pred.pickle"), f, protocol = 4)
 
     # Initialize segment features dict in centerline_graph.graph
     centerline_graph.graph["segment features"] = {}
@@ -62,8 +65,9 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
             centerline_graph.graph["segment features"][vessel_type] = segments_cell_id[vessel_type].graph["features"]
 
     # Overwrite centerline graph
-    nx.write_gpickle(centerline_graph, os.path.join(case_dir, "graph.pickle"))
-
+    with open(os.path.join(case_dir, "graph.pickle"), "wb"):
+        pickle.dump(centerline_graph, f, protocol = 4)
+ 
     # Create single segments plot
     plot_single_segments(case_dir, centerline_graph, segments_vessel_type)
 

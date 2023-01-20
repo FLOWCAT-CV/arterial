@@ -1,13 +1,15 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
 import os
+
 import numpy as np
 import networkx as nx
+
+import pickle
 
 import matplotlib.pyplot as plt
 
 import torch
-import torch.nn.functional as F
 
 from torch_geometric.data import Data, InMemoryDataset
 from torch_geometric.loader import DataLoader
@@ -164,7 +166,8 @@ def save_predicted_graph(case_dir, graph, predicted_vessels):
         predicted_graph[src][dst]["features"] = graph[src][dst]["features"]
 
     # Save the graph and image for quick visualization
-    nx.write_gpickle(predicted_graph, os.path.join(case_dir, "graph_pred.pickle"))
+    with open(os.path.join(case_dir, "graph_pred.pickle"), "wb") as f:
+        pickle.dump(predicted_graph, f, protocol = 4)
     make_graph_plot(case_dir, predicted_graph, "graph_pred.png", label = "vessel type name")
 
 class ArterialDatasetInference(InMemoryDataset):

@@ -6,6 +6,8 @@ import math
 import numpy as np
 import networkx as nx
 
+import pickle
+
 import matplotlib.pyplot as plt
 from mycolorpy import colorlist as mcp
 
@@ -608,7 +610,8 @@ def supersegment_built(case_dir, centerline_graph, predicted_configurations):
             # Add to the supersegments dict
             supersegments[access].append(supersegment)
             # Save supersegment as pickle
-            nx.readwrite.gpickle.write_gpickle(supersegment, os.path.join(case_dir, "supersegments", f"{configuration_name}.pickle"), protocol = 4)
+            with open(os.path.join(case_dir, "supersegments", f"{configuration_name}.pickle"), "wb") as f:
+                pickle.dump(supersegment, f, protocol = 4)
 
     # Make plot with all supersegments
     make_supersegment_plots(case_dir, supersegments)
@@ -863,7 +866,8 @@ def select_configuration(case_dir, centerline_graph):
         for supersegment_path in [supersegment_path for supersegment_path in os.listdir(os.path.join(case_dir, "supersegments")) if supersegment_path.endswith(".pickle") and supersegment_path.startswith(str(configuration_id))]:
             print("Selecting supersegment:", supersegment_path)
             shutil.copyfile(os.path.join(case_dir, "supersegments", supersegment_path), os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
-            supersegment = nx.read_gpickle(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
+            with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "rb") as f:
+                supersegment = pickle.load(f)
             make_supersegment_plot(case_dir, supersegment, patient_configuration)
 
         supersegment = add_configuration_features(supersegment, patient_configuration)
@@ -880,7 +884,8 @@ def select_configuration(case_dir, centerline_graph):
         else:
             supersegment.graph["time to first series over 15 min"] = 1
 
-        nx.write_gpickle(supersegment, os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
+        with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "wb") as f:
+            pickle.dump(supersegment, f, protocol = 4)
 
     else:
         print("Laterality is ambiguous:", patient_configuration["Laterality"])

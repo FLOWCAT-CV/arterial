@@ -4,7 +4,8 @@ import os
 
 import numpy as np
 import networkx as nx
-import nibabel as nib
+
+import pickle
 
 from arterial.vessel_labelling.preprocessing.utils import extract_features_for_labelling, make_graph_plot
 
@@ -88,5 +89,6 @@ def build_simple_centerline_graph(case_dir):
     # Featurizes simple_centerline_graph
     simple_centerline_graph = extract_features_for_labelling(simple_centerline_graph)
     # Save simplified graph and image for quick visualization
-    nx.readwrite.gpickle.write_gpickle(simple_centerline_graph, os.path.join(case_dir, "graph_simple.pickle"), protocol = 4)
+    with open(os.path.join(case_dir, "graph_simple.pickle"), "wb") as f:
+        pickle.dump(simple_centerline_graph, f, protocol = 4)
     make_graph_plot(case_dir, simple_centerline_graph, "graph_simple.png", label = "cell_id")
