@@ -7,6 +7,8 @@ from arterial.centerline_extraction.centerline_extractor import CenterlineExtrac
 from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
+from time import time
+
 class ArterialProcessor():
     """
     ArterialProcessor class to perform the desired analysis specified by the parsed arguments upon
@@ -72,10 +74,20 @@ class ArterialProcessor():
 
         """
         print("Performing analysis over case {}. \n".format(os.path.basename(self.case_dir)))
+        start = time()
         self.perform_segmentation()
+        step0 = time()
+        print("Segmentation took {:.2f} s".format(step0 - start))
         self.perform_centerline_extraction()
+        step1 = time()
+        print("Centerline extraction took {:.2f} s".format(step1 - step0))
         self.perform_vessel_labelling()
+        step2 = time()
+        print("Vessel labelling took {:.2f} s".format(step2 - step1))
         self.perform_feature_extraction()
+        step3 = time()
+        print("Feature extraction took {:.2f} s".format(step3 - step2))
+        print("Total time for analysis: {:.2f} s".format(step3 - start))
 
     def perform_segmentation(self):
         """

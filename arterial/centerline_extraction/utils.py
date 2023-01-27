@@ -491,7 +491,7 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
         distances_endpoints = []
         for idx in range(1, endpoints_node.GetNumberOfControlPoints()):
             distances_endpoints.append(np.linalg.norm(startpoint - np.array(endpoints_node.GetCurvePoints().GetPoint(idx))))
-        endpoints_node.RemoveMarkup(np.argmin(distances_endpoints) + 1)
+        endpoints_node.RemoveNthControlPoint(np.argmin(distances_endpoints) + 1)
         
     print("Relocating endpoints for robust centerline extraction...")
     # Relocate endpoints for robust centerline extraction 
