@@ -483,8 +483,6 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     new_centerline_segments_array[:, 0] = coordinate_array
     # Overwrite radius array from centerline_segments_array
     new_centerline_segments_array[:, 1] = radius_array
-    # Overwrite new centerline_segments_array
-    # np.save(os.path.join(case_dir, "centerline_segments_array.npy"), new_centerline_segments_array)
     # Update global features
     centerline_graph.graph["predicted_vessel_types"] = predicted_vessel_types
     centerline_graph.graph["predicted_vessel_type_names"] = predicted_vessel_type_names

@@ -59,6 +59,9 @@ def get_single_segments_vessel_type(centerline_graph):
         if segments_vessel_type[vessel_type] is not None:
             # Perform feature extraction
             segments_vessel_type[vessel_type] = extract_segment_features(segments_vessel_type[vessel_type])
+        else:
+            # If segment is none, pop from dict to eliminate future errors
+            segments_vessel_type.pop(vessel_type)
 
     if "RCCA" in segments_vessel_type.keys() and "RICA" in segments_vessel_type.keys():
         # Get both segments
@@ -86,7 +89,7 @@ def get_single_segments_vessel_type(centerline_graph):
                     rcca_segment.add_edge(previous_node, node)
                     for key in rica_segment.nodes[node].keys():
                         rcca_segment.nodes[node][key] = rica_segment.nodes[node][key]
-                    rcca_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_rcca
+                    rcca_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_rcca + 1
                     previous_node = node
                     
         # Add to dict
@@ -120,7 +123,7 @@ def get_single_segments_vessel_type(centerline_graph):
                     lcca_segment.add_edge(previous_node, node)
                     for key in lica_segment.nodes[node].keys():
                         lcca_segment.nodes[node][key] = lica_segment.nodes[node][key]
-                    lcca_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_lcca
+                    lcca_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_lcca + 1
                     previous_node = node
                     
         # Add to dict
@@ -521,7 +524,6 @@ def extract_segment_features(segment):
     segment.graph["features"]["min max diameter ratio"] = min_max_diameter_ratio(segment)
     segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment)
     segment.graph["features"]["bending length"] = bending_length(segment)
-    segment.graph["features"]["integral area"] = compute_integral_area(segment)
     segment.graph["features"]["cumulative curvature"] = cumulative_curvature(segment)
     segment.graph["features"]["tortuosity index 5 cm"] = tortuosity_index_first_5_cm(segment)
 
@@ -803,71 +805,22 @@ def bending_length(segment):
     # Assign node positions
     proximal_node_pos = segment.nodes[proximal_node]["pos"]
     distal_node_pos = segment.nodes[distal_node]["pos"]
+
     # Compute distance from reference axis
     node = proximal_node
     while segment.nodes[node]["hierarchy femoral"] < segment.nodes[distal_node]["hierarchy femoral"]:
         for neighbor in segment.neighbors(node):
             if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
                 node_pos = segment.nodes[node]["pos"]
-                bending_lengths.append(np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2))
+                if node != proximal_node:
+                    bending_lengths.append(np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2))
                 node = neighbor
+
     # Return maxium bending length
     if len(bending_lengths) > 0:
         return np.amax(bending_lengths)
     else:
         return 0
-
-def compute_integral_area(segment):
-    """
-    Computes integral of area of the line drawn by the centerline with respect to the 
-    reference axis (line connecting proximal and distal end nodes of the segment).
-
-    For each node, it first computes the normal distance of the node to the reference 
-    axis. Then, it computes the amplitude of each area differential by computing the 
-    projected distance of the vectors connecting the neighbors of the node and computing
-    the scalar product of the resulting vector and the unitary vector of the reference axis.
-
-    Then, it adds up all computed area differentials to compute the resulting integral.
-
-    Parameters
-    ----------
-    segment : networkx.Graph
-        Graph of the individual segment.
-
-    Returns
-    -------
-    integral_area : float
-        Integral area of the segment.
-
-    """
-    # Find proximal and distal nodes of a segment and their positions
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
-    proximal_node_pos = segment.nodes[proximal_node]["pos"]
-    distal_node_pos = segment.nodes[distal_node]["pos"]
-    # Initialize integral area and iterate over all nodes between endpoints, 
-    # computing the area differential for each node
-    integral_area = 0
-    node = proximal_node
-    while segment.nodes[node]["hierarchy femoral"] < segment.nodes[distal_node]["hierarchy femoral"]:
-        for neighbor in segment.neighbors(node):
-            node_pos = segment.nodes[node]["pos"]
-            height = np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2)
-            # Create a new 3D vector to store the vectors between neighbor's positions
-            mean_neighbors_vector = np.array([0., 0., 0.])
-            for neighbor in segment.neighbors(node):
-                # Add vectors to all neighbors
-                if segment.nodes[node]["hierarchy femoral"] > segment.nodes[neighbor]["hierarchy femoral"]:
-                    mean_neighbors_vector += (segment.nodes[node]["pos"] - segment.nodes[neighbor]["pos"])
-                else:
-                    mean_neighbors_vector += (segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
-                    node = neighbor
-            # Project resulting vector over unitary reference axis vector and divide by 2
-            amlitude_differential = np.dot(mean_neighbors_vector, distal_node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * 2)
-            # Compute area differential
-            integral_area += amlitude_differential * height
-
-    return integral_area
 
 def cumulative_curvature(segment):
     """
