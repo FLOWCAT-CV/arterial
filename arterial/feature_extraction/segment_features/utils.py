@@ -620,7 +620,13 @@ def mean_diameter(segment):
         if segment.nodes[node]["features femoral"]["blanking"] < 0.5:
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
     # Compute mean
-    return np.mean(diameters)
+    if len(diameters) > 0:
+        return np.mean(diameters)
+    # If no nodes with blanking 0, choose between all nodes
+    else:
+        for node in segment:
+            diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
+        return np.mean(diameters)
 
 def max_diameter(segment):
     """
@@ -644,7 +650,13 @@ def max_diameter(segment):
         if segment.nodes[node]["features femoral"]["blanking"] < 0.5:
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
     # Select maximum
-    return np.amax(diameters)
+    if len(diameters) > 0:
+        return np.amax(diameters)
+    # If no nodes with blanking 0, choose between all nodes
+    else:
+        for node in segment:
+            diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
+        return np.amax(diameters)
 
 def min_diameter(segment):
     """
@@ -668,7 +680,13 @@ def min_diameter(segment):
         if segment.nodes[node]["features femoral"]["blanking"] < 0.5:
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
     # Select minimum
-    return np.amin(diameters)
+    if len(diameters) > 0:
+        return np.amin(diameters)
+    # If no nodes with blanking 0, choose between all nodes
+    else:
+        for node in segment:
+            diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
+        return np.amin(diameters)
 
 def proximal_diameter(segment):
     """
@@ -734,7 +752,13 @@ def min_max_diameter_ratio(segment):
         if segment.nodes[node]["features femoral"]["blanking"] < 0.5:
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
     # Computes ratio between min and max diameters
-    return np.amin(diameters) / np.amax(diameters)
+    if len(diameters) > 0:
+        return np.amin(diameters) / np.amax(diameters)
+    # If no nodes with blanking 0, choose between all nodes
+    else:
+        for node in segment:
+            diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
+        return np.amin(diameters) / np.amax(diameters)
 
 def tortuosity_index(segment):
     """
