@@ -51,7 +51,7 @@ def perform_preprocessing_and_centerline_extraction(case_dir, no_display):
         os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
     else:
         os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-        # os.system("{} --no-main-window --no-splash --disable-terminal-outputs  --python-script {} -case_dir {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+        # os.system("{} --python-script {} -case_dir {}".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
 
 if __name__ == "__main__":
     # Script to be executed by PythonSlicer interpreter
@@ -77,6 +77,6 @@ if __name__ == "__main__":
     master_volume_node = getNode("{}_segmentation".format(os.path.basename(case_dir)))
 
     # Perform segmentation from binary mask
-    segmentation_node, masked_volume_array = preprocessing(master_volume_node)
+    segmentation_node, masked_volume_array = preprocessing(case_dir, master_volume_node)
     # Perform centerline extraction. Creates centerlines.vtk
     centerline_extraction(case_dir, segmentation_node, masked_volume_array)

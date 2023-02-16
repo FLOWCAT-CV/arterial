@@ -1,5 +1,6 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
  
+import os
 import slicer
 import vtk
 
@@ -22,7 +23,7 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
         MRML node with all endpoints from the automatic endpoint detection.
     masked_volume_array : numpy.array
         Binary array of the segmentation mask after removal of the foreground voxels
-        of the upper 80% of the segmentation's bounding box.
+        of the upper 85% of the segmentation's bounding box.
     aff : numpy.array or array-like object. Shape: 4 x 4
         Affine matrix corresponding to the nifti file. RAS to ijk transformation.
 
@@ -32,10 +33,17 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
         Updated MRML node with all endpoints from the automatic endpoint detection.
 
     """
+    # We define a distance factor in case we are dealing with images of a different resolution
+    # We always assume we have close-to-isotropic voxels. 0.43 corresponds to the reference voxel size
+    # used to empirically define certain reference values
+    factor = abs(0.43 / aff[0, 0])
     # For AA island validation (number of foreground voxels in the bottom slice)
-    threshold_counts = 500 
+    # Empirically, we found that 500 is a good threshold for a voxel size of 0.43 * 0.43 * 0.4 mm^3
+    reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
+    voxel_size = np.prod([aff[idx, idx] for idx in range(3)])
+    threshold_counts = abs(round(500 * (reference_voxel_size / voxel_size)))
     # For AA endpoints check (distance from bottom slice)
-    threshold_distance = 50 
+    threshold_distance = 50 * 0.4 / aff[2, 2]
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(masked_volume_array[0])
@@ -85,13 +93,13 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
     # Select distal AA endpoint as startpoint (in some cases, the distal LSA endpoint is closer to the origin)
     # The criteria will be to choose the AA endpoint (at < 50 mm from bottom slice) that is closest to the reference point
     # Check every other point's distance to origin (ijk)
-    distance_to_ras_origin = []
+    distance_to_reference = []
     for idx in range(endpoints_node.GetNumberOfControlPoints()):
         endpoint = np.matmul(np.linalg.inv(aff), np.append(np.array(endpoints_node.GetCurvePoints().GetPoint(idx)), 1.0))[:3]
         # Reference point set at [350, 0, 0] in LAS coordinates
-        distance_to_ras_origin.append(np.linalg.norm(endpoint - np.array([350.0, 0.0, 0.0])))
+        distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
     # Get order from closest to furthest
-    sorted_distance_idx = np.argsort(distance_to_ras_origin)
+    sorted_distance_idx = np.argsort(distance_to_reference)
     for idx in sorted_distance_idx:
         startpoint = np.array(endpoints_node.GetCurvePoints().GetPoint(idx))
         if np.matmul(np.linalg.inv(aff), np.append(startpoint, 1.0))[2] > threshold_distance:
@@ -134,7 +142,7 @@ def robust_end_point_detection(endpoint, segmentation, aff, n = 15):
         Affine matrix corresponding to the nifti file. RAS to ijk transformation.
     n : integer 
         Defines the size of the region around the endpoint that is analyzed for this method.
-        New endpoint location will be searched within a cubic box of sie 2 * n around the 
+        New endpoint location will be searched within a cubic box of size 2 * n around the 
         originial endpoint location.
 
     Returns
@@ -183,7 +191,7 @@ def robust_end_point_detection(endpoint, segmentation, aff, n = 15):
     # Return the new position of the endpoint in RAS coordinates
     return np.matmul(aff, np.append(center_of_mass, 1.0))[:3]
 
-def inspect_circular_centerlines(centerline_poly_data, surface_model, segmentation_node, segment_id, aff):
+def inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, segmentation_node, segment_id, aff):
     """ 
     Analyzes surface model and centerline model to recognize large surface areas without associated centerline.
     This can happen due to either the presence of circular segments (VMTK does not contemplate this possibility) or due
@@ -223,7 +231,7 @@ def inspect_circular_centerlines(centerline_poly_data, surface_model, segmentati
     # Distance in ijk units to propagate a single centerlineless segment
     threshold_distance_prop = 5
     # Minimum number of surface model points to consider unique propagated segment as centerlineless
-    threshold_counts = 250
+    threshold_counts = 500
     
     # First we pool all centerline points and their associated radius
     centerline_positions_array = np.ndarray([centerline_poly_data.GetNumberOfPoints(), 3])
@@ -326,7 +334,7 @@ def inspect_circular_centerlines(centerline_poly_data, surface_model, segmentati
             # If counts are larger than threshold_counts, it means it is probably a well-identified segment, then we keep it
             # Otherwise, we discard it as it is probably a sparse island, incorrecly clustered
             if counts[val_idx] > threshold_counts:
-                print("Segment with label {}, found with {} counts. Creating closed surface model and importing into Slicer...".format(int(value), counts[val_idx]))
+                print("Segment with label {}, found with {} counts ({:.2f} % of total counts). \n Creating closed surface model and importing into Slicer...".format(int(value), counts[val_idx], 100 * counts[val_idx] / len(distance_radius_ratio)))
                 print()
                 for idx, label_cluster in enumerate(labels):
                     # For originally clustered points
@@ -408,6 +416,13 @@ def inspect_circular_centerlines(centerline_poly_data, surface_model, segmentati
                 # Apply the centerline extraction algorithm for circular segments
                 centerline_poly_data = extract_centerline_circular_segment(circular_segment_model_node, centerline_poly_data, segmentation_node, segment_id, aff)
 
+                # Overwriting centerlines separately after circular centerline inspection and extraction
+                writer = vtk.vtkPolyDataWriter()
+                writer.SetFileVersion(42)
+                writer.SetInputData(centerline_poly_data)
+                writer.SetFileName(os.path.join(case_dir, "centerlines", f"centerlines{segment_id}.vtk"))
+                writer.Write()
+
         return centerline_poly_data
     
 def extract_centerline_circular_segment(input_surface_model_node, centerline_poly_data, segmentation_node, segment_id, aff): 
@@ -462,11 +477,27 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     extract_centerline_widget.updateParameterNodeFromGUI()
     extract_centerline_widget._parameterNode.SetNodeReferenceID("InputSurface", input_surface_model_node.GetID())
 
-    print("Automatic endpoint extraction...")
-    # Autodetect endpoints
-    extract_centerline_widget.onAutoDetectEndPoints()
-    extract_centerline_widget.updateGUIFromParameterNode()
-    
+    import signal
+
+    class TimeoutException(Exception):
+        pass
+
+    def timeout_handler(signum, frame):
+        raise TimeoutException
+
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(5) 
+
+    try: 
+        print("Automatic endpoint extraction...")
+        # Autodetect endpoints
+        extract_centerline_widget.onAutoDetectEndPoints()
+        extract_centerline_widget.updateGUIFromParameterNode()
+        signal.alarm(0)
+    except TimeoutException:
+        print("Stuck in endpoint autodetection, skipping segment")
+        return centerline_poly_data
+        
     # Set network node reference to original segment
     extract_centerline_widget._parameterNode.SetNodeReferenceID("InputSurface", segmentation_node.GetID())
     extract_centerline_widget.ui.inputSegmentSelectorWidget.setCurrentSegmentID(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id))
@@ -487,7 +518,7 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     startpoint = np.array(endpoints_node.GetCurvePoints().GetPoint(0))
     # Remove all nodes except for the startpoint and the one that is further away. We do this because sometimes there are several 
     # endpoints detected close to the origin of the centerline-less segment
-    while endpoints_node.GetNumberOfControlPoints() > 2: # Sometimes it gets stuck here                                                                     ####### Revise
+    while endpoints_node.GetNumberOfControlPoints() > 2: 
         distances_endpoints = []
         for idx in range(1, endpoints_node.GetNumberOfControlPoints()):
             distances_endpoints.append(np.linalg.norm(startpoint - np.array(endpoints_node.GetCurvePoints().GetPoint(idx))))
@@ -508,8 +539,8 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
                 closest_cell_points[cell_idx]= np.amin(np.linalg.norm(new_endpoint - centerline_cell_points, axis = 1))
             new_endpoint = centerline_poly_data.GetCell(np.argmin(closest_cell_points)).GetPoints().GetPoint(centerline_poly_data.GetCell(np.argmin(closest_cell_points)).GetNumberOfPoints() - 1)
         endpoints_node.SetNthControlPointPosition(idx, new_endpoint[0],
-                                                       new_endpoint[1],
-                                                       new_endpoint[2])
+                                                    new_endpoint[1],
+                                                    new_endpoint[2])
     
     # We add startpoint of original segment as endpoint
     startpoint = centerline_poly_data.GetCell(0).GetPoints().GetPoint(0)
@@ -519,7 +550,6 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     # original centerline_poly_data. We should have two additional endpoints: one corresponding to the centerline point from 
     # the original centerline_poly_data closest to the robust endpoint detected at the other end of the centerline-less segment
     # and another one at the startpoint of the original centerline_poly_data
-
     print("Extracting centerline...")
     # Create new model node for the centerline model
     centerline_model_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
@@ -552,14 +582,10 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
                 if (unique_cells_first_coordinate_array[idx] == cells_first_coordinate_array[idx2]).all(): remove_floating.append(idx2)
 
     if len(remove_floating) > 0:
-        print("Found floating centerlines:", remove_floating)
+        print("Found floating centerlines: {}. Suspending circular centerline extraction".format(remove_floating))
+        return centerline_poly_data
     else:
         print("No errors found")
-
-    for idx in remove_floating:
-        circular_centerline_poly_data.DeleteCell(idx)
-
-    circular_centerline_poly_data.RemoveDeletedCells()
 
     print("Building final centerline segment")
     # We join both cells to create the final cell of the original centerline_poly_data 
@@ -578,7 +604,7 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
         final_cell_array.InsertNextCell(centerline_poly_data.GetCell(cell_idx))
     
     # Now, we join both cells from the circular_centerline_poly_data as one with the correct order
-    assert circular_centerline_poly_data.GetNumberOfCells() == 2                                                                                ####### This should not ever fail if we make sure that there are only 3 endpoints. Revise
+    assert circular_centerline_poly_data.GetNumberOfCells() == 2
     
     # We have to search for the exact preceeding centerline segment from the original centerline_poly_data
     # First store all centerlines from the original centerline_poly_data in numpy arrays for speed
@@ -596,8 +622,8 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
             if np.amin(distances) < 0.1:
                 centerline_point_idx = np.argmin(distances)
                 break # centerline_cell_idx, centerline_point_idx correspond to the original centerline_poly_data
-                      # circular_centerline_prox_point_idx - 1 will be the first point used from the circularCenterline
-                      # We will concatenate both
+                    # circular_centerline_prox_point_idx - 1 will be the first point used from the circularCenterline
+                    # We will concatenate both
         if np.amin(distances) < 0.1:
             break
             
@@ -611,8 +637,8 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
             if np.amin(distances) < 0.1:
                 centerline_point_idx_2 = np.argmin(distances)
                 break # centerline_cell_idx_2, centerline_point_idx_2 correspond to the preceeding centerline
-                      # circular_centerline_dist_point_idx - 1 will be the first point used from the circularCenterline
-                      # We will concatenate both
+                    # circular_centerline_dist_point_idx - 1 will be the first point used from the circularCenterline
+                    # We will concatenate both
         if np.amin(distances) < 0.1:
             break
     
@@ -705,5 +731,5 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     final_centerline_poly_data.GetPointData().GetArray(1).SetName("EdgeArray")
     final_centerline_poly_data.GetPointData().AddArray(vtk.util.numpy_support.numpy_to_vtk(edge_p_coord_array_numpy))
     final_centerline_poly_data.GetPointData().GetArray(2).SetName("EdgePCoordArray")
-    
+
     return final_centerline_poly_data

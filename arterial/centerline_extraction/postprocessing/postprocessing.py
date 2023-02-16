@@ -239,3 +239,130 @@ def compute_centerline_segments_array(case_dir):
     # Finally, we delete the additional segments and save the array as a npy file
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
     np.save(os.path.join(case_dir, "centerline_segments_array.npy"), final_centerline_segments_array)
+    
+def perform_segmentation_unification(case_dir):
+    """
+    Reads all segmentations in case_dir/segmentations 
+    files and creates unified segmentation. 
+
+    **** This needs re-thinking to be feasible, it takes forever as of now without the group id from the clipped models.
+    
+    Saves unified segmentation as:
+
+    >>> case_dir/segmentation.vtk
+
+    Parameters
+    ----------
+    case_dir : string or path-like object
+        Path to case directory. 
+
+    Returns
+    -------
+
+    """
+    print("Unifying all segmentations...")
+    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
+    # Initialize the vtkPoints and the vtkCellArray objects for the segmentation
+    cell_array_segmentation = vtk.vtkCellArray()
+    points_segmentation = vtk.vtkPoints()
+
+    points_from_previous_segmentations = 0
+
+    for surface_model_id, _ in enumerate(surface_model_list):
+        # Load segmentation         
+        segmentation_path = os.path.join(case_dir, "segmentations", "segmentation{}.vtk".format(surface_model_id))
+        vtk_poly_data_reader = vtk.vtkPolyDataReader()
+        vtk_poly_data_reader.SetFileName(segmentation_path)
+        vtk_poly_data_reader.Update()
+        segmentation = vtk_poly_data_reader.GetOutput()
+
+        if segmentation.GetNumberOfCells() == 0:
+            print("Error in segmentation {}. Skipping".format(surface_model_id))
+        else:
+            print("Processing segmentation {}...".format(surface_model_id))
+            # Get number of points in each segmentation cell (= 3)
+            number_of_point_ids = segmentation.GetCell(0).GetPointIds().GetNumberOfIds()
+            # Generally, points are placed as cell indices go up, but this is not always the case
+            # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
+            # But in the cases where a point_idx has not been found, we search across all cells of the model, in order
+            # to ensure that no point_idx is missed
+            last_cell = 0
+            # We iterate through every pointId
+            for point_idx in range(segmentation.GetNumberOfPoints()):
+                # We need a boolean variable to stop the iterative search when a point is found to speed up computations
+                found_point = False
+                # We primarily only search for cells with a cellId larger than the ones analyzed
+                # Limiting up the search dramatically speeds up computations
+                for cell_idx in range(max(0, last_cell - 1), segmentation.GetNumberOfCells()):
+                    # Iterate over points in cell
+                    for idx in range(number_of_point_ids):
+                        # If a point is found with pointId equal to the next point_idx
+                        if segmentation.GetCell(cell_idx).GetPointId(idx) == point_idx:
+                            # Keep cell_idx to limit cell of the next point_idx
+                            last_cell = cell_idx
+                            # Insert next point in final segmentation point object and groupId point array
+                            points_segmentation.InsertNextPoint(segmentation.GetCell(cell_idx).GetPoints().GetPoint(idx))
+                            # Update boolean marker to stop the search for the current pointidx
+                            found_point = True
+                            break
+                    # Break cell serach if point is found
+                    if found_point:
+                        break
+                # If point is not found, search all throughout the cell pool, including cells with a smaller cell_idx than last_cell
+                # These searches are significantly longer than the general case, but we only apply them when needed
+                # This is very rare but if not done, it will mess up the final model
+                if not found_point:
+                    # If point_idx has not been found, we also look at the previous cells (rare but it happens)
+                    for cell_idx in range(segmentation.GetNumberOfCells()):
+                        # Iterate over points in cell
+                        for idx in range(number_of_point_ids):
+                            # If a point is found with pointId equal to the next point_idx
+                            if segmentation.GetCell(cell_idx).GetPointId(idx) == point_idx:
+                                # Keep cell_idx to limit cell of the next point_idx
+                                last_cell = cell_idx
+                                # Insert next point in final segmentation point object and groupId point array
+                                points_segmentation.InsertNextPoint(segmentation.GetCell(cell_idx).GetPoints().GetPoint(idx))
+                                # Update boolean marker to stop the search for the current pointidx
+                                found_point = True
+                        # Break cell serach if point is found
+                        if found_point:
+                            break
+
+            # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
+            # Insert the cells with the corresponding groupId to the new vtkCellArray
+            # for idx in cellIdArray:
+            for cell_idx in range(segmentation.GetNumberOfCells()):
+                cell = vtk.vtkTriangle()
+                cell.GetPointIds().SetNumberOfIds(number_of_point_ids)
+                for idx in range(number_of_point_ids):
+                    cell.GetPointIds().SetId(idx, segmentation.GetCell(cell_idx).GetPointId(idx) + points_from_previous_segmentations)
+                cell_array_segmentation.InsertNextCell(cell)
+            
+            # Update total number of points from previous models
+            points_from_previous_segmentations += segmentation.GetNumberOfPoints()
+
+    # Store all segmentation data in new vtkPolyData
+    final_segmentation = vtk.vtkPolyData()
+    final_segmentation.SetPoints(points_segmentation)
+    final_segmentation.SetPolys(cell_array_segmentation)
+
+    # We can to compute the normals for all mesh triangles
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputData(final_segmentation)
+    normals.SetFeatureAngle(80)
+    normals.AutoOrientNormalsOn()
+    normals.UpdateInformation()
+    normals.Update()
+    final_segmentation = normals.GetOutput()
+
+    # We also pass a clean vtkPolyData filter for good measure
+    clean_poly_data = vtk.vtkCleanPolyData()
+    clean_poly_data.SetInputData(final_segmentation)
+    clean_poly_data.Update()
+    final_segmentation = clean_poly_data.GetOutput()
+
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetFileVersion(42)
+    writer.SetInputData(final_segmentation)
+    writer.SetFileName(os.path.join(case_dir, "segmentation.vtk"))
+    writer.Write()

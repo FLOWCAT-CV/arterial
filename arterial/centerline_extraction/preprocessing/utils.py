@@ -2,8 +2,6 @@
 
 import numpy as np
 
-from scipy.optimize import curve_fit
-
 def get_bounding_box_limits_3d(img):
     ''' 
     Computes bounding box (only z axis) of a numpy array (expects an array 

@@ -82,7 +82,7 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
 
         # For the largest segment, we check the existence of circular centerlines
         if segment_id == 0:
-            centerline_poly_data = inspect_circular_centerlines(centerline_poly_data, decimated_surface_model, segmentation_node, segment_id, aff)
+            centerline_poly_data = inspect_circular_centerlines(case_dir, centerline_poly_data, decimated_surface_model, segmentation_node, segment_id, aff)
 
         # Overwriting centerlines separately after circular centerline inspection and extraction
         writer = vtk.vtkPolyDataWriter()
@@ -184,14 +184,14 @@ def extract_centerline(segmentation_node, segment_id, masked_volume_array, aff):
         centerline_poly_data.GetCell(cell_id, cell)
         cell_first_coordinate_array[cell_id] = np.matmul(aff, np.append(cell.GetPoints().GetPoint(0), 1.0))[:3]
 
-    uniquecell_first_coordinate_array, counts = np.unique(cell_first_coordinate_array, return_counts=True, axis=0)
+    unique_cell_first_coordinate_array, counts = np.unique(cell_first_coordinate_array, return_counts=True, axis=0)
 
     # Get all those that do not start at the startpoint
     remove_floating = []
-    for idx in range(len(uniquecell_first_coordinate_array)):
+    for idx in range(len(unique_cell_first_coordinate_array)):
         if idx != np.argmax(counts):
             for idx2 in range(centerline_poly_data.GetNumberOfCells()):
-                if (uniquecell_first_coordinate_array[idx] == cell_first_coordinate_array[idx2]).all(): remove_floating.append(idx2)
+                if (unique_cell_first_coordinate_array[idx] == cell_first_coordinate_array[idx2]).all(): remove_floating.append(idx2)
 
     # Finally, check if there are any floating centerlines
     if len(remove_floating) > 0:

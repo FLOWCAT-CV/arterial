@@ -29,7 +29,7 @@ def perform_centerline_branching(case_dir):
     
     """
     # List all centerline model to be branched
-    centerline_list = [centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")]
+    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")])
     # Create dir to store all branch_models
     if not os.path.isdir(os.path.join(case_dir, "branch_models")): os.mkdir(os.path.join(case_dir, "branch_models"))
 
@@ -64,7 +64,7 @@ def perform_branch_model_unification(case_dir):
 
     """
     print("Unifying all branch models...")
-    centerline_list = [centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")] 
+    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")])
     # Initialize the vtkPoints and the vtkCellArray objects for the branch_model
     cell_array_branch_model = vtk.vtkCellArray()
     points_branch_model = vtk.vtkPoints()
@@ -193,7 +193,7 @@ def perform_surface_model_clipping(case_dir):
     
     """
     # List all surface models to be clipped
-    surface_model_list = [surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")]       
+    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
     # Create dir to store all clipped_models
     if not os.path.isdir(os.path.join(case_dir, "clipped_models")): os.mkdir(os.path.join(case_dir, "clipped_models"))
     for idx, surface_model_file in enumerate(surface_model_list):
@@ -228,7 +228,7 @@ def perform_clipped_model_unification(case_dir):
 
     """
     print("Unifying all clipped models...")
-    surface_model_list = [surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")] 
+    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
     # Initialize the vtkPoints and the vtkCellArray objects for the clipped_model
     cell_array_clipped_model = vtk.vtkCellArray()
     points_clipped_model = vtk.vtkPoints()
