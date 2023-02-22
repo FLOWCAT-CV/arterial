@@ -3,6 +3,11 @@
 *.model
 *.pth
 *.pkl
+*tests/
+batch_processing*
+*__pycache__/
+*.pyc
+.*
 
 
 # Byte-compiled / optimized / DLL files
