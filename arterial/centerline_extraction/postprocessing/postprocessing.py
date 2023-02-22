@@ -1,8 +1,5 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-### This code should compute centerline_segments_array (better name?), 
-# We will also add segment_splitting but will not do anything with it at the moment (will not be called)
-
 import os
 import vtk
 
@@ -239,7 +236,7 @@ def compute_centerline_segments_array(case_dir):
     # Finally, we delete the additional segments and save the array as a npy file
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
     np.save(os.path.join(case_dir, "centerline_segments_array.npy"), final_centerline_segments_array)
-    
+
 def perform_segmentation_unification(case_dir):
     """
     Reads all segmentations in case_dir/segmentations 
@@ -280,63 +277,75 @@ def perform_segmentation_unification(case_dir):
             print("Error in segmentation {}. Skipping".format(surface_model_id))
         else:
             print("Processing segmentation {}...".format(surface_model_id))
-            # Get number of points in each segmentation cell (= 3)
-            number_of_point_ids = segmentation.GetCell(0).GetPointIds().GetNumberOfIds()
-            # Generally, points are placed as cell indices go up, but this is not always the case
-            # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
-            # But in the cases where a point_idx has not been found, we search across all cells of the model, in order
-            # to ensure that no point_idx is missed
-            last_cell = 0
-            # We iterate through every pointId
-            for point_idx in range(segmentation.GetNumberOfPoints()):
-                # We need a boolean variable to stop the iterative search when a point is found to speed up computations
-                found_point = False
-                # We primarily only search for cells with a cellId larger than the ones analyzed
-                # Limiting up the search dramatically speeds up computations
-                for cell_idx in range(max(0, last_cell - 1), segmentation.GetNumberOfCells()):
-                    # Iterate over points in cell
-                    for idx in range(number_of_point_ids):
-                        # If a point is found with pointId equal to the next point_idx
-                        if segmentation.GetCell(cell_idx).GetPointId(idx) == point_idx:
-                            # Keep cell_idx to limit cell of the next point_idx
-                            last_cell = cell_idx
-                            # Insert next point in final segmentation point object and groupId point array
-                            points_segmentation.InsertNextPoint(segmentation.GetCell(cell_idx).GetPoints().GetPoint(idx))
-                            # Update boolean marker to stop the search for the current pointidx
-                            found_point = True
-                            break
-                    # Break cell serach if point is found
-                    if found_point:
-                        break
-                # If point is not found, search all throughout the cell pool, including cells with a smaller cell_idx than last_cell
-                # These searches are significantly longer than the general case, but we only apply them when needed
-                # This is very rare but if not done, it will mess up the final model
-                if not found_point:
-                    # If point_idx has not been found, we also look at the previous cells (rare but it happens)
-                    for cell_idx in range(segmentation.GetNumberOfCells()):
-                        # Iterate over points in cell
-                        for idx in range(number_of_point_ids):
-                            # If a point is found with pointId equal to the next point_idx
-                            if segmentation.GetCell(cell_idx).GetPointId(idx) == point_idx:
-                                # Keep cell_idx to limit cell of the next point_idx
-                                last_cell = cell_idx
-                                # Insert next point in final segmentation point object and groupId point array
-                                points_segmentation.InsertNextPoint(segmentation.GetCell(cell_idx).GetPoints().GetPoint(idx))
-                                # Update boolean marker to stop the search for the current pointidx
-                                found_point = True
-                        # Break cell serach if point is found
-                        if found_point:
-                            break
+            # To speed up computation, we bypass processing on the first segment
+            # and we add the points and cells from the rest of the 
+            if surface_model_id == 0:
+                for point_idx in range(segmentation.GetNumberOfPoints()):
+                    points_segmentation.InsertNextPoint(segmentation.GetPoints().GetPoint(point_idx))
+                for cell_idx in range(segmentation.GetNumberOfCells()):
+                    cell_array_segmentation.InsertNextCell(segmentation.GetCell(cell_idx))
+            else:
+                for point_idx in range(segmentation.GetNumberOfPoints()):
+                    points_segmentation.InsertNextPoint(segmentation.GetPoints().GetPoint(point_idx))
+                for cell_idx in range(segmentation.GetNumberOfCells()):
+                    cell_array_segmentation.InsertNextCell(segmentation.GetCell(cell_idx))
+                # Get number of points in each segmentation cell (= 3)
+                number_of_point_ids = segmentation.GetCell(0).GetPointIds().GetNumberOfIds()
+                # # Generally, points are placed as cell indices go up, but this is not always the case
+                # # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
+                # # But in the cases where a point_idx has not been found, we search across all cells of the model, in order
+                # # to ensure that no point_idx is missed
+                # last_cell = 0
+                # # We iterate through every pointId
+                # for point_idx in range(segmentation.GetNumberOfPoints()):
+                #     # We need a boolean variable to stop the iterative search when a point is found to speed up computations
+                #     found_point = False
+                #     # We primarily only search for cells with a cellId larger than the ones analyzed
+                #     # Limiting up the search dramatically speeds up computations
+                #     for cell_idx in range(max(0, last_cell - 1), segmentation.GetNumberOfCells()):
+                #         # Iterate over points in cell
+                #         for idx in range(number_of_point_ids):
+                #             # If a point is found with pointId equal to the next point_idx
+                #             if segmentation.GetCell(cell_idx).GetPointId(idx) == point_idx:
+                #                 # Keep cell_idx to limit cell of the next point_idx
+                #                 last_cell = cell_idx
+                #                 # Insert next point in final segmentation point object and groupId point array
+                #                 points_segmentation.InsertNextPoint(segmentation.GetCell(cell_idx).GetPoints().GetPoint(idx))
+                #                 # Update boolean marker to stop the search for the current pointidx
+                #                 found_point = True
+                #                 break
+                #         # Break cell serach if point is found
+                #         if found_point:
+                #             break
+                #     # If point is not found, search all throughout the cell pool, including cells with a smaller cell_idx than last_cell
+                #     # These searches are significantly longer than the general case, but we only apply them when needed
+                #     # This is very rare but if not done, it will mess up the final model
+                #     if not found_point:
+                #         # If point_idx has not been found, we also look at the previous cells (rare but it happens)
+                #         for cell_idx in range(segmentation.GetNumberOfCells()):
+                #             # Iterate over points in cell
+                #             for idx in range(number_of_point_ids):
+                #                 # If a point is found with pointId equal to the next point_idx
+                #                 if segmentation.GetCell(cell_idx).GetPointId(idx) == point_idx:
+                #                     # Keep cell_idx to limit cell of the next point_idx
+                #                     last_cell = cell_idx
+                #                     # Insert next point in final segmentation point object and groupId point array
+                #                     points_segmentation.InsertNextPoint(segmentation.GetCell(cell_idx).GetPoints().GetPoint(idx))
+                #                     # Update boolean marker to stop the search for the current pointidx
+                #                     found_point = True
+                #             # Break cell serach if point is found
+                #             if found_point:
+                #                 break
 
-            # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
-            # Insert the cells with the corresponding groupId to the new vtkCellArray
-            # for idx in cellIdArray:
-            for cell_idx in range(segmentation.GetNumberOfCells()):
-                cell = vtk.vtkTriangle()
-                cell.GetPointIds().SetNumberOfIds(number_of_point_ids)
-                for idx in range(number_of_point_ids):
-                    cell.GetPointIds().SetId(idx, segmentation.GetCell(cell_idx).GetPointId(idx) + points_from_previous_segmentations)
-                cell_array_segmentation.InsertNextCell(cell)
+                # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
+                # Insert the cells with the corresponding groupId to the new vtkCellArray
+                # for idx in cellIdArray:
+                for cell_idx in range(segmentation.GetNumberOfCells()):
+                    cell = vtk.vtkTriangle()
+                    cell.GetPointIds().SetNumberOfIds(number_of_point_ids)
+                    for idx in range(number_of_point_ids):
+                        cell.GetPointIds().SetId(idx, segmentation.GetCell(cell_idx).GetPointId(idx) + points_from_previous_segmentations)
+                    cell_array_segmentation.InsertNextCell(cell)
             
             # Update total number of points from previous models
             points_from_previous_segmentations += segmentation.GetNumberOfPoints()

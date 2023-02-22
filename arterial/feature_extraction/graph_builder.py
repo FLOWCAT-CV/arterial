@@ -58,6 +58,9 @@ def build_centerline_graph(case_dir):
         centerline_graph.graph["centerline_segments_array"] = centerline_segments_array
         # Building dense graph
         total_nodes = 0 
+        # We register the highest and lowest s coordinates of the nodes (initialization)
+        lowest_s_pos = 10000
+        highest_s_pos = -10000
         # We only link nodes from the same centerline first, and afterwards we contract nodes with the same position
         for cell_id, curve in enumerate(coordinate_array):
             if cell_id not in skip_cell_ids:
@@ -67,6 +70,11 @@ def build_centerline_graph(case_dir):
                 previous_idx = 0
                 # Now we loop to every centerline point in each centerline_segments_array cell
                 for idx, position in enumerate(curve):
+                    # We register the highest and lowest s coordinates of the nodes
+                    if position[2] < lowest_s_pos:
+                        lowest_s_pos = position[2]
+                    if position[2] > highest_s_pos:
+                        highest_s_pos = position[2]
                     # For the first node in every cell, we add just a node with its corresponding cell_id
                     if idx == 0:
                         centerline_graph.add_node(total_nodes, pos = position)
@@ -187,10 +195,13 @@ def build_centerline_graph(case_dir):
         else:
             sanity_check = True
     else:
-        # The rightmost_node node can be used for hierarchical indexing from radial access                                   
+        # Once we go out of the while loop, we compute the range of the s coordinate
+        # We limit the rightmost node search to the lowest 60% of the image
+        range_pos = highest_s_pos - lowest_s_pos
+        # The rightmost_node node can be used for hierarchical indexing from radial access                          
         rightmost_node_position = coordinate_array[0][0]
         for node in centerline_graph:
-            if centerline_graph.nodes[node]["pos"][0] < rightmost_node_position[0] and centerline_graph.degree(node) == 1:
+            if centerline_graph.nodes[node]["pos"][0] < rightmost_node_position[0] and centerline_graph.degree(node) == 1 and centerline_graph.nodes[node]["pos"][2] < range_pos * 0.6 + lowest_s_pos:
                 rightmost_node = node
                 rightmost_node_position = centerline_graph.nodes[node]["pos"]
 

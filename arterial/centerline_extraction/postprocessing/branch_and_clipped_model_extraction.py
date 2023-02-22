@@ -54,6 +54,12 @@ def perform_branch_model_unification(case_dir):
 
     >>> case_dir/branch_model.vtk
 
+    Final branch mdoel should have the following cell data arrays updated:
+    * centerlinesId -> connections between origin and endpoints
+    * tractId -> following a centerline Id, tract number (closest to origin is 0, next is 1 and so on)
+    * blanking -> transition to a new branch
+    * groupId -> indicates is the centerline is inside of the tract 
+
     Parameters
     ----------
     case_dir : string or path-like object
@@ -64,7 +70,7 @@ def perform_branch_model_unification(case_dir):
 
     """
     print("Unifying all branch models...")
-    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")])
+    branch_model_list = sorted([branch_model_file for branch_model_file in os.listdir(os.path.join(case_dir, "branch_models")) if branch_model_file.endswith(".vtk")])
     # Initialize the vtkPoints and the vtkCellArray objects for the branch_model
     cell_array_branch_model = vtk.vtkCellArray()
     points_branch_model = vtk.vtkPoints()
@@ -76,29 +82,35 @@ def perform_branch_model_unification(case_dir):
     acc_group_id_branch_model = 0
     points_from_previous_branch_models = 0
 
-    for centerline_model_id, _ in enumerate(centerline_list):
+    for branch_model_model_id, _ in enumerate(branch_model_list):
         # Load branch model
-        branch_model_path = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(centerline_model_id))
+        branch_model_path = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(branch_model_model_id))
         vtk_poly_data_reader = vtk.vtkPolyDataReader()
         vtk_poly_data_reader.SetFileName(branch_model_path)
         vtk_poly_data_reader.Update()
         branch_model = vtk_poly_data_reader.GetOutput()
 
         if branch_model.GetNumberOfCells() == 0:
-            print("Error in branch model {}. Skipping".format(centerline_model_id))
+            print("Error in branch model {}. Skipping".format(branch_model_model_id))
         else:
             # Get cell data
             cell_data_array = np.ndarray([4, branch_model.GetNumberOfCells()], dtype=np.int64)
-            cell_data_array[0] = vtk_to_numpy(branch_model.GetCellData().GetArray("CenterlineIds")) # centerlinesId -> connections between origin and endpoints
-            cell_data_array[1] = vtk_to_numpy(branch_model.GetCellData().GetArray("TractIds")) # tractId -> following a centerline Id, tract number (closest to origin is 0, next is 1 and so on)
-            cell_data_array[2] = vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking")) # blanking -> transition to a new branch
-            cell_data_array[3] = vtk_to_numpy(branch_model.GetCellData().GetArray("GroupIds")) # groupId -> indicates is the centerline is inside of the tract 
-            # Add centerlineId and groupId (add previous summed maximums)
-            cell_data_array[0] = cell_data_array[0] + acc_centerline_id
-            cell_data_array[3] = cell_data_array[3] + acc_group_id_branch_model
-            # Update accumulated centerlineId and groupId
-            acc_centerline_id += np.amax(cell_data_array[0]) + 1
-            acc_group_id_branch_model += np.amax(cell_data_array[3]) + 1
+            for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
+                # Get cell data array name
+                cell_data_name = branch_model.GetCellData().GetArrayName(idx)
+                # Add to cell data array
+                cell_data_array[idx] = vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
+                if cell_data_name == "CenterlineIds":
+                    # Add accumulated centerline id
+                    cell_data_array[idx] += acc_centerline_id
+                    # Update accumulated centerlineId and groupId
+                    acc_centerline_id += np.amax(cell_data_array[idx]) + 1
+                elif cell_data_name == "GroupIds":
+                    # Add accumulated group id
+                    cell_data_array[idx] += acc_group_id_branch_model
+                    # Update accumulated centerlineId and groupId
+                    acc_group_id_branch_model += np.amax(cell_data_array[idx]) + 1
+
             # Append cell_data_array from present branch_model
             final_cell_data_array_branch_model = np.append(final_cell_data_array_branch_model, cell_data_array, axis=1)
             
@@ -228,7 +240,7 @@ def perform_clipped_model_unification(case_dir):
 
     """
     print("Unifying all clipped models...")
-    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
+    clipped_model_list = sorted([clipped_model_file for clipped_model_file in os.listdir(os.path.join(case_dir, "clipped_models")) if clipped_model_file.endswith(".vtk")])
     # Initialize the vtkPoints and the vtkCellArray objects for the clipped_model
     cell_array_clipped_model = vtk.vtkCellArray()
     points_clipped_model = vtk.vtkPoints()
@@ -238,18 +250,18 @@ def perform_clipped_model_unification(case_dir):
     acc_group_id_clipped_model = 0
     points_from_previous_clipped_models = 0
 
-    for surface_model_id, _ in enumerate(surface_model_list):
+    for clipped_model_id, _ in enumerate(clipped_model_list):
         # Load clipped model         
-        clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model{}.vtk".format(surface_model_id))
+        clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model{}.vtk".format(clipped_model_id))
         vtk_poly_data_reader = vtk.vtkPolyDataReader()
         vtk_poly_data_reader.SetFileName(clipped_model_path)
         vtk_poly_data_reader.Update()
         clipped_model = vtk_poly_data_reader.GetOutput()
 
         if clipped_model.GetNumberOfCells() == 0:
-            print("Error in clipped model {}. Skipping".format(surface_model_id))
+            print("Error in clipped model {}. Skipping".format(clipped_model_id))
         else:
-            print("Processing clipped model {}...".format(surface_model_id))
+            print("Processing clipped model {}...".format(clipped_model_id))
             # Get point data (we only get groupId)
             group_id_point_array_clipped_model = vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
             # Update groupIds of current clipped_model

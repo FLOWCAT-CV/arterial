@@ -691,7 +691,7 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
                 edge_p_coord_array_numpy = np.append(edge_p_coord_array_numpy, circular_centerline_poly_data.GetPointData().GetArray("EdgePCoordArray").GetValue(circular_centerline_cell.GetPointId(point_idx)))
             # Create a new cell with the poits up to centerline_cell_idx_2 and a few points (e.g., 2-10. We take 4) from the circular segment. This can solve several issues in branch model, clipped model and segments_array computation
             # We define the necessary objects for the circular centerline cell
-            circular_centerline_poly_line_2 = vtk.vtkPolyLine()                                     ####### Branch and clipped model extraction is a bit broken and unification messes up models. Possibly due to something happening here
+            circular_centerline_poly_line_2 = vtk.vtkPolyLine()
             circular_centerline_poly_line_points_2 = vtk.vtkPoints()
             circular_centerline_poly_line_point_ids_2 = []
             for point_idx in range(centerline_point_idx_2):

@@ -92,7 +92,7 @@ def get_aortic_arch_type(centerline_graph):
 
 def get_bovine_arch(centerline_graph):
     """
-    Gets bovine arch presence. Gets most procimal LCCA node and detects segments in 
+    Gets bovine arch presence. Gets most proximal LCCA node and detects segments in 
     contact at origin. If the BT is one of the vessels in contact at the LCCA origin,
     it detects the bovine aortic arch. Otherwise, it does not.
 
@@ -189,7 +189,7 @@ def get_arsa(centerline_graph):
                     vessel_type_names_in_contact.append(centerline_graph[src][dst]["vessel type name"])
         # If AA is in contact of the RSA origin and the closest RSA node has a smaller hierarchy 
         # than the closest LSA node, ARSA is detected
-        if 1 in vessel_type_names_in_contact and centerline_graph.nodes[closest_rsa_node]["hierarchy femoral"] < centerline_graph.nodes[closest_lsa_node]["hierarchy femoral"]:
+        if "AA" in vessel_type_names_in_contact and centerline_graph.nodes[closest_rsa_node]["hierarchy femoral"] < centerline_graph.nodes[closest_lsa_node]["hierarchy femoral"]:
             arsa = 1
         else:
             arsa = 0

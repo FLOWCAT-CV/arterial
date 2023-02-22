@@ -55,15 +55,15 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
 
     # Overwrite simple graph
     with open(os.path.join(case_dir, "graph_pred.pickle"), "wb") as f:
-        pickle.dump(os.path.join(case_dir, "graph_pred.pickle"), f, protocol = 4)
+        pickle.dump(simple_centerline_graph, f, protocol = 4)
 
     # Initialize segment features dict in centerline_graph.graph
     centerline_graph.graph["segment features"] = {}
     # Extract vessel type segments
     segments_vessel_type = get_single_segments_vessel_type(centerline_graph)
     for vessel_type in segments_vessel_type.keys():
-        if segments_cell_id[vessel_type] is not None:
-            centerline_graph.graph["segment features"][vessel_type] = segments_cell_id[vessel_type].graph["features"]
+        if segments_vessel_type[vessel_type] is not None:
+            centerline_graph.graph["segment features"][vessel_type] = segments_vessel_type[vessel_type].graph["features"]
 
     # Overwrite centerline graph
     with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:

@@ -42,7 +42,7 @@ def get_single_segments_vessel_type(centerline_graph):
         vessel_type_list = []
         # Iterates over all edges of the simple graph to find unique vessel types
         for node in centerline_graph:
-            vessel_type = centerline_graph.nodes[node]["features femoral"]["vessel type"]
+            vessel_type = centerline_graph.nodes[node]["vessel type name"]
             if vessel_type != "other" and vessel_type not in vessel_type_list:
                 vessel_type_list.append(vessel_type)
 
@@ -55,7 +55,7 @@ def get_single_segments_vessel_type(centerline_graph):
     # Iterate over all vessel types in list to find segments for all of them
     for vessel_type in vessel_type_list:
         # Extract individual segments according to vessel type
-        segments_vessel_type[vessel_type] = get_single_segment(centerline_graph, vessel_type, identifier_type = "vessel_type")
+        segments_vessel_type[vessel_type] = get_single_segment(centerline_graph, vessel_type, identifier_type = "vessel_type")        
         if segments_vessel_type[vessel_type] is not None:
             # Perform feature extraction
             segments_vessel_type[vessel_type] = extract_segment_features(segments_vessel_type[vessel_type])
@@ -346,7 +346,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
 
     # Select the key for node identifier acoording to the selector
     if identifier_type == "vessel_type":
-        key_name = "vessel type"
+        key_name = "vessel type name"
     elif identifier_type == "cell_id":
         key_name = "cell_id"
     else:
@@ -895,27 +895,29 @@ def tortuosity_index_first_5_cm(segment):
         Tortuosity index of the first 5 cm of the segment.
     
     """
+    # Create a copy of the segment
+    segment_copy = segment.copy()
     # Finds proximal and distal nodes of a segment
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
+    proximal_node = find_proximal_node(segment_copy)
+    distal_node = find_distal_node(segment_copy)
     # Initialize list for nodes within 5 cm of the proximal node and cumulative distance
     keep_nodes = [proximal_node]
     cumulative_distance = 0
     node = proximal_node
     # Iterate over all nodes between proximal and distal endpoints and find nodes to keep
-    while segment.nodes[node]["hierarchy femoral"] < segment.nodes[distal_node]["hierarchy femoral"] and cumulative_distance < 50:
-        for neighbor in segment.neighbors(node):
-            if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
-                cumulative_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
+    while segment_copy.nodes[node]["hierarchy femoral"] < segment_copy.nodes[distal_node]["hierarchy femoral"] and cumulative_distance < 50:
+        for neighbor in segment_copy.neighbors(node):
+            if segment_copy.nodes[neighbor]["hierarchy femoral"] > segment_copy.nodes[node]["hierarchy femoral"]:
+                cumulative_distance += np.linalg.norm(segment_copy.nodes[neighbor]["pos"] - segment_copy.nodes[node]["pos"])
                 keep_nodes.append(neighbor)
                 node = neighbor
 
     # Eliminate all other nodes from the segment
-    for node in segment.copy():
+    for node in segment_copy.copy():
         if node not in keep_nodes:
-            segment.remove_node(node)
+            segment_copy.remove_node(node)
     # Compute tortuosity index from the remaining segment
-    return tortuosity_index(segment)
+    return tortuosity_index(segment_copy)
 
 # def min_angle_curve(segment):
 #     """
@@ -1113,14 +1115,14 @@ def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
     # Create template for subplots
     _, ax = plt.subplots(rows, columns, figsize = [5 * columns, 10 * rows])
     # Draw each segment in a subplot space
-    for idx, vesselType in enumerate(segments_vessel_type.keys()):
+    for idx, vessel_type in enumerate(segments_vessel_type.keys()):
         # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
         node_pos_dict_P = {}
-        for n in segments_vessel_type[vesselType].nodes():
-            node_pos_dict_P[n] = [segments_vessel_type[vesselType].nodes(data=True)[n]["pos"][0], segments_vessel_type[vesselType].nodes(data=True)[n]["pos"][2]]
+        for n in segments_vessel_type[vessel_type].nodes():
+            node_pos_dict_P[n] = [segments_vessel_type[vessel_type].nodes(data=True)[n]["pos"][0], segments_vessel_type[vessel_type].nodes(data=True)[n]["pos"][2]]
         for _ in range(1):
-            nx.draw(segments_vessel_type[vesselType], node_pos_dict_P, node_size = 10, ax = ax[idx // columns, idx % columns])
-            ax[idx // columns, idx % columns].set_title(vesselType, fontsize=12)
+            nx.draw(segments_vessel_type[vessel_type], node_pos_dict_P, node_size = 10, ax = ax[idx // columns, idx % columns])
+            ax[idx // columns, idx % columns].set_title(vessel_type, fontsize=12)
             ax[idx // columns, idx % columns].set_xlim(xlim)
             ax[idx // columns, idx % columns].set_ylim(ylim)
 

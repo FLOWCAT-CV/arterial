@@ -2,7 +2,7 @@
 
 from arterial.centerline_extraction.run_centerline_extraction_slicer import perform_preprocessing_and_centerline_extraction
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import perform_centerline_branching, perform_surface_model_clipping
-from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array
+from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array, perform_segmentation_unification
 
 class CenterlineExtractor():
     """
@@ -114,3 +114,4 @@ class CenterlineExtractor():
         
         """
         compute_centerline_segments_array(self.case_dir)
+        perform_segmentation_unification(self.case_dir)

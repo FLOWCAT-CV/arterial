@@ -82,13 +82,15 @@ def preprocessing(case_dir, master_volume_node):
     # effect.setParameter("GaussianStandardDeviationMm", 1)
     # effect.self().onApply()
 
-    # Remove small islands
     # Choose the number of voxels for small island threshold
     # Empirically, we found that 10000 is a good threshold for a 
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
+    # Get voxel size from image
     voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
+    # Compute approximate number of voxels
     number_of_voxels_threshold = round(10000 * (reference_voxel_size / voxel_size))
+    # Remove small islands
     segment_editor_widget.setActiveEffectByName("Islands")
     effect = segment_editor_widget.activeEffect()
     effect.setParameter("Operation", "REMOVE_SMALL_ISLANDS")
