@@ -1,6 +1,6 @@
 #    Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-from arterial.segmentation.inference import perform_inference
+from arterial.segmentation.inference import perform_inference_fast
 
 class Segmenter():
     """ 
@@ -22,7 +22,13 @@ class Segmenter():
         """
         self.case_dir = case_dir
 
-    def predict(self):
+    def crop_for_full_processing(self):
+        """
+        
+        """
+
+
+    def predict_fast(self):
         """
         This method calls perform_inference to perform inference using a trained nnunet
         model over the original CTA. The CTA should be in nifti format, within the 
@@ -45,4 +51,10 @@ class Segmenter():
         -------
 
         """
-        perform_inference(self.case_dir)
+        perform_inference_fast(self.case_dir)
+
+    def predict_full(self):
+        """
+        
+        """
+

@@ -107,7 +107,7 @@ class ArterialProcessor():
         # Predicts segmentation by nnunet inference
         if not self.skip_segmentation:
             print("Predicting segmentation...")
-            self.segmenter.predict()
+            self.segmenter.predict_fast()
             print("done \n")
         else:
             print("Skipping segmentation \n")
