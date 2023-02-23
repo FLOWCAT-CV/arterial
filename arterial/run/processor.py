@@ -54,6 +54,7 @@ class ArterialProcessor():
         self.case_dir = parser.case_dir
         self.no_display = parser.no_display
         self.skip_segmentation = parser.skip_segmentation
+        self.full_segmentation = parser.full_segmentation
         self.skip_centerline_extraction = parser.skip_centerline_extraction
         self.skip_branching = parser.skip_branching
         self.skip_clipping = parser.skip_clipping
@@ -106,10 +107,14 @@ class ArterialProcessor():
         """
         # Predicts segmentation by nnunet inference
         if not self.skip_segmentation:
-            print("Predicting segmentation...")
-            # self.segmenter.predict_fast()
-            self.segmenter.predict_full()
-            print("done \n")
+            if self.full_segmentation:
+                print("Predicting segmentation (full)...")
+                self.segmenter.predict_full()
+                print("done \n")
+            else:
+                print("Predicting segmentation (fast)...")
+                self.segmenter.predict_fast()
+                print("done \n")
         else:
             print("Skipping segmentation \n")
 
