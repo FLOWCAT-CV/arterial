@@ -156,10 +156,10 @@ def join_head_and_neck_segmentations(case_dir):
 
     # Initialize final segmentation array
     segmentation_array = np.zeros_like(cta_nifti.get_fdata())
-    # Add neck CTA segmentation to lower part of the image
-    segmentation_array[:, :, :highest_similarity_s_coordinate] = head_segmentation_array[:, :, :highest_similarity_s_coordinate]
-    # Add head CTA segmentation to upper part of the image
-    segmentation_array[:, :, highest_similarity_s_coordinate:] = neck_segmentation_array[:, :, highest_similarity_s_coordinate - half_s_coordinate:]
+    # Add neck CTA segmentation to upper part of the image
+    segmentation_array[:, :, highest_similarity_s_coordinate:] = head_segmentation_array[:, :, highest_similarity_s_coordinate - half_s_coordinate:]
+    # Add head CTA segmentation to lower part of the image
+    segmentation_array[:, :, :highest_similarity_s_coordinate] = neck_segmentation_array[:, :, :highest_similarity_s_coordinate]
 
     # Generate new nifti file for segmentation
     segmentation_nifti = nib.Nifti1Image(segmentation_array, cta_nifti.affine, cta_nifti.header)
