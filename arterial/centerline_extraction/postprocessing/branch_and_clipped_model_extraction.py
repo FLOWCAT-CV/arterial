@@ -1,6 +1,6 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import os
+import os, shutil
 import vtk
 
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
@@ -82,55 +82,71 @@ def perform_branch_model_unification(case_dir):
     acc_group_id_branch_model = 0
     points_from_previous_branch_models = 0
 
-    for branch_model_model_id, _ in enumerate(branch_model_list):
-        # Load branch model
-        branch_model_path = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(branch_model_model_id))
-        vtk_poly_data_reader = vtk.vtkPolyDataReader()
-        vtk_poly_data_reader.SetFileName(branch_model_path)
-        vtk_poly_data_reader.Update()
-        branch_model = vtk_poly_data_reader.GetOutput()
+    if len(branch_model_list) == 1:
+        shutil.copyfile(os.path.join(case_dir, "branch_models", "branch_model0.vtk"), os.path.join(case_dir, "branch_model.vtk"))
+    else:
+        for branch_model_model_id, _ in enumerate(branch_model_list):
+            # Load branch model
+            branch_model_path = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(branch_model_model_id))
+            vtk_poly_data_reader = vtk.vtkPolyDataReader()
+            vtk_poly_data_reader.SetFileName(branch_model_path)
+            vtk_poly_data_reader.Update()
+            branch_model = vtk_poly_data_reader.GetOutput()
 
-        if branch_model.GetNumberOfCells() == 0:
-            print("Error in branch model {}. Skipping".format(branch_model_model_id))
-        else:
-            # Get cell data
-            cell_data_array = np.ndarray([4, branch_model.GetNumberOfCells()], dtype=np.int64)
-            for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
-                # Get cell data array name
-                cell_data_name = branch_model.GetCellData().GetArrayName(idx)
-                # Add to cell data array
-                cell_data_array[idx] = vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
-                if cell_data_name == "CenterlineIds":
-                    # Add accumulated centerline id
-                    cell_data_array[idx] += acc_centerline_id
-                    # Update accumulated centerlineId and groupId
-                    acc_centerline_id += np.amax(cell_data_array[idx]) + 1
-                elif cell_data_name == "GroupIds":
-                    # Add accumulated group id
-                    cell_data_array[idx] += acc_group_id_branch_model
-                    # Update accumulated centerlineId and groupId
-                    acc_group_id_branch_model += np.amax(cell_data_array[idx]) + 1
+            if branch_model.GetNumberOfCells() == 0:
+                print("Error in branch model {}. Skipping".format(branch_model_model_id))
+            else:
+                # Get cell data
+                cell_data_array = np.ndarray([4, branch_model.GetNumberOfCells()], dtype=np.int64)
+                for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
+                    # Get cell data array name
+                    cell_data_name = branch_model.GetCellData().GetArrayName(idx)
+                    # Add to cell data array
+                    cell_data_array[idx] = vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
+                    if cell_data_name == "CenterlineIds":
+                        # Add accumulated centerline id
+                        cell_data_array[idx] += acc_centerline_id
+                        # Update accumulated centerlineId and groupId
+                        acc_centerline_id += np.amax(cell_data_array[idx]) + 1
+                    elif cell_data_name == "GroupIds":
+                        # Add accumulated group id
+                        cell_data_array[idx] += acc_group_id_branch_model
+                        # Update accumulated centerlineId and groupId
+                        acc_group_id_branch_model += np.amax(cell_data_array[idx]) + 1
 
-            # Append cell_data_array from present branch_model
-            final_cell_data_array_branch_model = np.append(final_cell_data_array_branch_model, cell_data_array, axis=1)
-            
-            # Get point data (we only get radius)
-            radius_array = vtk_to_numpy(branch_model.GetPointData().GetArray("Radius"))
+                # Append cell_data_array from present branch_model
+                final_cell_data_array_branch_model = np.append(final_cell_data_array_branch_model, cell_data_array, axis=1)
+                
+                # Get point data (we only get radius)
+                radius_array = vtk_to_numpy(branch_model.GetPointData().GetArray("Radius"))
 
-            # On rare occasions, there is a mismatch (a gap) between the number of points of the vtkPolyData and the sum of the number of points from each cell
-            # These should be restarted for each branch_modelIdx
-            gap = 0
-            idx_points_minus_gap = 0
+                # On rare occasions, there is a mismatch (a gap) between the number of points of the vtkPolyData and the sum of the number of points from each cell
+                # These should be restarted for each branch_modelIdx
+                gap = 0
+                idx_points_minus_gap = 0
 
-            for idx in range(branch_model.GetNumberOfCells()):
-                poly_line = branch_model.GetCell(idx)
-                new_poly_line = vtk.vtkPolyLine()
-                new_poly_line_points = vtk.vtkPoints()
-                new_poly_line_points_ids = []
-                for idx2 in range(poly_line.GetNumberOfPoints()):
-                    # Condition tells us if there is a diference between current cell point and branch_model point with accumulated gap
-                    condition = np.abs(np.sum(np.array(poly_line.GetPoints().GetPoint(idx2)) - np.array(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap)))) < 0.01
-                    while not condition:
+                for idx in range(branch_model.GetNumberOfCells()):
+                    poly_line = branch_model.GetCell(idx)
+                    new_poly_line = vtk.vtkPolyLine()
+                    new_poly_line_points = vtk.vtkPoints()
+                    new_poly_line_points_ids = []
+                    for idx2 in range(poly_line.GetNumberOfPoints()):
+                        # Condition tells us if there is a diference between current cell point and branch_model point with accumulated gap
+                        condition = np.abs(np.sum(np.array(poly_line.GetPoints().GetPoint(idx2)) - np.array(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap)))) < 0.01
+                        while not condition:
+                            # Insert point in vtkPoints
+                            points_branch_model.InsertNextPoint(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap))
+                            # Insert point in new_poly_line
+                            new_poly_line_points.InsertNextPoint(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap))
+                            # Get radius data for each point
+                            final_radius_array = np.append(final_radius_array, radius_array[idx_points_minus_gap + gap])
+                            # Change point id for each point in the cell, taking into account accumulated number of points
+                            new_poly_line_points_ids.append(idx_points_minus_gap + points_from_previous_branch_models + gap)
+                            # Update gap
+                            gap += 1
+                            # Recompute condition
+                            condition = np.abs(np.sum(np.array(poly_line.GetPoints().GetPoint(idx2)) - np.array(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap)))) < 0.01
+
                         # Insert point in vtkPoints
                         points_branch_model.InsertNextPoint(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap))
                         # Insert point in new_poly_line
@@ -139,47 +155,34 @@ def perform_branch_model_unification(case_dir):
                         final_radius_array = np.append(final_radius_array, radius_array[idx_points_minus_gap + gap])
                         # Change point id for each point in the cell, taking into account accumulated number of points
                         new_poly_line_points_ids.append(idx_points_minus_gap + points_from_previous_branch_models + gap)
-                        # Update gap
-                        gap += 1
-                        # Recompute condition
-                        condition = np.abs(np.sum(np.array(poly_line.GetPoints().GetPoint(idx2)) - np.array(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap)))) < 0.01
-
-                    # Insert point in vtkPoints
-                    points_branch_model.InsertNextPoint(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap))
-                    # Insert point in new_poly_line
-                    new_poly_line_points.InsertNextPoint(branch_model.GetPoints().GetPoint(idx_points_minus_gap + gap))
-                    # Get radius data for each point
-                    final_radius_array = np.append(final_radius_array, radius_array[idx_points_minus_gap + gap])
-                    # Change point id for each point in the cell, taking into account accumulated number of points
-                    new_poly_line_points_ids.append(idx_points_minus_gap + points_from_previous_branch_models + gap)
-                    # Update idx_points_minus_gap
-                    idx_points_minus_gap += 1   
+                        # Update idx_points_minus_gap
+                        idx_points_minus_gap += 1   
+                    
+                    new_poly_line.Initialize(len(new_poly_line_points_ids), new_poly_line_points_ids, new_poly_line_points)  
+                    # Insert cell in vtkCellArray
+                    cell_array_branch_model.InsertNextCell(new_poly_line)
                 
-                new_poly_line.Initialize(len(new_poly_line_points_ids), new_poly_line_points_ids, new_poly_line_points)  
-                # Insert cell in vtkCellArray
-                cell_array_branch_model.InsertNextCell(new_poly_line)
-            
-            # Update total number of points from previous models
-            points_from_previous_branch_models += branch_model.GetNumberOfPoints()
-            
-    # Store all branch model data in new vtkPolyData
-    final_branch_model = vtk.vtkPolyData()
-    final_branch_model.SetPoints(points_branch_model)
-    final_branch_model.SetLines(cell_array_branch_model)
+                # Update total number of points from previous models
+                points_from_previous_branch_models += branch_model.GetNumberOfPoints()
+                
+        # Store all branch model data in new vtkPolyData
+        final_branch_model = vtk.vtkPolyData()
+        final_branch_model.SetPoints(points_branch_model)
+        final_branch_model.SetLines(cell_array_branch_model)
 
-    for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
-        final_branch_model.GetCellData().AddArray(numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
-        final_branch_model.GetCellData().GetArray(idx).SetName(branch_model.GetCellData().GetArrayName(idx))
+        for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
+            final_branch_model.GetCellData().AddArray(numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
+            final_branch_model.GetCellData().GetArray(idx).SetName(branch_model.GetCellData().GetArrayName(idx))
 
-    final_branch_model.GetPointData().AddArray(numpy_to_vtk(final_radius_array))
-    final_branch_model.GetPointData().GetArray(0).SetName("Radius")
+        final_branch_model.GetPointData().AddArray(numpy_to_vtk(final_radius_array))
+        final_branch_model.GetPointData().GetArray(0).SetName("Radius")
 
-    # Define writer for the vtkPolyData
-    writer = vtk.vtkPolyDataWriter()
-    writer.SetFileVersion(42)
-    writer.SetInputData(final_branch_model)
-    writer.SetFileName(os.path.join(case_dir, "branch_model.vtk"))
-    writer.Write()
+        # Define writer for the vtkPolyData
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputData(final_branch_model)
+        writer.SetFileName(os.path.join(case_dir, "branch_model.vtk"))
+        writer.Write()
 
 def perform_surface_model_clipping(case_dir):
     """
@@ -250,59 +253,41 @@ def perform_clipped_model_unification(case_dir):
     acc_group_id_clipped_model = 0
     points_from_previous_clipped_models = 0
 
-    for clipped_model_id, _ in enumerate(clipped_model_list):
-        # Load clipped model         
-        clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model{}.vtk".format(clipped_model_id))
-        vtk_poly_data_reader = vtk.vtkPolyDataReader()
-        vtk_poly_data_reader.SetFileName(clipped_model_path)
-        vtk_poly_data_reader.Update()
-        clipped_model = vtk_poly_data_reader.GetOutput()
+    if len(clipped_model_list) == 1:
+        shutil.copyfile(os.path.join(case_dir, "clipped_models", "clipped_model0.vtk"), os.path.join(case_dir, "clipped_model.vtk"))
+    else:
+        for clipped_model_id, _ in enumerate(clipped_model_list):
+            # Load clipped model         
+            clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model{}.vtk".format(clipped_model_id))
+            vtk_poly_data_reader = vtk.vtkPolyDataReader()
+            vtk_poly_data_reader.SetFileName(clipped_model_path)
+            vtk_poly_data_reader.Update()
+            clipped_model = vtk_poly_data_reader.GetOutput()
 
-        if clipped_model.GetNumberOfCells() == 0:
-            print("Error in clipped model {}. Skipping".format(clipped_model_id))
-        else:
-            print("Processing clipped model {}...".format(clipped_model_id))
-            # Get point data (we only get groupId)
-            group_id_point_array_clipped_model = vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
-            # Update groupIds of current clipped_model
-            group_id_point_array_clipped_model = group_id_point_array_clipped_model + acc_group_id_clipped_model
-            # Update accumulated groupId
-            acc_group_id_clipped_model += np.amax(group_id_point_array_clipped_model) + 1
-            # Get number of points in each clipped model cell (= 3)
-            number_of_point_ids = clipped_model.GetCell(0).GetPointIds().GetNumberOfIds()
-            # Generally, points are placed as cell indices go up, but this is not always the case
-            # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
-            # But in the cases where a point_idx has not been found, we search across all cells of the model, in order
-            # to ensure that no point_idx is missed
-            last_cell = 0
-            # We iterate through every pointId
-            for point_idx in range(clipped_model.GetNumberOfPoints()):
-                # We need a boolean variable to stop the iterative search when a point is found to speed up computations
-                found_point = False
-                # We primarily only search for cells with a cellId larger than the ones analyzed
-                # Limiting up the search dramatically speeds up computations
-                for cell_idx in range(max(0, last_cell - 1), clipped_model.GetNumberOfCells()):
-                    # Iterate over points in cell
-                    for idx in range(number_of_point_ids):
-                        # If a point is found with pointId equal to the next point_idx
-                        if clipped_model.GetCell(cell_idx).GetPointId(idx) == point_idx:
-                            # Keep cell_idx to limit cell of the next point_idx
-                            last_cell = cell_idx
-                            # Insert next point in final clipped model point object and groupId point array
-                            points_clipped_model.InsertNextPoint(clipped_model.GetCell(cell_idx).GetPoints().GetPoint(idx))
-                            final_group_id_point_array_clipped_model.InsertNextValue(group_id_point_array_clipped_model[clipped_model.GetCell(cell_idx).GetPointId(idx)])
-                            # Update boolean marker to stop the search for the current pointidx
-                            found_point = True
-                            break
-                    # Break cell serach if point is found
-                    if found_point:
-                        break
-                # If point is not found, search all throughout the cell pool, including cells with a smaller cell_idx than last_cell
-                # These searches are significantly longer than the general case, but we only apply them when needed
-                # This is very rare but if not done, it will mess up the final model
-                if not found_point:
-                    # If point_idx has not been found, we also look at the previous cells (rare but it happens)
-                    for cell_idx in range(clipped_model.GetNumberOfCells()):
+            if clipped_model.GetNumberOfCells() == 0:
+                print("Error in clipped model {}. Skipping".format(clipped_model_id))
+            else:
+                print("Processing clipped model {}...".format(clipped_model_id))
+                # Get point data (we only get groupId)
+                group_id_point_array_clipped_model = vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
+                # Update groupIds of current clipped_model
+                group_id_point_array_clipped_model = group_id_point_array_clipped_model + acc_group_id_clipped_model
+                # Update accumulated groupId
+                acc_group_id_clipped_model += np.amax(group_id_point_array_clipped_model) + 1
+                # Get number of points in each clipped model cell (= 3)
+                number_of_point_ids = clipped_model.GetCell(0).GetPointIds().GetNumberOfIds()
+                # Generally, points are placed as cell indices go up, but this is not always the case
+                # To speed up computations, we only search for cells with higher cellIds than the ones already searched for, 
+                # But in the cases where a point_idx has not been found, we search across all cells of the model, in order
+                # to ensure that no point_idx is missed
+                last_cell = 0
+                # We iterate through every pointId
+                for point_idx in range(clipped_model.GetNumberOfPoints()):
+                    # We need a boolean variable to stop the iterative search when a point is found to speed up computations
+                    found_point = False
+                    # We primarily only search for cells with a cellId larger than the ones analyzed
+                    # Limiting up the search dramatically speeds up computations
+                    for cell_idx in range(max(0, last_cell - 1), clipped_model.GetNumberOfCells()):
                         # Iterate over points in cell
                         for idx in range(number_of_point_ids):
                             # If a point is found with pointId equal to the next point_idx
@@ -314,46 +299,67 @@ def perform_clipped_model_unification(case_dir):
                                 final_group_id_point_array_clipped_model.InsertNextValue(group_id_point_array_clipped_model[clipped_model.GetCell(cell_idx).GetPointId(idx)])
                                 # Update boolean marker to stop the search for the current pointidx
                                 found_point = True
+                                break
                         # Break cell serach if point is found
                         if found_point:
                             break
+                    # If point is not found, search all throughout the cell pool, including cells with a smaller cell_idx than last_cell
+                    # These searches are significantly longer than the general case, but we only apply them when needed
+                    # This is very rare but if not done, it will mess up the final model
+                    if not found_point:
+                        # If point_idx has not been found, we also look at the previous cells (rare but it happens)
+                        for cell_idx in range(clipped_model.GetNumberOfCells()):
+                            # Iterate over points in cell
+                            for idx in range(number_of_point_ids):
+                                # If a point is found with pointId equal to the next point_idx
+                                if clipped_model.GetCell(cell_idx).GetPointId(idx) == point_idx:
+                                    # Keep cell_idx to limit cell of the next point_idx
+                                    last_cell = cell_idx
+                                    # Insert next point in final clipped model point object and groupId point array
+                                    points_clipped_model.InsertNextPoint(clipped_model.GetCell(cell_idx).GetPoints().GetPoint(idx))
+                                    final_group_id_point_array_clipped_model.InsertNextValue(group_id_point_array_clipped_model[clipped_model.GetCell(cell_idx).GetPointId(idx)])
+                                    # Update boolean marker to stop the search for the current pointidx
+                                    found_point = True
+                            # Break cell serach if point is found
+                            if found_point:
+                                break
 
-            # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
-            # Insert the cells with the corresponding groupId to the new vtkCellArray
-            # for idx in cellIdArray:
-            for cell_idx in range(clipped_model.GetNumberOfCells()):
-                cell = vtk.vtkTriangle()
-                cell.GetPointIds().SetNumberOfIds(number_of_point_ids)
-                for idx in range(number_of_point_ids):
-                    cell.GetPointIds().SetId(idx, clipped_model.GetCell(cell_idx).GetPointId(idx) + points_from_previous_clipped_models)
-                cell_array_clipped_model.InsertNextCell(cell)
-            
-            # Update total number of points from previous models
-            points_from_previous_clipped_models += clipped_model.GetNumberOfPoints()
+                # We need this to set the new pointIds for the triangles with the SetId method. This will be 3
+                # Insert the cells with the corresponding groupId to the new vtkCellArray
+                # for idx in cellIdArray:
+                for cell_idx in range(clipped_model.GetNumberOfCells()):
+                    cell = vtk.vtkTriangle()
+                    cell.GetPointIds().SetNumberOfIds(number_of_point_ids)
+                    for idx in range(number_of_point_ids):
+                        cell.GetPointIds().SetId(idx, clipped_model.GetCell(cell_idx).GetPointId(idx) + points_from_previous_clipped_models)
+                    cell_array_clipped_model.InsertNextCell(cell)
+                
+                # Update total number of points from previous models
+                points_from_previous_clipped_models += clipped_model.GetNumberOfPoints()
 
-    # Store all clipped model data in new vtkPolyData
-    final_clipped_model = vtk.vtkPolyData()
-    final_clipped_model.SetPoints(points_clipped_model)
-    final_clipped_model.SetPolys(cell_array_clipped_model)
-    final_clipped_model.GetPointData().AddArray(final_group_id_point_array_clipped_model)
+        # Store all clipped model data in new vtkPolyData
+        final_clipped_model = vtk.vtkPolyData()
+        final_clipped_model.SetPoints(points_clipped_model)
+        final_clipped_model.SetPolys(cell_array_clipped_model)
+        final_clipped_model.GetPointData().AddArray(final_group_id_point_array_clipped_model)
 
-    # We can to compute the normals for all mesh triangles
-    normals = vtk.vtkPolyDataNormals()
-    normals.SetInputData(final_clipped_model)
-    normals.SetFeatureAngle(80)
-    normals.AutoOrientNormalsOn()
-    normals.UpdateInformation()
-    normals.Update()
-    final_clipped_model = normals.GetOutput()
+        # We can to compute the normals for all mesh triangles
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(final_clipped_model)
+        normals.SetFeatureAngle(80)
+        normals.AutoOrientNormalsOn()
+        normals.UpdateInformation()
+        normals.Update()
+        final_clipped_model = normals.GetOutput()
 
-    # We also pass a clean vtkPolyData filter for good measure
-    clean_poly_data = vtk.vtkCleanPolyData()
-    clean_poly_data.SetInputData(final_clipped_model)
-    clean_poly_data.Update()
-    final_clipped_model = clean_poly_data.GetOutput()
+        # We also pass a clean vtkPolyData filter for good measure
+        clean_poly_data = vtk.vtkCleanPolyData()
+        clean_poly_data.SetInputData(final_clipped_model)
+        clean_poly_data.Update()
+        final_clipped_model = clean_poly_data.GetOutput()
 
-    writer = vtk.vtkPolyDataWriter()
-    writer.SetFileVersion(42)
-    writer.SetInputData(final_clipped_model)
-    writer.SetFileName(os.path.join(case_dir, "clipped_model.vtk"))
-    writer.Write()
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputData(final_clipped_model)
+        writer.SetFileName(os.path.join(case_dir, "clipped_model.vtk"))
+        writer.Write()

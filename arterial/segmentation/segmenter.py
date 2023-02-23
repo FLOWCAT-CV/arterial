@@ -1,6 +1,6 @@
 #    Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-from arterial.segmentation.inference import perform_inference_fast
+from arterial.segmentation.inference import perform_inference_fast, perform_inference_full
 
 class Segmenter():
     """ 
@@ -21,12 +21,6 @@ class Segmenter():
         
         """
         self.case_dir = case_dir
-
-    def crop_for_full_processing(self):
-        """
-        
-        """
-
 
     def predict_fast(self):
         """
@@ -55,6 +49,25 @@ class Segmenter():
 
     def predict_full(self):
         """
-        
-        """
+        This method calls perform_inference_full to perform inference using two trained nnunet
+        models over the original CTA. The CTA should be in nifti format, within the 
+        self.case_dir directory and with case_id being the basename of the self.case_dir,
+        the name convention used should be:
 
+        >>> {case_id}.nii.gz
+
+        At the end of the segmentation prediction, a nifti file with the format:
+        
+        >>> {case_id}_segmentation.nii.gz
+        
+        should be generated in the self.case_dir. This class acts as a wrapper
+        for the arterial.segmentation.inference.perform_inference_full() function. 
+
+        Parmeters
+        ---------
+
+        Returns
+        -------
+
+        """
+        perform_inference_full(self.case_dir)

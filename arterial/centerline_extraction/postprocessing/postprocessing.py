@@ -29,7 +29,7 @@ def compute_centerline_segments_array(case_dir):
     -------
         
     '''
-    centerline_list = [centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")]
+    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")])
     final_centerline_segments_array = np.ndarray([0, 2])
 
     for centerline_idx, _ in enumerate(centerline_list):

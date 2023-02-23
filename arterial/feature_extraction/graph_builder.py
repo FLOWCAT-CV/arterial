@@ -195,6 +195,8 @@ def build_centerline_graph(case_dir):
         else:
             sanity_check = True
     else:
+        # Initialize rightmost node just in case
+        rightmost_node = 0
         # Once we go out of the while loop, we compute the range of the s coordinate
         # We limit the rightmost node search to the lowest 60% of the image
         range_pos = highest_s_pos - lowest_s_pos

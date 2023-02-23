@@ -517,6 +517,7 @@ def extract_segment_features(segment):
     """
     segment.graph["features"] = {}
     segment.graph["features"]["mean diameter"] = mean_diameter(segment)
+    segment.graph["features"]["std diameter"] = std_diameter(segment)
     segment.graph["features"]["min diameter"] = min_diameter(segment)
     segment.graph["features"]["max diameter"] = max_diameter(segment)
     segment.graph["features"]["proximal diameter"] = proximal_diameter(segment)
@@ -627,6 +628,37 @@ def mean_diameter(segment):
         for node in segment:
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
         return np.mean(diameters)
+
+def std_diameter(segment):  
+    """
+    Finds mean diameter of segment. Collects diameters from all nodes of the
+    segment and computes mean. 
+
+    Parameters
+    ----------
+    segment : networkx.Graph
+        Graph of the individual segment.
+
+    Returns
+    -------
+    mean_diameter : float
+        Mean diameter of segment.
+
+    """
+    # Initialize list
+    diameters = []
+    # Collect diameters from all nodes
+    for node in segment:
+        if segment.nodes[node]["features femoral"]["blanking"] < 0.5:
+            diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
+    # Compute mean
+    if len(diameters) > 0:
+        return np.std(diameters)
+    # If no nodes with blanking 0, choose between all nodes
+    else:
+        for node in segment:
+            diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
+        return np.std(diameters)
 
 def max_diameter(segment):
     """
