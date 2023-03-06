@@ -169,11 +169,11 @@ def compute_centerline_segments_array(case_dir):
                     remove_point_idx.append(point_idx)
 
             if len(remove_point_idx) > 0:
-                print(centerline_segments_array[idx, 0])
+                print(centerline_segments_array[idx, 0].dtype, centerline_segments_array[idx, 0].shape)
             centerline_segments_array[idx, 0] = np.delete(centerline_segments_array[idx, 0], remove_point_idx, axis = 0)
             centerline_segments_array[idx, 1] = np.delete(centerline_segments_array[idx, 1], remove_point_idx, axis = 0)
             if len(remove_point_idx) > 0:
-                print(centerline_segments_array[idx, 0])
+                print(centerline_segments_array[idx, 0].dtype, centerline_segments_array[idx, 0].shape)
 
         remove_floating = []
         for idx, segment in enumerate(centerline_segments_array):
