@@ -160,14 +160,21 @@ def compute_centerline_segments_array(case_dir):
                 centerline_segments_array[idx, 0] = cells_coordinate_array[unique_segments_position_array[idx, 0]][unique_segments_position_array[idx, 1]:unique_segments_position_array[idx, 2] + 1]
                 centerline_segments_array[idx, 1] = cells_radius_array[unique_segments_position_array[idx, 0]][unique_segments_position_array[idx, 1]:unique_segments_position_array[idx, 2] + 1]
 
+        # Add filter for repeated points
+        for idx, segment in enumerate(centerline_segments_array):
+            remove_point_idx = []
+            # We look at consecutive points. If two consecutive points are the same, we remove one of them
+            for point_idx in range(1, len(segment[0])):
+                if np.linalg.norm(segment[0][point_idx - 1] - segment[0][point_idx]) < 1e-4:
+                    remove_point_idx.append(point_idx)
+            centerline_segments_array[idx] = np.delete(centerline_segments_array[idx], remove_point_idx, axis = 0)
+
         remove_floating = []
         for idx, segment in enumerate(centerline_segments_array):
             if len(segment[0]) < 2:
                 remove_floating.append(idx)
-            elif len(segment[0]) == 2 and np.linalg.norm(segment[0][0] == segment[0][-1]) < 1e-4:
-                remove_floating.append(idx)
 
-        centerline_segments_array = np.delete(centerline_segments_array, remove_floating, axis=0)
+        centerline_segments_array = np.delete(centerline_segments_array, remove_floating, axis = 0)
 
         # Check if circular segments should be joint
         new_segments = []
