@@ -167,8 +167,13 @@ def compute_centerline_segments_array(case_dir):
             for point_idx in range(1, len(segment[0])):
                 if np.linalg.norm(segment[0][point_idx - 1] - segment[0][point_idx]) < 1e-4:
                     remove_point_idx.append(point_idx)
-            centerline_segments_array[idx, 0] = np.delete(centerline_segments_array[idx, 0], remove_point_idx)
-            centerline_segments_array[idx, 1] = np.delete(centerline_segments_array[idx, 1], remove_point_idx)
+
+            if len(remove_point_idx) > 0:
+                print(centerline_segments_array[idx, 0])
+            centerline_segments_array[idx, 0] = np.delete(centerline_segments_array[idx, 0], remove_point_idx, axis = 0)
+            centerline_segments_array[idx, 1] = np.delete(centerline_segments_array[idx, 1], remove_point_idx, axis = 0)
+            if len(remove_point_idx) > 0:
+                print(centerline_segments_array[idx, 0])
 
         remove_floating = []
         for idx, segment in enumerate(centerline_segments_array):
