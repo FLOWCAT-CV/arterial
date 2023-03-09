@@ -10,15 +10,15 @@ from skimage.measure import label
 
 def slice_cta_head_and_neck(case_dir):
     """
-    This funciton enables slicing of head and neck parts of the CTA ({os.path.basename(case_dir)}.nii.gz)
+    This funciton enables slicing of head and neck parts of the CTA ({case_id}.nii.gz)
     by using a Laplacian of Gaussian filter (scipy) to perform a segmentation
     of the cranium. That information is used to slice the original CTA
     into two parts: the head CTA and neck CTA.
 
     This function generates two additional nifti files:
 
-    >>> case_dir/{os.path.basename(case_dir)}_head.nii.gz
-    >>> case_dir/{os.path.basename(case_dir)}_neck.nii.gz
+    >>> case_dir/{case_id}_head.nii.gz
+    >>> case_dir/{case_id}_neck.nii.gz
 
     Parameters
     ----------
@@ -53,6 +53,7 @@ def slice_cta_head_and_neck(case_dir):
         # Get largest component
         largest_connected_component = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
         return largest_connected_component  
+    
     # Load nifti of full CTA
     cta_nifti = nib.load(os.path.join(case_dir, "{}.nii.gz".format(os.path.basename(case_dir))))
     cta_array = cta_nifti.get_fdata()
@@ -69,27 +70,43 @@ def slice_cta_head_and_neck(case_dir):
     # Get largest connected component
     cranium_mask = get_largest_connected_component(cranium_mask)
     # Get lowest coordinate with a non-zero voxel from cranium mask 
-    nonzero_s_coordinates = np.nonzero(cranium_mask)[2]
+    nonzero_coordinates = np.nonzero(cranium_mask)
     # Get s coordinate for slicing into head and neck
-    slicing_s_coordinate = half_s_coordinate + min(nonzero_s_coordinates)
+    lower_slicing_i_coordinate = min(nonzero_coordinates[0])
+    upper_slicing_i_coordinate = max(nonzero_coordinates[0])
+    lower_slicing_j_coordinate = min(nonzero_coordinates[1])
+    upper_slicing_j_coordinate = max(nonzero_coordinates[1])
+    lower_slicing_k_coordinate = half_s_coordinate + min(nonzero_coordinates[2])
+    upper_slicing_k_coordinate = half_s_coordinate + max(nonzero_coordinates[2])
+    
+    # Save coordinates for head_cta_array in original nifti
+    head_origin = [lower_slicing_i_coordinate, lower_slicing_j_coordinate, lower_slicing_k_coordinate]
     
     # Slice cta into two (head and neck)
-    head_cta_array = cta_array[:, :, slicing_s_coordinate:]
+    head_cta_array = cta_array[lower_slicing_i_coordinate:upper_slicing_i_coordinate, lower_slicing_j_coordinate:upper_slicing_j_coordinate, lower_slicing_k_coordinate:upper_slicing_k_coordinate]
     # For the neck (lower part of the image) we add some extra slices to have some overlap
     # This should smooth edge effects upon merge after separate segmentation
-    neck_cta_array = cta_array[:, :, : int(1.1 * slicing_s_coordinate)]
+    neck_cta_array = cta_array[:, :, : int(1.1 * lower_slicing_k_coordinate)]
     
     # Update affine and header for head CTA (neck will be fine, 
     # header["dim"] updates automatically when creating the new nifti object)
     head_affine = cta_nifti.affine.copy()
     head_header = cta_nifti.header.copy()
     # Get s voxel size
+    r_voxel_size = head_affine[0, 0]
+    a_voxel_size = head_affine[1, 1]
     s_voxel_size = head_affine[2, 2]
     # Update s translation from affine
-    head_affine[2, 3] += slicing_s_coordinate * s_voxel_size
+    head_affine[0, 3] += lower_slicing_i_coordinate * r_voxel_size
+    head_affine[1, 3] += lower_slicing_j_coordinate * a_voxel_size
+    head_affine[2, 3] += lower_slicing_k_coordinate * s_voxel_size
     # Update s translation from header
-    head_header["qoffset_z"] += slicing_s_coordinate * s_voxel_size
-    head_header["srow_z"][3] += slicing_s_coordinate * s_voxel_size
+    head_header["qoffset_x"] += lower_slicing_k_coordinate * r_voxel_size
+    head_header["qoffset_y"] += lower_slicing_j_coordinate * a_voxel_size
+    head_header["qoffset_z"] += lower_slicing_k_coordinate * s_voxel_size
+    head_header["srow_x"][3] += lower_slicing_k_coordinate * r_voxel_size
+    head_header["srow_y"][3] += lower_slicing_j_coordinate * a_voxel_size
+    head_header["srow_z"][3] += lower_slicing_k_coordinate * s_voxel_size
     
     # Generate new nifti files
     head_cta_nifti = nib.Nifti1Image(head_cta_array, head_affine, head_header)
@@ -137,29 +154,44 @@ def join_head_and_neck_segmentations(case_dir):
         return 2 * np.logical_and(a, b).sum() / (a.sum() + b.sum())
     # Load original CTA
     cta_nifti = nib.load(os.path.join(case_dir, "{}.nii.gz".format(os.path.basename(case_dir))))
+    cta_shape = cta_nifti.get_fdata().shape
     # Load head segmentation
-    head_segmentation_array = nib.load(os.path.join(case_dir, "{}_head_segmentation.nii.gz".format(os.path.basename(case_dir)))).get_fdata()
+    head_segmentation_nifti = nib.load(os.path.join(case_dir, "{}_head_segmentation.nii.gz".format(os.path.basename(case_dir))))
+    head_segmentation_array_reduced = head_segmentation_nifti.get_fdata()
+    head_header = head_segmentation_nifti.header
     # Load neck segmentation
-    neck_segmentation_array = nib.load(os.path.join(case_dir, "{}_neck_segmentation.nii.gz".format(os.path.basename(case_dir)))).get_fdata()
-
-    # Get half s coordinate of original cta
-    half_s_coordinate = cta_nifti.get_fdata().shape[2] - head_segmentation_array.shape[2]
+    neck_segmentation_nifti = nib.load(os.path.join(case_dir, "{}_neck_segmentation.nii.gz".format(os.path.basename(case_dir))))
+    neck_segmentation_array = neck_segmentation_nifti.get_fdata()
+    neck_header = neck_segmentation_nifti.header
+    
+    r_voxel_size, a_voxel_size, s_voxel_size = head_header["srow_x"][0], head_header["srow_y"][1], head_header["srow_z"][2]
+    
+    head_origin_i = int((head_header["qoffset_x"] - neck_header["qoffset_x"]) / r_voxel_size)
+    head_origin_j = int((head_header["qoffset_y"] - neck_header["qoffset_y"]) / a_voxel_size)
+    head_origin_k = int((head_header["qoffset_z"] - neck_header["qoffset_z"]) / s_voxel_size)bbb
+    
+    # Set head_segmentation_array_reduced into original shape
+    head_segmentation_array = np.zeros([cta_shape[0], cta_shape[1], cta_shape[2] - head_origin_k])
+    head_segmentation_array[head_origin_i:head_origin_i + head_segmentation_array_reduced.shape[0], 
+                            head_origin_j:head_origin_j + head_segmentation_array_reduced.shape[1], 
+                            :head_segmentation_array_reduced.shape[2]] = head_segmentation_array_reduced
     
     # Initialize dice list to get slice with maximum similarity (smoothest transition)
     dice = []
     # Check all slices in the middle for the one with the highest similarity in terms of Dice coefficient
-    for idx in range(neck_segmentation_array.shape[2] - half_s_coordinate):
-        dice.append(compute_dice(neck_segmentation_array[:, :, half_s_coordinate + idx], head_segmentation_array[:, :, idx]))
+    for idx in range(neck_segmentation_array.shape[2] - head_origin_k):
+        dice.append(compute_dice(neck_segmentation_array[:, :, head_origin_k + idx], head_segmentation_array[:, :, idx]))
 
     # Get s coordinate for highest similarity
-    highest_similarity_s_coordinate = half_s_coordinate + np.argmax(dice)
+    slice_difference = np.argmax(dice)
+    highest_similarity_k_coordinate = head_origin_k + slice_difference
 
     # Initialize final segmentation array
     segmentation_array = np.zeros_like(cta_nifti.get_fdata())
     # Add neck CTA segmentation to upper part of the image
-    segmentation_array[:, :, highest_similarity_s_coordinate:] = head_segmentation_array[:, :, highest_similarity_s_coordinate - half_s_coordinate:]
+    segmentation_array[:, :, highest_similarity_k_coordinate:] = head_segmentation_array[:, :, slice_difference:]
     # Add head CTA segmentation to lower part of the image
-    segmentation_array[:, :, :highest_similarity_s_coordinate] = neck_segmentation_array[:, :, :highest_similarity_s_coordinate]
+    segmentation_array[:, :, :highest_similarity_k_coordinate] = neck_segmentation_array[:, :, :highest_similarity_k_coordinate]
 
     # Generate new nifti file for segmentation
     segmentation_nifti = nib.Nifti1Image(segmentation_array, cta_nifti.affine, cta_nifti.header)

@@ -733,3 +733,14 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     final_centerline_poly_data.GetPointData().GetArray(2).SetName("EdgePCoordArray")
 
     return final_centerline_poly_data
+
+def compute_frenet_serret(centerline_model):
+    """
+
+    
+    """
+    curve_coordinate_system_generator = slicer.vtkParallelTransportFrame()
+    curve_coordinate_system_generator.SetInputData(centerline_model)
+    curve_coordinate_system_generator.Update()
+
+    return curve_coordinate_system_generator.GetOutput()

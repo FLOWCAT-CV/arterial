@@ -7,7 +7,7 @@ import vtk
 import numpy as np
 import nibabel as nib
 
-from utils import aortic_arch_endpoint_check, robust_end_point_detection, inspect_circular_centerlines
+from utils import aortic_arch_endpoint_check, robust_end_point_detection, inspect_circular_centerlines, compute_frenet_serret
 
 def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
     """
@@ -83,6 +83,9 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
         # For the largest segment, we check the existence of circular centerlines
         if segment_id == 0:
             centerline_poly_data = inspect_circular_centerlines(case_dir, centerline_poly_data, decimated_surface_model, segmentation_node, segment_id, aff)
+
+        # Compute Frenet-Serret frame vectors at each point
+        centerline_poly_data = compute_frenet_serret(centerline_poly_data)
 
         # Overwriting centerlines separately after circular centerline inspection and extraction
         writer = vtk.vtkPolyDataWriter()
