@@ -10,7 +10,7 @@ class CenterlineExtractor():
     segmentation.   
         
     """
-    def __init__(self, case_dir, no_display):
+    def __init__(self, case_dir, no_display = False, fast_segmentation = False):
         """
         Initializes object of the CenterlineExtractor class.
 
@@ -29,6 +29,7 @@ class CenterlineExtractor():
         """
         self.case_dir = case_dir
         self.no_display = no_display
+        self.fast_segmentation = fast_segmentation
     
     def extract_centerline(self):
         """
@@ -52,7 +53,7 @@ class CenterlineExtractor():
         -------
 
         """
-        perform_preprocessing_and_centerline_extraction(self.case_dir, self.no_display)
+        perform_preprocessing_and_centerline_extraction(self.case_dir, self.no_display, self.fast_segmentation)
 
     def extract_branch_model(self):
         """

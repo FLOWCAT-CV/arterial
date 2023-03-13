@@ -168,7 +168,7 @@ def join_head_and_neck_segmentations(case_dir):
     
     head_origin_i = int((head_header["qoffset_x"] - neck_header["qoffset_x"]) / r_voxel_size)
     head_origin_j = int((head_header["qoffset_y"] - neck_header["qoffset_y"]) / a_voxel_size)
-    head_origin_k = int((head_header["qoffset_z"] - neck_header["qoffset_z"]) / s_voxel_size)bbb
+    head_origin_k = int((head_header["qoffset_z"] - neck_header["qoffset_z"]) / s_voxel_size)
     
     # Set head_segmentation_array_reduced into original shape
     head_segmentation_array = np.zeros([cta_shape[0], cta_shape[1], cta_shape[2] - head_origin_k])

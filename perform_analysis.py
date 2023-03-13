@@ -16,8 +16,8 @@ def main():
         help="Boolean argument to determine if segmentation is predicted or not. Use (True) if segmentation is already "
         "predicted, to skip nnUNet inference and save time. If True, there should exist a nifti file with the binary map "
         "with the following naming convention: {os.path.basename}_segmentation.nii.gz. Not required, default = False.")
-    parser.add_argument("-full", "--full_segmentation", type=bool, required=False, default=False, 
-        help="Boolean argument to determine if full segmentation is used or not. Use (True) if full segmentation is wanted. "
+    parser.add_argument("-fast", "--fast_segmentation", type=bool, required=False, default=False, 
+        help="Boolean argument to determine if fast segmentation is used or not. Use (True) if fast segmentation is wanted. "
         "Otherwise, fast segmentation will be performed. Not required, default = False.")
     parser.add_argument("-sce", "--skip_centerline_extraction", type=bool, required=False, default=False, 
         help="Boolean argument to determine if centerline extraction should be skipped or not. Not required, default = False.")

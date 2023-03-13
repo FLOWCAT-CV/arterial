@@ -8,7 +8,7 @@ import nibabel as nib
 
 from preprocessing.utils import get_bounding_box_limits_3d
 
-def preprocessing(case_dir, master_volume_node):
+def preprocessing(case_dir, master_volume_node, fast_segmentation = False):
     """
     Performs segmentation of a binary mask using Slicer's segmentEditorWidget to create
     volume model of the segmented bodies. Also, it applies preprocessing of the resulting
@@ -45,8 +45,11 @@ def preprocessing(case_dir, master_volume_node):
     """
     # Set to 0 the voxels in the upper 20% of the bounding box
     masked_volume_array = slicer.util.arrayFromVolume(master_volume_node)
-    # _, _, _, _, min_is, max_is = get_bounding_box_limits_3d(masked_volume_array)
-    # masked_volume_array[int(np.round((max_is - min_is) * 0.85)):] = 0
+    # If fast segmentation was performed, we ignore the voxels in the upper 15% 
+    # of the foreground bounding box in the binary map
+    if fast_segmentation:
+        _, _, _, _, min_is, max_is = get_bounding_box_limits_3d(masked_volume_array)
+        masked_volume_array[int(np.round((max_is - min_is) * 0.85)):] = 0
     # Update volume in slicer
     slicer.util.updateVolumeFromArray(master_volume_node, masked_volume_array)
 

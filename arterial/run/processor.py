@@ -54,7 +54,7 @@ class ArterialProcessor():
         self.case_dir = parser.case_dir
         self.no_display = parser.no_display
         self.skip_segmentation = parser.skip_segmentation
-        self.full_segmentation = parser.full_segmentation
+        self.fast_segmentation = parser.fast_segmentation
         self.skip_centerline_extraction = parser.skip_centerline_extraction
         self.skip_branching = parser.skip_branching
         self.skip_clipping = parser.skip_clipping
@@ -63,7 +63,7 @@ class ArterialProcessor():
 
         # Initialize module classes
         self.segmenter = Segmenter(self.case_dir)
-        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.no_display)
+        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.no_display, self.fast_segmentation)
         self.vessel_labeller = VesselLabeller(self.case_dir)
         self.feature_extractor = FeatureExtractor(self.case_dir)
 
@@ -107,13 +107,13 @@ class ArterialProcessor():
         """
         # Predicts segmentation by nnunet inference
         if not self.skip_segmentation:
-            if self.full_segmentation:
-                print("Predicting segmentation (full)...")
-                self.segmenter.predict_full()
-                print("done \n")
-            else:
+            if self.fast_segmentation:
                 print("Predicting segmentation (fast)...")
                 self.segmenter.predict_fast()
+                print("done \n")
+            else:
+                print("Predicting segmentation (full)...")
+                self.segmenter.predict_full()
                 print("done \n")
         else:
             print("Skipping segmentation \n")
@@ -143,7 +143,7 @@ class ArterialProcessor():
         if not self.skip_centerline_extraction:
             print("Performing centerline extraction...")
             # Applies centerline preprocessing and extraction using Slicer and VMTK
-            # self.centerline_extractor.extract_centerline()
+            self.centerline_extractor.extract_centerline()
             if not self.skip_branching:
                 print("Performing centerline branching...")
                 # Performs centerline model branching with VMTK

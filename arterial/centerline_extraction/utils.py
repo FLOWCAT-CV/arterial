@@ -736,7 +736,20 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
 
 def compute_frenet_serret(centerline_model):
     """
+    Uses the vtkParallelTransportFrame custom filter from
+    Slicer to compute tangent, normal and binormal vectors from 
+    the Frenet-Serret frame for each point of the centerline model.
 
+    Parameters
+    ----------
+    centerline_model : vtk.vtkPolyData
+        Centerline model.
+    
+    Returns
+    -------
+    centerline_model : vtk.vtkPolyData
+        Centerline model with tangent, normal and binormal vectors 
+        computed for each centerline point as point data.
     
     """
     curve_coordinate_system_generator = slicer.vtkParallelTransportFrame()
