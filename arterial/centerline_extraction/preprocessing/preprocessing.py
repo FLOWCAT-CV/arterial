@@ -92,13 +92,70 @@ def preprocessing(case_dir, master_volume_node, fast_segmentation = False):
     # Get voxel size from image
     voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
     # Compute approximate number of voxels
-    number_of_voxels_threshold = round(10000 * (reference_voxel_size / voxel_size))
+    number_of_voxels_threshold = round(3000 * (reference_voxel_size / voxel_size))
     # Remove small islands
     segment_editor_widget.setActiveEffectByName("Islands")
     effect = segment_editor_widget.activeEffect()
     effect.setParameter("Operation", "REMOVE_SMALL_ISLANDS")
     effect.setParameter("MinimumSize", number_of_voxels_threshold)
     effect.self().onApply()
+
+    # Saving segmentation (undivided)
+    import vtk
+
+    # Create closed surface representation of segmentation
+    segmentation_node.CreateClosedSurfaceRepresentation()
+    
+    for segment_id in range(segmentation_node.GetSegmentation().GetNumberOfSegments()):
+        surface_model = vtk.vtkPolyData()
+        segmentation_node.GetClosedSurfaceRepresentation(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id), surface_model)
+
+        # Decimating model
+        decimator = vtk.vtkDecimatePro()
+        decimator.SetTargetReduction(0.8)
+        decimator.AddInputData(surface_model)
+        decimator.Update()
+        # Saving decimated model
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputConnection(decimator.GetOutputPort())
+        writer.SetFileName(os.path.join(case_dir, "segmentation.vtk"))
+        writer.Write()
+
+        # # Get the points from the VTK data
+        # points = decimated_surface_model.GetPoints()
+
+        # # Convert the points to a NumPy array
+        # num_points = points.GetNumberOfPoints()
+        # point_array = np.zeros((num_points, 4))
+        # for i in range(num_points):
+        #     point_array[i, :3] = points.GetPoint(i)
+        #     point_array[i, 3] = 1
+            
+        # # Define the affine matrix to invert the second axis coordinates and apply translation
+        # tranformation_matrix = nib.load(os.path.join(case_dir, "{}.nii.gz".format(os.path.basename(case_dir)))).affine
+        # tranformation_matrix[0, 0] = -1
+        # tranformation_matrix[1, 1] = -1
+        # tranformation_matrix[2, 2] = 1
+
+        # # Apply the affine matrix to the point coordinates
+        # point_array = np.dot(point_array, tranformation_matrix)[:, :3]
+
+        # # Set the new point coordinates back to the VTK data
+        # for i in range(num_points):
+        #     points.SetPoint(i, point_array[i, :])
+
+        # # Convert the VTK data to a polydata object
+        # surface_filter = vtk.vtkDataSetSurfaceFilter()
+        # surface_filter.SetInputData(reader.GetOutput())
+        # surface_filter.Update()
+
+        # Write the polydata object to an STL file
+        writer = vtk.vtkSTLWriter()
+        writer.SetFileTypeToBinary()
+        writer.SetInputConnection(decimator.GetOutputPort())
+        writer.SetFileName(os.path.join(case_dir, "segmentation.stl"))
+        writer.Update()
 
     # Split remaining islands into individual segments
     segment_editor_widget.setActiveEffectByName("Islands")

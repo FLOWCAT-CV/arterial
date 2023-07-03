@@ -57,7 +57,6 @@ def perform_preprocessing_and_centerline_extraction(case_dir, no_display, fast_s
             os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
         else:
             os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-        # os.system("{} --python-script {} -case_dir {}".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
 
 if __name__ == "__main__":
     # Script to be executed by PythonSlicer interpreter
@@ -73,7 +72,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-case_dir', '--case_dir', type=str, required=True, 
         help='path binary nifti to be processed. Required.')
-    parser.add_argument("-fast", "--fast_segmentation", type=str, default=False, required=False,
+    parser.add_argument("-fast", "--fast_segmentation", type=bool, default=False, required=False,
         help='flag to indicate if segmentation was acquired in fast or full mode. It will change '
              'the preprocessing of the centerline extraction process. Defaults to False. Not required.')
 

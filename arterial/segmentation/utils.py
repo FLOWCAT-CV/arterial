@@ -101,10 +101,10 @@ def slice_cta_head_and_neck(case_dir):
     head_affine[1, 3] += lower_slicing_j_coordinate * a_voxel_size
     head_affine[2, 3] += lower_slicing_k_coordinate * s_voxel_size
     # Update s translation from header
-    head_header["qoffset_x"] += lower_slicing_k_coordinate * r_voxel_size
+    head_header["qoffset_x"] += lower_slicing_i_coordinate * r_voxel_size
     head_header["qoffset_y"] += lower_slicing_j_coordinate * a_voxel_size
     head_header["qoffset_z"] += lower_slicing_k_coordinate * s_voxel_size
-    head_header["srow_x"][3] += lower_slicing_k_coordinate * r_voxel_size
+    head_header["srow_x"][3] += lower_slicing_i_coordinate * r_voxel_size
     head_header["srow_y"][3] += lower_slicing_j_coordinate * a_voxel_size
     head_header["srow_z"][3] += lower_slicing_k_coordinate * s_voxel_size
     
@@ -164,7 +164,7 @@ def join_head_and_neck_segmentations(case_dir):
     neck_segmentation_array = neck_segmentation_nifti.get_fdata()
     neck_header = neck_segmentation_nifti.header
     
-    r_voxel_size, a_voxel_size, s_voxel_size = head_header["srow_x"][0], head_header["srow_y"][1], head_header["srow_z"][2]
+    r_voxel_size, a_voxel_size, s_voxel_size = cta_nifti.affine[0, 0], cta_nifti.affine[1, 1], cta_nifti.affine[2, 2]
     
     head_origin_i = int((head_header["qoffset_x"] - neck_header["qoffset_x"]) / r_voxel_size)
     head_origin_j = int((head_header["qoffset_y"] - neck_header["qoffset_y"]) / a_voxel_size)

@@ -241,13 +241,21 @@ def perform_inference_full(case_dir):
         shutil.rmtree(input_dir)
         shutil.rmtree(output_dir)
     # Slice full CTA into two nifties for head and neck
+    print("Running segmentation preprocessing...")
     slice_cta_head_and_neck(case_dir)
+    print("done")
     # Perform inference of the head CTA
+    print("Performing inference (head)...")
     perform_inference_head(case_dir)
+    print("done")
     # Perform inference of the neck CTA
+    print("Performing inference (neck)...")
     perform_inference_neck(case_dir)
+    print("done")
     # Join segmentations
+    print("Joining segmentation")
     join_head_and_neck_segmentations(case_dir)
+    print("done")
 
     # Remove useless files
     os.remove(os.path.join(case_dir, "{}_head.nii.gz".format(os.path.basename(case_dir))))
