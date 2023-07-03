@@ -79,9 +79,6 @@ def slice_cta_head_and_neck(case_dir):
     lower_slicing_k_coordinate = half_s_coordinate + min(nonzero_coordinates[2])
     upper_slicing_k_coordinate = half_s_coordinate + max(nonzero_coordinates[2])
     
-    # Save coordinates for head_cta_array in original nifti
-    head_origin = [lower_slicing_i_coordinate, lower_slicing_j_coordinate, lower_slicing_k_coordinate]
-    
     # Slice cta into two (head and neck)
     head_cta_array = cta_array[lower_slicing_i_coordinate:upper_slicing_i_coordinate, lower_slicing_j_coordinate:upper_slicing_j_coordinate, lower_slicing_k_coordinate:upper_slicing_k_coordinate]
     # For the neck (lower part of the image) we add some extra slices to have some overlap
@@ -91,7 +88,6 @@ def slice_cta_head_and_neck(case_dir):
     # Update affine and header for head CTA (neck will be fine, 
     # header["dim"] updates automatically when creating the new nifti object)
     head_affine = cta_nifti.affine.copy()
-    head_header = cta_nifti.header.copy()
     # Get s voxel size
     r_voxel_size = head_affine[0, 0]
     a_voxel_size = head_affine[1, 1]
@@ -100,17 +96,12 @@ def slice_cta_head_and_neck(case_dir):
     head_affine[0, 3] += lower_slicing_i_coordinate * r_voxel_size
     head_affine[1, 3] += lower_slicing_j_coordinate * a_voxel_size
     head_affine[2, 3] += lower_slicing_k_coordinate * s_voxel_size
-    # Update s translation from header
-    head_header["qoffset_x"] += lower_slicing_i_coordinate * r_voxel_size
-    head_header["qoffset_y"] += lower_slicing_j_coordinate * a_voxel_size
-    head_header["qoffset_z"] += lower_slicing_k_coordinate * s_voxel_size
-    head_header["srow_x"][3] += lower_slicing_i_coordinate * r_voxel_size
-    head_header["srow_y"][3] += lower_slicing_j_coordinate * a_voxel_size
-    head_header["srow_z"][3] += lower_slicing_k_coordinate * s_voxel_size
     
     # Generate new nifti files
-    head_cta_nifti = nib.Nifti1Image(head_cta_array, head_affine, head_header)
-    neck_cta_nifti = nib.Nifti1Image(neck_cta_array, cta_nifti.affine, cta_nifti.header)
+    head_cta_nifti = nib.Nifti1Image(head_cta_array, head_affine)
+    head_cta_nifti.set_data_dtype(np.int16)
+    neck_cta_nifti = nib.Nifti1Image(neck_cta_array, cta_nifti.affine)
+    neck_cta_nifti.set_data_dtype(np.int16)
     # Save new nifti files
     nib.save(head_cta_nifti, os.path.join(case_dir, "{}_head.nii.gz".format(os.path.basename(case_dir))))
     nib.save(neck_cta_nifti, os.path.join(case_dir, "{}_neck.nii.gz".format(os.path.basename(case_dir))))
