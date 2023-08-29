@@ -2,7 +2,7 @@
 
 from arterial.centerline_extraction.run_centerline_extraction_slicer import perform_preprocessing_and_centerline_extraction
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import perform_centerline_branching, perform_surface_model_clipping
-from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array
+from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array, perform_segmentation_unification
 
 class CenterlineExtractor():
     """
@@ -10,24 +10,32 @@ class CenterlineExtractor():
     segmentation.   
         
     """
-    def __init__(self, case_dir, no_display = False, fast_segmentation = False):
+    def __init__(self, case_dir, mode = "vessels", no_display = False, fast_segmentation = False):
         """
         Initializes object of the CenterlineExtractor class.
 
         Parameters
         ----------
         case_dir : string or path-like object
-            Path to case directory. 
+            Path to case directory.
+        mode: string, default = "vessels"
+            Determines whether the centerline is extracted from ```vessels```, ```intracranial_vessels``` 
+            or ```thrombus```. 
         no_display : bool, default = False
             Boolean variable to be used when running analysis on a headless server.
             In addition, add ```$xvfb-run --auto-servernum --server-num=1``` at the beggining
             of the command line call when executing the script from the command line.
+        fast_segmentation : bool, default = False
+            Boolean variable to be used when running analysis derived from fast segmentation (lowres).
+            In this case, segmentation of the cerebral arteries is less reliable, so a higher fraction
+            of vessels is ignored.
 
         Returns
         -------
         
         """
         self.case_dir = case_dir
+        self.mode = mode
         self.no_display = no_display
         self.fast_segmentation = fast_segmentation
     
@@ -53,7 +61,7 @@ class CenterlineExtractor():
         -------
 
         """
-        perform_preprocessing_and_centerline_extraction(self.case_dir, self.no_display, self.fast_segmentation)
+        perform_preprocessing_and_centerline_extraction(self.case_dir, self.mode, self.no_display, self.fast_segmentation)
 
     def extract_branch_model(self):
         """

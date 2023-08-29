@@ -6,6 +6,89 @@ import vtk
 import numpy as np
 import nibabel as nib
 
+from arterial.centerline_extraction.postprocessing.run_paraview_segmentation_imaging import get_rotation_png_files
+
+def perform_segmentation_unification(case_dir):
+    """
+    Reads all segmentations in case_dir/segmentations 
+    files and creates unified segmentation. 
+    
+    Saves unified segmentation as:
+
+    >>> case_dir/segmentation.vtk
+
+    If enviorment variable `paraview_path` is set, also runs Paraview 
+    processing to get images of segmentation from all angles in a full 
+    axial rotation. Saves images as:
+
+    >>> case_dir/segmentation_images/{idx}.png
+
+    Parameters
+    ----------
+    case_dir : string or path-like object
+        Path to case directory. 
+
+    Returns
+    -------
+
+    """
+    print("Unifying all segmentations...")
+    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
+
+    if len(surface_model_list) == 1:
+        shutil.copyfile(os.path.join(case_dir, "segmentations", "segmentation0.vtk"), os.path.join(case_dir, "segmentation.vtk"))
+    else:
+        # Initialize empty final segmentation polydata
+        final_segmentation = vtk.vtkPolyData()
+        # Initialize append polydata filter
+        append_poly_data_filter = vtk.vtkAppendPolyData()
+        append_poly_data_filter.AddInputData(final_segmentation)
+        for surface_model_id, _ in enumerate(surface_model_list):
+            # Load segmentation         
+            segmentation_path = os.path.join(case_dir, "segmentations", "vessel_segmentation_{}.vtk".format(surface_model_id))
+            vtk_poly_data_reader = vtk.vtkPolyDataReader()
+            vtk_poly_data_reader.SetFileName(segmentation_path)
+            vtk_poly_data_reader.Update()
+            segmentation = vtk_poly_data_reader.GetOutput()
+
+            if segmentation.GetNumberOfCells() == 0:
+                print("Error in segmentation {}. Skipping".format(surface_model_id))
+            else:
+                print("Processing segmentation {}...".format(surface_model_id))
+                # Add new segmentation model and update
+                append_poly_data_filter.AddInputData(segmentation)
+                append_poly_data_filter.Update()
+                final_segmentation = append_poly_data_filter.GetOutput()
+
+        # We can to recompute the normals for all mesh triangles
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(final_segmentation)
+        normals.SetFeatureAngle(80)
+        normals.AutoOrientNormalsOn()
+        normals.UpdateInformation()
+        normals.Update()
+        final_segmentation = normals.GetOutput()
+
+        # We also pass a clean vtkPolyData filter for good measure
+        clean_poly_data = vtk.vtkCleanPolyData()
+        clean_poly_data.SetInputData(final_segmentation)
+        clean_poly_data.Update()
+        final_segmentation = clean_poly_data.GetOutput()
+
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputData(final_segmentation)
+        writer.SetFileName(os.path.join(case_dir, "segmentation.vtk"))
+        writer.Write()
+
+    # Get png files (only if Paraview is available and path to python interpreter is set)
+    if os.environ.get('paraview_path') is not None:
+        print("Getting images of segmentation... \n")
+        get_rotation_png_files(case_dir)
+    else:
+        print("Please set a `paraview_path` environment variable to get images from segmentation using Paraview.")
+        print("It should look something like (MacOS): /Applications/ParaView-5.10.1.app/Contents/bin/pvpython \n")
+
 def compute_centerline_segments_array(case_dir):
     ''' 
     Loads a vtkPolyData object containing the centerline model and generates
@@ -55,7 +138,7 @@ def compute_centerline_segments_array(case_dir):
         translation = np.transpose(aff[:3, 3])
 
         # Centerline point data for maximal inscribed sphere radius
-        radius_array = vtk.util.numpy_support.vtk_to_numpy(centerline_model.GetPointData().GetArray(0))
+        radius_array = vtk.util.numpy_support.vtk_to_numpy(centerline_model.GetPointData().GetArray("Radius"))
 
         # Iterate over cells to extract cell_ids, positions and radii. We also store lengths of cells (number of points, not distance)
         for cell_id in range(number_of_cells):
