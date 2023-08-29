@@ -5,9 +5,13 @@ import slicer
 import vtk
 
 import numpy as np
+import nibabel as nib
 
 from skimage import measure
 from scipy import ndimage
+
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+from scipy.signal import savgol_filter
 
 def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
     """
@@ -97,7 +101,10 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
     for idx in range(endpoints_node.GetNumberOfControlPoints()):
         endpoint = np.matmul(np.linalg.inv(aff), np.append(np.array(endpoints_node.GetCurvePoints().GetPoint(idx)), 1.0))[:3]
         # Reference point set at [350, 0, 0] in LAS coordinates
-        distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
+        if nib.orientations.aff2axcodes(aff) == ("L", "A", "S"):
+            distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
+        elif nib.orientations.aff2axcodes(aff) == ("L", "P", "S"):
+            distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, label_mask.shape[1], 0.0])))
     # Get order from closest to furthest
     sorted_distance_idx = np.argsort(distance_to_reference)
     for idx in sorted_distance_idx:
@@ -231,7 +238,13 @@ def inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, 
     # Distance in ijk units to propagate a single centerlineless segment
     threshold_distance_prop = 5
     # Minimum number of surface model points to consider unique propagated segment as centerlineless
-    threshold_counts = 500
+    # voxel size of 0.43 * 0.43 * 0.4 mm^3
+    reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
+    # Get voxel size from image
+    voxel_size = abs(aff[0, 0] * aff[1, 1] * aff[2, 2])
+    # Compute approximate number of voxels
+    threshold_counts = round(500 * (reference_voxel_size / voxel_size))
+    # threshold_counts = 500
     
     # First we pool all centerline points and their associated radius
     centerline_positions_array = np.ndarray([centerline_poly_data.GetNumberOfPoints(), 3])
@@ -335,7 +348,6 @@ def inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, 
             # Otherwise, we discard it as it is probably a sparse island, incorrecly clustered
             if counts[val_idx] > threshold_counts:
                 print("Segment with label {}, found with {} counts ({:.2f} % of total counts). \n Creating closed surface model and importing into Slicer...".format(int(value), counts[val_idx], 100 * counts[val_idx] / len(distance_radius_ratio)))
-                print()
                 for idx, label_cluster in enumerate(labels):
                     # For originally clustered points
                     if label_cluster == 1: 
@@ -413,15 +425,29 @@ def inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, 
                 circular_segment_model_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
                 circular_segment_model_node.SetAndObservePolyData(clean_circular_segment)
 
-                # Apply the centerline extraction algorithm for circular segments
-                centerline_poly_data = extract_centerline_circular_segment(circular_segment_model_node, centerline_poly_data, segmentation_node, segment_id, aff)
+                points_numpy = np.ndarray([points_circular_segment_model.GetNumberOfPoints(), 3])
+                for point_idx in range(points_circular_segment_model.GetNumberOfPoints()):
+                    points_numpy[point_idx] = points_circular_segment_model.GetPoint(point_idx)
 
-                # Overwriting centerlines separately after circular centerline inspection and extraction
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"centerlines{segment_id}.vtk"))
-                writer.Write()
+                # For now we limit the circular centerline analysis to extracranial vessels 
+                # For that, we only look at segments with their center of mass at the lower 80% of the image
+                center_of_mass = np.mean(points_numpy, axis = 0)
+                min_is = centerline_positions_array[:, 2].min()
+                max_is = centerline_positions_array[:, 2].max()
+
+                if center_of_mass[2] - min_is < 0.80 * (max_is - min_is):
+                    print(" Performing circular centerline extraction")
+                    # Apply the centerline extraction algorithm for circular segments
+                    centerline_poly_data = extract_centerline_circular_segment(circular_segment_model_node, centerline_poly_data, segmentation_node, segment_id, aff)
+                    # Overwriting centerlines separately after circular centerline inspection and extraction
+                    writer = vtk.vtkPolyDataWriter()
+                    writer.SetFileVersion(42)
+                    writer.SetInputData(centerline_poly_data)
+                    writer.SetFileName(os.path.join(case_dir, "centerlines", f"centerlines{segment_id}.vtk"))
+                    writer.Write()
+                else:
+                    print(" Ignoring segment (it is most likely a cerebral vessel, not fined tuned for circular centerline extraction)")
+                print()
 
         return centerline_poly_data
     
@@ -477,26 +503,10 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     extract_centerline_widget.updateParameterNodeFromGUI()
     extract_centerline_widget._parameterNode.SetNodeReferenceID("InputSurface", input_surface_model_node.GetID())
 
-    import signal
-
-    class TimeoutException(Exception):
-        pass
-
-    def timeout_handler(signum, frame):
-        raise TimeoutException
-
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(5) 
-
-    try: 
-        print("Automatic endpoint extraction...")
-        # Autodetect endpoints
-        extract_centerline_widget.onAutoDetectEndPoints()
-        extract_centerline_widget.updateGUIFromParameterNode()
-        signal.alarm(0)
-    except TimeoutException:
-        print("Stuck in endpoint autodetection, skipping segment")
-        return centerline_poly_data
+    # Autodetect endpoints
+    print("Automatic endpoint extraction...")
+    extract_centerline_widget.onAutoDetectEndPoints()
+    extract_centerline_widget.updateGUIFromParameterNode()
         
     # Set network node reference to original segment
     extract_centerline_widget._parameterNode.SetNodeReferenceID("InputSurface", segmentation_node.GetID())
@@ -561,6 +571,13 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     # Check if all centerlines depart from the same origin. Dismiss the ones that do not, they are most likely floating
     circular_centerline_poly_data = centerline_model_node.GetPolyData()
 
+    # Decimate centerline model
+    # decimator = vtk.vtkDecimatePolylineFilter()
+    # decimator.SetTargetReduction(0.5)
+    # decimator.AddInputData(circular_centerline_poly_data)
+    # decimator.Update()
+    # circular_centerline_poly_data = decimator.GetOutput()
+
     # Declare empty arrays
     cells_id_array = np.ndarray([circular_centerline_poly_data.GetNumberOfCells()], dtype=int)
     cells_first_coordinate_array = np.ndarray([circular_centerline_poly_data.GetNumberOfCells(), 3])
@@ -604,8 +621,6 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
         final_cell_array.InsertNextCell(centerline_poly_data.GetCell(cell_idx))
     
     # Now, we join both cells from the circular_centerline_poly_data as one with the correct order
-    assert circular_centerline_poly_data.GetNumberOfCells() == 2
-    
     # We have to search for the exact preceeding centerline segment from the original centerline_poly_data
     # First store all centerlines from the original centerline_poly_data in numpy arrays for speed
     centerline_cell_arrays = np.ndarray([centerline_poly_data.GetNumberOfCells()], dtype = object)
@@ -622,23 +637,23 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
             if np.amin(distances) < 0.1:
                 centerline_point_idx = np.argmin(distances)
                 break # centerline_cell_idx, centerline_point_idx correspond to the original centerline_poly_data
-                    # circular_centerline_prox_point_idx - 1 will be the first point used from the circularCenterline
-                    # We will concatenate both
+                      # circular_centerline_prox_point_idx - 1 will be the first point used from the circular_centerline
+                      # We will concatenate both
         if np.amin(distances) < 0.1:
             break
             
     # We can then search for the distal branch of the centerline model. Branching and clipping present problems if nothing else is done
     # The idea is to split the distal end into a new centerline cell. Then, for each centerline point, search for closest point to each 
     # centerline_poly_data cell (now centerline_cell_idx_2) and get the first under 0.1 mm    
-    for circular_centerline_dist_point_idx in range(circular_centerline_poly_data.GetCell(0).GetNumberOfPoints()):
+    for circular_centerline_dist_point_idx in range(1, circular_centerline_poly_data.GetCell(0).GetNumberOfPoints()):
         point = circular_centerline_poly_data.GetCell(0).GetPoints().GetPoint(circular_centerline_dist_point_idx)
         for centerline_cell_idx_2 in range(centerline_poly_data.GetNumberOfCells()):
             distances = np.linalg.norm(point - centerline_cell_arrays[centerline_cell_idx_2], axis = 1)
             if np.amin(distances) < 0.1:
                 centerline_point_idx_2 = np.argmin(distances)
                 break # centerline_cell_idx_2, centerline_point_idx_2 correspond to the preceeding centerline
-                    # circular_centerline_dist_point_idx - 1 will be the first point used from the circularCenterline
-                    # We will concatenate both
+                      # circular_centerline_dist_point_idx - 1 will be the first point used from the circular_centerline
+                      # We will concatenate both
         if np.amin(distances) < 0.1:
             break
     
@@ -665,7 +680,7 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
                 # Append point_data values to the numpy arrays
                 radius_numpy = np.append(radius_numpy, centerline_poly_data.GetPointData().GetArray("Radius").GetValue(centerline_poly_data.GetCell(centerline_cell_idx).GetPointId(point_idx)))
                 edge_array_numpy = np.append(edge_array_numpy, np.array([centerline_poly_data.GetPointData().GetArray("EdgeArray").GetTuple(centerline_poly_data.GetCell(centerline_cell_idx).GetPointId(point_idx))]), axis=0)
-                edge_p_coord_array_numpy = np.append(edge_p_coord_array_numpy, centerline_poly_data.GetPointData().GetArray("EdgePCoordArray").GetValue(centerline_poly_data.GetCell(centerline_cell_idx).GetPointId(point_idx)))                
+                edge_p_coord_array_numpy = np.append(edge_p_coord_array_numpy, centerline_poly_data.GetPointData().GetArray("EdgePCoordArray").GetValue(centerline_poly_data.GetCell(centerline_cell_idx).GetPointId(point_idx)))
             # We then add the rest of the second cell (1) of the circular_centerline_poly_data. We go backwards because we want to invert the order
             for point_idx in range(circular_centerline_prox_point_idx - 1, -1, -1):
                 # Add points to the cell and the vtkPoints. Keep new pointIds
@@ -731,10 +746,10 @@ def extract_centerline_circular_segment(input_surface_model_node, centerline_pol
     final_centerline_poly_data.GetPointData().GetArray(1).SetName("EdgeArray")
     final_centerline_poly_data.GetPointData().AddArray(vtk.util.numpy_support.numpy_to_vtk(edge_p_coord_array_numpy))
     final_centerline_poly_data.GetPointData().GetArray(2).SetName("EdgePCoordArray")
-
+    
     return final_centerline_poly_data
 
-def compute_frenet_serret(centerline_model):
+def compute_frenet_serret(centerline_poly_data):
     """
     Uses the vtkParallelTransportFrame custom filter from
     Slicer to compute tangent, normal and binormal vectors from 
@@ -742,18 +757,65 @@ def compute_frenet_serret(centerline_model):
 
     Parameters
     ----------
-    centerline_model : vtk.vtkPolyData
+    centerline_poly_data : vtk.vtkPolyData
         Centerline model.
     
     Returns
     -------
-    centerline_model : vtk.vtkPolyData
+    centerline_poly_data : vtk.vtkPolyData
         Centerline model with tangent, normal and binormal vectors 
         computed for each centerline point as point data.
     
     """
     curve_coordinate_system_generator = slicer.vtkParallelTransportFrame()
-    curve_coordinate_system_generator.SetInputData(centerline_model)
+    curve_coordinate_system_generator.SetInputData(centerline_poly_data)
     curve_coordinate_system_generator.Update()
 
     return curve_coordinate_system_generator.GetOutput()
+
+def compute_curvature_and_torsion(centerline_poly_data):
+    """
+    Compute cruvature and torsion using the Frenet-Serret moving frame.
+    Assumes that Frenet-Serret vectors are available as point data in the 
+    input centerline_poly_data object. Stores curvature and torsion as
+    point data arrays in the centerline_poly_data object. Also computes 
+    a smoothed out version of the curvature using a Savitzky-Golay filter.
+
+    Parameters
+    ----------
+    centerline_poly_data : vtk.vtkPolyData
+        Centerline model.
+
+    Returns
+    ------
+    centerline_poly_data : vtk.vtkPolyData
+        Centerline model with curvature, torsion and filtered_curvature 
+        as additional point data arrays.
+
+    References:
+    [1]     
+    
+    """
+    # Load Frenet-Serret vectors as numpy arrays for each point
+    coordinates = np.ndarray([centerline_poly_data.GetNumberOfPoints(), 3])
+    for point_idx in range(centerline_poly_data.GetNumberOfPoints()):
+        coordinates[point_idx] = centerline_poly_data.GetPoints().GetPoint(point_idx)
+    tangents = vtk_to_numpy(centerline_poly_data.GetPointData().GetArray("Tangents"))
+    normals = vtk_to_numpy(centerline_poly_data.GetPointData().GetArray("Normals"))
+    binormals = vtk_to_numpy(centerline_poly_data.GetPointData().GetArray("Binormals"))
+    
+    # Compute curvature and torsion
+    curvature = np.linalg.norm(np.gradient(tangents, axis = 0), axis = 1)
+    torsion = (- np.gradient(binormals, axis = 0) * normals).sum(axis = 1)
+    # Compute smoothed curvature
+    filtered_curvature = savgol_filter(curvature, window_length=10, polyorder=3, mode='nearest')
+    
+    # Add new point data arrays
+    centerline_poly_data.GetPointData().AddArray(numpy_to_vtk(curvature))
+    centerline_poly_data.GetPointData().GetArray(centerline_poly_data.GetPointData().GetNumberOfArrays() - 1).SetName("Curvature")
+    centerline_poly_data.GetPointData().AddArray(numpy_to_vtk(torsion))
+    centerline_poly_data.GetPointData().GetArray(centerline_poly_data.GetPointData().GetNumberOfArrays() - 1).SetName("Torsion")
+    centerline_poly_data.GetPointData().AddArray(numpy_to_vtk(filtered_curvature))
+    centerline_poly_data.GetPointData().GetArray(centerline_poly_data.GetPointData().GetNumberOfArrays() - 1).SetName("Filtered curvature")
+
+    return centerline_poly_data

@@ -29,7 +29,7 @@ def perform_centerline_branching(case_dir):
     
     """
     # List all centerline model to be branched
-    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")])
+    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith("vessel_centerlines")])
     # Create dir to store all branch_models
     if not os.path.isdir(os.path.join(case_dir, "branch_models")): os.mkdir(os.path.join(case_dir, "branch_models"))
 
@@ -37,7 +37,7 @@ def perform_centerline_branching(case_dir):
         print("Starting branch extraction from centerline model {}...".format(idx))
         # Assing the necessary variables to pass as arguments to vmtkbranchextractor
         centerline_model = os.path.join(case_dir, "centerlines", centerline_file)
-        branch_model = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(idx))
+        branch_model = os.path.join(case_dir, "branch_models", "branch_model_{}.vtk".format(idx))
         radius_array_name = "Radius"
         # Call vmtkbranchextractor command in the command line
         os.system("vmtkbranchextractor -ifile {} -ofile {} -radiusarray {}".format(centerline_model, branch_model, radius_array_name))
@@ -83,11 +83,11 @@ def perform_branch_model_unification(case_dir):
     points_from_previous_branch_models = 0
 
     if len(branch_model_list) == 1:
-        shutil.copyfile(os.path.join(case_dir, "branch_models", "branch_model0.vtk"), os.path.join(case_dir, "branch_model.vtk"))
+        shutil.copyfile(os.path.join(case_dir, "branch_models", "branch_model_0.vtk"), os.path.join(case_dir, "branch_model.vtk"))
     else:
         for branch_model_model_id, _ in enumerate(branch_model_list):
             # Load branch model
-            branch_model_path = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(branch_model_model_id))
+            branch_model_path = os.path.join(case_dir, "branch_models", "branch_model_{}.vtk".format(branch_model_model_id))
             vtk_poly_data_reader = vtk.vtkPolyDataReader()
             vtk_poly_data_reader.SetFileName(branch_model_path)
             vtk_poly_data_reader.Update()
@@ -208,15 +208,15 @@ def perform_surface_model_clipping(case_dir):
     
     """
     # List all surface models to be clipped
-    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
+    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk") and surface_model_file.startswith("vessel_segmentation")])
     # Create dir to store all clipped_models
     if not os.path.isdir(os.path.join(case_dir, "clipped_models")): os.mkdir(os.path.join(case_dir, "clipped_models"))
     for idx, surface_model_file in enumerate(surface_model_list):
         print("Clipping surface model {}...".format(idx))
         # Assing the necessary variables to pass as arguments to vmtkbranchclipper
         surface_model = os.path.join(case_dir, "segmentations", surface_model_file)
-        branch_model = os.path.join(case_dir, "branch_models", "branch_model{}.vtk".format(idx))
-        clipped_model = os.path.join(case_dir, "clipped_models", "clipped_model{}.vtk".format(idx))
+        branch_model = os.path.join(case_dir, "branch_models", "branch_model_{}.vtk".format(idx))
+        clipped_model = os.path.join(case_dir, "clipped_models", "clipped_model_{}.vtk".format(idx))
         radius_array_name = "Radius"
         # Call vmtkbranchclipper command in the command line
         os.system("vmtkbranchclipper -ifile {} -centerlinesfile {} -ofile {} -radiusarray {}".format(surface_model, branch_model, clipped_model, radius_array_name))
@@ -254,11 +254,11 @@ def perform_clipped_model_unification(case_dir):
     points_from_previous_clipped_models = 0
 
     if len(clipped_model_list) == 1:
-        shutil.copyfile(os.path.join(case_dir, "clipped_models", "clipped_model0.vtk"), os.path.join(case_dir, "clipped_model.vtk"))
+        shutil.copyfile(os.path.join(case_dir, "clipped_models", "clipped_model_0.vtk"), os.path.join(case_dir, "clipped_model.vtk"))
     else:
         for clipped_model_id, _ in enumerate(clipped_model_list):
             # Load clipped model         
-            clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model{}.vtk".format(clipped_model_id))
+            clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model_{}.vtk".format(clipped_model_id))
             vtk_poly_data_reader = vtk.vtkPolyDataReader()
             vtk_poly_data_reader.SetFileName(clipped_model_path)
             vtk_poly_data_reader.Update()
