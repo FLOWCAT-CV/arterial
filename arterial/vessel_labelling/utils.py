@@ -120,7 +120,7 @@ def predict_vessel_types(model, tranformed_graph):
     
     return predicted_vessels
 
-def save_predicted_graph(case_dir, graph, predicted_vessels):
+def save_predicted_graph(case_dir, graph, predicted_vessels, mode = "vessels"):
     """ 
     Integrates the predicted vessel types from the inference of the 
     graph U-Net over the node form graph on the original graph. 
@@ -143,9 +143,15 @@ def save_predicted_graph(case_dir, graph, predicted_vessels):
     -------
     
     """
+    if mode == "vessels":
+        name_centerline_files = "vessel"
+        edge_types = dict(zip([idx for idx in range(14)], 
+                            ["other", "AA", "BT", "RCCA", "LCCA", "RSA", "LSA", "RVA", "LVA", "RICA", "LICA", "RECA", "LECA", "BA"]))
+    elif mode == "intracranial_vessels":
+        name_centerline_files = "intracranial_vessel"
+        edge_types = dict(zip([idx for idx in range(8)], 
+                        ["other", "LICA", "RICA", "BA", "LM1", "RM1", "LM2", "RM2", "LA1"]))
     # Define edge_types dict
-    edge_types = dict(zip([idx for idx in range(14)], 
-                          ["other", "AA", "BT", "RCCA", "LCCA", "RSA", "LSA", "RVA", "LVA", "RICA", "LICA", "RECA", "LECA", "BA"]))
     # Define new graph with same nodes and edges and information from the input graph
     predicted_graph = nx.Graph()
     # For nodes, we only keep the position of the original edge form graph nodes. We use these for visualization in the png file
@@ -166,9 +172,9 @@ def save_predicted_graph(case_dir, graph, predicted_vessels):
         predicted_graph[src][dst]["features"] = graph[src][dst]["features"]
 
     # Save the graph and image for quick visualization
-    with open(os.path.join(case_dir, "graph_pred.pickle"), "wb") as f:
+    with open(os.path.join(case_dir, "{}_graph_pred.pickle".format(name_centerline_files)), "wb") as f:
         pickle.dump(predicted_graph, f, protocol = 4)
-    make_graph_plot(case_dir, predicted_graph, "graph_pred.png", label = "vessel type name")
+    make_graph_plot(case_dir, predicted_graph, "{}_graph_pred.png".format(name_centerline_files), label = "vessel type name")
 
 class ArterialDatasetInference(InMemoryDataset):
     """
@@ -369,3 +375,70 @@ def make_graph_plot(case_dir, graph, filename, label = None):
 
     plt.savefig(os.path.join(case_dir, filename))
     plt.close()
+
+import nibabel as nib
+import pandas as pd
+import xgboost as xgb
+
+def graph_data_to_df(case_dir, graph):
+    """
+   
+    """
+    edges_features_dict = {}  # Initialize the final dictionary
+    intracranial_features = ['proximal bifurcation position i', 
+                             'proximal bifurcation position j', 
+                             'proximal bifurcation position k', 
+                             'distal bifurcation position i' ,
+                             'distal bifurcation position j', 
+                             'distal bifurcation position k', 
+                             'pos i',
+                             'pos j', 
+                             'pos k']
+
+    # Load the .nii.gz file and get its dimensions
+    i, j, k = nib.load(os.path.join(case_dir, '{}_cta.nii.gz'.format(os.path.basename(case_dir)))).get_fdata().shape
+
+    for src, dst in graph.edges:  # Iterate over the edges of the graph
+        edge_features_dict = {}  # Initialize the sub-dictionary
+        
+        for key in graph[src][dst]['features']:  # Iterate over the features of the current edge
+            # Check if the current feature is in the list of special columns
+            if key in intracranial_features:
+                # Normalize the feature value based on the dimension it represents
+                if key.endswith('i'):
+                    edge_features_dict[key] = graph[src][dst]['features'][key] / i
+                elif key.endswith('j'):
+                    edge_features_dict[key] = graph[src][dst]['features'][key] / j
+                elif key.endswith('k'):
+                    edge_features_dict[key] = graph[src][dst]['features'][key] / k
+            else:
+                # If the current feature is not a special column, just add it to the sub-dictionary
+                edge_features_dict[key] = graph[src][dst]['features'][key]
+                
+        edge_features_dict['cell_id'] = graph[src][dst]['cell_id']  # Add the cell ID to the sub-dictionary
+        
+        # Add the sub-dictionary to the final dictionary, using the edge's nodes as the key
+        edges_features_dict[str(src)+ '_' + str(dst)] = edge_features_dict
+
+    return pd.DataFrame(edges_features_dict).T  # Return the final dictionary as a DataFrame
+
+def predict_intracranial_vessel_types(graph, case_dir):
+    """
+    
+    """
+    # Get the features DataFrame for the graph
+    x = graph_data_to_df(case_dir, graph) 
+    # Initialize the XGBoost model
+    model = xgb.Booster({'nthread': 4})     
+    # Load the pre-trained model
+    model.load_model(os.path.join(os.environ["arterial_dir"], 'vessel_labelling/models/intracranial_vessels/model.model'))
+    
+    # Use the XBG model to predict the vessel types
+    predicted_nodes = model.predict(xgb.DMatrix(x)).astype(int)
+
+    # We create a dict to link the cell_ids from the centerline_segments_array to the predicted vessel types
+    predicted_vessels = {}
+    for idx, (src, dst) in enumerate(sorted(graph.edges)):
+        predicted_vessels[graph[src][dst]['cell_id']] = predicted_nodes[idx]
+        
+    return predicted_vessels 

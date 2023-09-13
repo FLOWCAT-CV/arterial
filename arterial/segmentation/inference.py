@@ -3,7 +3,7 @@
 import os
 import shutil
 
-from arterial.segmentation.utils import slice_cta_head_and_neck, join_head_and_neck_segmentations, recenter_thrombus_patch
+from arterial.segmentation.utils import slice_cta_head_and_neck, join_head_and_neck_segmentations, recenter_thrombus_patch, crop_intracranial_cta
 
 def perform_inference_fast(case_dir):
     """
@@ -283,6 +283,11 @@ def perform_inference_intracranial(case_dir):
     -------
     
     """
+    # Compute intracranial CTA
+    if not os.path.isfile(os.path.join(case_dir, "{}_cta_intracranial.nii.gz".format(os.path.basename(case_dir)))):
+        print("Cropping intracranial CTA patch...")
+        crop_intracranial_cta(case_dir)
+        print("done")
     # Define path to CTA
     case_path = os.path.join(case_dir, "{}_cta_intracranial.nii.gz".format(os.path.basename(case_dir)))
 

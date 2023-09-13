@@ -36,7 +36,7 @@ def perform_segmentation_unification(case_dir):
     surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk")])
 
     if len(surface_model_list) == 1:
-        shutil.copyfile(os.path.join(case_dir, "segmentations", "segmentation0.vtk"), os.path.join(case_dir, "segmentation.vtk"))
+        shutil.copyfile(os.path.join(case_dir, "segmentations", "vessel_segmentation_0.vtk"), os.path.join(case_dir, "segmentation.vtk"))
     else:
         # Initialize empty final segmentation polydata
         final_segmentation = vtk.vtkPolyData()
@@ -89,7 +89,7 @@ def perform_segmentation_unification(case_dir):
         print("Please set a `paraview_path` environment variable to get images from segmentation using Paraview.")
         print("It should look something like (MacOS): /Applications/ParaView-5.10.1.app/Contents/bin/pvpython \n")
 
-def compute_centerline_segments_array(case_dir):
+def compute_centerline_segments_array(case_dir, mode = "vessels"):
     ''' 
     Loads a vtkPolyData object containing the centerline model and generates
     centerline_segments_array, spliting the centerline cells into individual 
@@ -107,18 +107,45 @@ def compute_centerline_segments_array(case_dir):
     ----------
     case_dir : string or path-like object
         Path to case directory.
+    mode: string, default = "vessels"
+            Determines whether the centerline is extracted from ```vessels```, ```intracranial_vessels``` 
+            or ```thrombus```. 
 
     Returns
     -------
         
     '''
-    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk")])
+    if mode == "vessels":
+        name_centerline_files = "vessel"
+    elif mode == "intracranial_vessels":
+        name_centerline_files = "intracranial_vessel"
+    elif mode == "thrombus":
+        name_centerline_files = "thrombus"
+
+    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith(name_centerline_files)])
     final_centerline_segments_array = np.ndarray([0, 2])
 
+    # Define affine matrix and invert
+    nifti = nib.load(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), name_centerline_files)))
+    image_shape = nifti.get_fdata().shape
+    aff = nifti.affine
+
+    # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
+    orientation = nib.aff2axcodes(aff)
+    if orientation == ('R', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([0, 0, 0])
+    elif orientation == ('L', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, 0, 0])
+    elif orientation == ('L', 'P', 'S'):
+        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
+
+    # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
+    lpi_corner_coordinates = np.dot(aff, np.append(lpi_corner_voxel_coordinates, 1))[:3]
+          
     for centerline_idx, _ in enumerate(centerline_list):
         # Load centerlines.vtk as a vtkPolyData object
         centerline_poly_data_reader = vtk.vtkPolyDataReader()
-        centerline_poly_data_reader.SetFileName(os.path.join(case_dir, "centerlines", "centerlines{}.vtk".format(centerline_idx)))
+        centerline_poly_data_reader.SetFileName(os.path.join(case_dir, "centerlines", "{}_centerlines_{}.vtk".format(name_centerline_files, centerline_idx)))
         centerline_poly_data_reader.Update()
         centerline_model = centerline_poly_data_reader.GetOutput()
     
@@ -131,11 +158,6 @@ def compute_centerline_segments_array(case_dir):
         cells_coordinate_array = np.ndarray([number_of_cells], dtype=object)
         cells_radius_array = np.ndarray([number_of_cells], dtype=object)
         length_coordinate_array = np.ndarray([number_of_cells], dtype=int)
-
-        # Define affine matrix and invert
-        aff = nib.load(os.path.join(case_dir, "{}_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
-        # Compute translation from affine matrix
-        translation = np.transpose(aff[:3, 3])
 
         # Centerline point data for maximal inscribed sphere radius
         radius_array = vtk.util.numpy_support.vtk_to_numpy(centerline_model.GetPointData().GetArray("Radius"))
@@ -152,13 +174,12 @@ def compute_centerline_segments_array(case_dir):
                 cells_radius_array[cell_id] = np.flip(radius_array[cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1):cell.GetPointId(0) + 1])
             else:
                 cells_radius_array[cell_id] = np.flip(radius_array[cell.GetPointId(0) - 1:cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1)])
-            # We subtract the translation from the affine matrix to the coordinates and invert the sign of the first to make all coordinates positive
-            # The resulting coordinates system is a translation-less 
+            # We subtract the lpi corner coordinates to get the coordinates from a reference point which is independent from the original 
+            # tranlation of the image, and in case the original orientation was different from RAS, we change the sign of the coordinates
             for idx in range(number_of_cell_points):
-                # Subtract translation
-                cells_coordinate_array[cell_id][idx] = cell.GetPoints().GetPoint(idx) - translation
-                # Change the sign of the first component of the coordinate (L ro R)
-                cells_coordinate_array[cell_id][idx][0] = - cells_coordinate_array[cell_id][idx][0]
+                # Subtract translation                    
+                cells_coordinate_array[cell_id][idx] = cell.GetPoints().GetPoint(idx) - lpi_corner_coordinates
+                
             length_coordinate_array[cell_id] = number_of_cell_points
 
         # Now, we start analyzing each centerline starting from the shortest to the longest. Here we want to analyze overlap between
@@ -328,4 +349,4 @@ def compute_centerline_segments_array(case_dir):
 
     # Finally, we delete the additional segments and save the array as a npy file
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
-    np.save(os.path.join(case_dir, "centerline_segments_array.npy"), final_centerline_segments_array)
+    np.save(os.path.join(case_dir, "{}_centerline_segments_array.npy".format(name_centerline_files)), final_centerline_segments_array)

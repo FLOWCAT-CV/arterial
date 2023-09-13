@@ -105,6 +105,7 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
             distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
         elif nib.orientations.aff2axcodes(aff) == ("L", "P", "S"):
             distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, label_mask.shape[1], 0.0])))
+    print(distance_to_reference)
     # Get order from closest to furthest
     sorted_distance_idx = np.argsort(distance_to_reference)
     for idx in sorted_distance_idx:
@@ -116,6 +117,122 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
             # Make sure that startpoint is close to the bottom slice
             if np.matmul(np.linalg.inv(aff), np.append(startpoint, 1.0))[2] < threshold_distance and idx == 0:
                 print("Original startpoint is at distal AA")
+                break
+            # If it is not, set next closest endpoint to reference as startpoint if it is closer to bottom slice
+            elif np.matmul(np.linalg.inv(aff), np.append(startpoint, 1.0))[2] < threshold_distance and idx != 0:
+                print("New startpoint ({}): {}".format(idx, startpoint))
+                endpoints_node.SetNthControlPointPosition(idx, endpoints_node.GetCurvePoints().GetPoint(0))
+                endpoints_node.SetNthControlPointPosition(0, startpoint)
+                break
+            else: 
+                pass
+    
+    return endpoints_node
+
+def ica_endpoint_check(endpoints_node, masked_volume_array, aff):
+    """
+    Checks that both ens of the aortic arch (AA), if present, have one associated endpoint.
+    To do that, it looks at the bottom slice of the volume and analyzes the presence 
+    of large connected components. Once it has recognized all large connected components,
+    it checks if any endpoint is at an Euclidean distance of less than 50 mm with respect to the
+    center of mass of the bottom islands. 
+    
+    Paremeters
+    ----------
+    endpoints_node : vtkMRMLMarkupsFiducialNode
+        MRML node with all endpoints from the automatic endpoint detection.
+    masked_volume_array : numpy.array
+        Binary array of the segmentation mask after removal of the foreground voxels
+        of the upper 85% of the segmentation's bounding box.
+    aff : numpy.array or array-like object. Shape: 4 x 4
+        Affine matrix corresponding to the nifti file. RAS to ijk transformation.
+
+    Returns
+    -------
+    endpoints_node : vtkMRMLMarkupsFiducialNode
+        Updated MRML node with all endpoints from the automatic endpoint detection.
+
+    """
+    # We define a distance factor in case we are dealing with images of a different resolution
+    # We always assume we have close-to-isotropic voxels. 0.43 corresponds to the reference voxel size
+    # used to empirically define certain reference values
+    factor = abs(0.43 / aff[0, 0])
+    # For AA island validation (number of foreground voxels in the bottom slice)
+    # Empirically, we found that 500 is a good threshold for a voxel size of 0.43 * 0.43 * 0.4 mm^3
+    reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
+    voxel_size = np.prod([aff[idx, idx] for idx in range(3)])
+    threshold_counts = abs(round(500 * (reference_voxel_size / voxel_size)))
+    # For AA endpoints check (distance from bottom slice)
+    threshold_distance = 50 * 0.4 / aff[2, 2]
+
+    # Divide into different connected components of the bottom slice
+    label_mask = measure.label(masked_volume_array[0])
+    properties = measure.regionprops(label_mask.astype(np.int), label_mask.astype(np.int))
+    
+    # Get rid of all components below the threshold_counts
+    # This is done because we expect here to only have bottom slices of the
+    # ascending and descending aorta. This way we get rid of any other component
+    _, counts = np.unique(label_mask, return_counts=True)
+    delete_idx = []
+    for idx, count in enumerate(counts):
+        if count < threshold_counts:
+            delete_idx.append(idx - 1)
+    properties = list(np.delete(properties, delete_idx))
+    
+    # Access and store the coordinates of centroids in RAS coordinates
+    # Notice that we set the S coordinate to 1.0 for all centroids
+    centroids = np.zeros(shape = (len(properties), 3))
+    for idx, prop in enumerate(properties):
+        centroids[idx] = np.matmul(aff, np.append(np.array(prop.centroid)[[1, 0]], [1.0, 1.0]))[:3]
+
+    # Compute distance from each endpoint to all centroids of components in the bottom slice
+    # The goal is to check that each component (generallly there should be 2) has one endpoint
+    # nearby
+    for idx in range(endpoints_node.GetNumberOfControlPoints()):
+        endpoint = np.array(endpoints_node.GetCurvePoints().GetPoint(idx))
+        delete_idx = None
+        for idx_centroids, centroid in enumerate(centroids):
+            # If a connnected component is found close to an endpoint, we accept it as correctly placed
+            if np.linalg.norm(centroid - endpoint) < threshold_distance: # Threshold at 50 mm
+                delete_idx = idx_centroids
+        if delete_idx is not None:
+            centroids = np.delete(centroids, delete_idx, axis=0)
+
+    # If any connected components survive, it means that no enpoints were found close by
+    if len(centroids) > 0:
+        print("{} ICA islands do not have associated endpoints".format(len(centroids)))
+        # This way, we convert the remaining centroinds to endpoints
+        for centroid in centroids:
+            print("Adding endpoint at", centroid)
+            print()
+            endpoints_node.AddControlPoint(np.array(centroid))
+
+    # Now all that's left is to ensure that the startpoint is placed at the descending aorta
+    # (most proximal point from femoral access in endovascular interventions)
+            
+    # Select distal AA endpoint as startpoint (in some cases, the distal LSA endpoint is closer to the origin)
+    # The criteria will be to choose the AA endpoint (at < 50 mm from bottom slice) that is closest to the reference point
+    # Check every other point's distance to origin (ijk)
+    distance_to_reference = []
+    for idx in range(endpoints_node.GetNumberOfControlPoints()):
+        endpoint = np.matmul(np.linalg.inv(aff), np.append(np.array(endpoints_node.GetCurvePoints().GetPoint(idx)), 1.0))[:3]
+        # Reference point set at [350, 0, 0] in LAS coordinates
+        if nib.orientations.aff2axcodes(aff) == ("L", "A", "S"):
+            distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, label_mask.shape[1], 0.0])))
+        elif nib.orientations.aff2axcodes(aff) == ("L", "P", "S"):
+            distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
+    print(distance_to_reference)
+    # Get order from closest to furthest
+    sorted_distance_idx = np.argsort(distance_to_reference)
+    for idx in sorted_distance_idx:
+        startpoint = np.array(endpoints_node.GetCurvePoints().GetPoint(idx))
+        if np.matmul(np.linalg.inv(aff), np.append(startpoint, 1.0))[2] > threshold_distance:
+            print("Startpoint {} found is not in the ICA region".format(idx))
+            pass
+        else:
+            # Make sure that startpoint is close to the bottom slice
+            if np.matmul(np.linalg.inv(aff), np.append(startpoint, 1.0))[2] < threshold_distance and idx == 0:
+                print("Original startpoint is at right ICA")
                 break
             # If it is not, set next closest endpoint to reference as startpoint if it is closer to bottom slice
             elif np.matmul(np.linalg.inv(aff), np.append(startpoint, 1.0))[2] < threshold_distance and idx != 0:

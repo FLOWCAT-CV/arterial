@@ -52,7 +52,8 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", 
     """
     # Define paths from enviornment variables. These should be set prior to execution in ~/.bashrc or equivalent
     SLICER_PATH = os.environ["slicer_path"]
-    RUN_CENTERLINE_EXTRACTION_SCRIPT = os.path.join(os.environ["arterial_dir"], "centerline_extraction/run_centerline_extraction_slicer.py")
+    # RUN_CENTERLINE_EXTRACTION_SCRIPT = os.path.join(os.environ["arterial_dir"], "centerline_extraction/run_centerline_extraction_slicer.py")
+    RUN_CENTERLINE_EXTRACTION_SCRIPT = "/home/vhir/github/new_arterial/arterial/arterial/centerline_extraction/run_centerline_extraction_slicer.py"
     if mode == "vessels":
         # Perform vessel segmentation and centerline extraction. This generates segmentations and centerlines in case_dir/centerlines and case_dir/segmentations
         if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     case_dir = args.case_dir
-    mode = parser.mode
+    mode = args.mode
     fast_segmentation = args.fast_segmentation
 
     if mode == "vessels":
@@ -119,7 +120,7 @@ if __name__ == "__main__":
         master_volume_node = getNode("{}_intracranial_vessel_segmentation".format(os.path.basename(case_dir)))
 
         # Perform segmentation from binary mask
-        segmentation_node, masked_volume_array = preprocessing_intracranial_vessels(case_dir, master_volume_node, fast_segmentation)
+        segmentation_node, masked_volume_array = preprocessing_intracranial_vessels(case_dir, master_volume_node)
         # Perform centerline extraction. Creates centerlines.vtk
         intracranial_centerline_extraction(case_dir, segmentation_node, masked_volume_array)
     elif mode == "thrombus":

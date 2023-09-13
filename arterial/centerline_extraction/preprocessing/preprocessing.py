@@ -99,7 +99,7 @@ def preprocessing_vessels(case_dir, master_volume_node, fast_segmentation = Fals
     # Get voxel size from image
     voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
     # Compute approximate number of voxels
-    number_of_voxels_threshold = round(5000 * (reference_voxel_size / voxel_size))
+    number_of_voxels_threshold = round(8000 * (reference_voxel_size / voxel_size))
     # Remove small islands
     segment_editor_widget.setActiveEffectByName("Islands")
     effect = segment_editor_widget.activeEffect()
@@ -118,13 +118,13 @@ def preprocessing_vessels(case_dir, master_volume_node, fast_segmentation = Fals
     decimator.Update()
     # Save segmentation as vtk
     vtk_writer = vtk.vtkPolyDataWriter()
-    vtk_writer.SetFileName(os.path.join(case_dir, "intracranial_vessel_segmentation.vtk"))
+    vtk_writer.SetFileName(os.path.join(case_dir, "vessel_segmentation.vtk"))
     vtk_writer.SetInputConnection(decimator.GetOutputPort())
     vtk_writer.Write()
     # Save segmentation as stl
     stl_writer = vtk.vtkSTLWriter()
     stl_writer.SetFileTypeToBinary()
-    stl_writer.SetFileName(os.path.join(case_dir, "intracranial_vessel_segmentation.stl"))
+    stl_writer.SetFileName(os.path.join(case_dir, "vessel_segmentation.stl"))
     stl_writer.SetInputConnection(decimator.GetOutputPort())
     stl_writer.Write()
 
@@ -233,7 +233,7 @@ def preprocessing_intracranial_vessels(case_dir, master_volume_node):
     segmentation_node.GetClosedSurfaceRepresentation(segmentation_node.GetSegmentation().GetNthSegmentID(0), surface_model)
     # Decimating model
     decimator = vtk.vtkDecimatePro()
-    decimator.SetTargetReduction(0.8)
+    decimator.SetTargetReduction(0.5)
     decimator.AddInputData(surface_model)
     decimator.Update()
     # Save segmentation as vtk

@@ -8,9 +8,9 @@ import pickle
 
 import torch
 
-from arterial.vessel_labelling.utils import node_transform, predict_vessel_types, save_predicted_graph
+from arterial.vessel_labelling.utils import node_transform, predict_vessel_types, save_predicted_graph, predict_intracranial_vessel_types
 
-def perform_inference(case_dir):
+def perform_inference(case_dir, mode = "vessels"):
     """
     Performs inference of simple graph with a trained graph U-Net [1] model. 
     
@@ -34,22 +34,31 @@ def perform_inference(case_dir):
     -------
 
     """
+    if mode == "vessels":
+        name_centerline_files = "vessel"
+        # Load the edge form graph (graph.pickle) created at centerlineGraph.py
+        with open(os.path.join(case_dir, "{}_graph_simple.pickle".format(name_centerline_files)), "rb") as f:
+            graph = pickle.load(f)
 
-    # Load the edge form graph (graph.pickle) created at centerlineGraph.py
-    with open(os.path.join(case_dir, "graph_simple.pickle"), "rb") as f:
-        graph = pickle.load(f)
+        # Pass the graph to node form
+        node_form_graph = node_transform(graph)
+        
+        # Load the trained graph U-Net model for inference
+        print(os.environ["arterial_dir"])
+        model_path = os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/vessels/model.pth")
+        # Use GPU if available
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        model = torch.load(model_path, map_location=torch.device(device))
 
-    # Pass the graph to node form
-    node_form_graph = node_transform(graph)
-    
-    # Load the trained graph U-Net model for inference
-    model_path = os.path.join(os.environ["arterial_dir"], "vessel_labelling/model/model.pth")
-    # Use GPU if available
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = torch.load(model_path, map_location=torch.device(device))
+        # Perform inference with the trained model
+        predicted_vessels_types = predict_vessel_types(model, node_form_graph)
+    elif mode == "intracranial_vessels":
+        name_centerline_files = "intracranial_vessel"
+        # Load the edge form graph (graph.pickle) created at centerlineGraph.py
+        with open(os.path.join(case_dir, "{}_graph_simple.pickle".format(name_centerline_files)), "rb") as f:
+            graph = pickle.load(f)
 
-    # Perform inference with the trained model
-    predicted_vessels_types = predict_vessel_types(model, node_form_graph)
+        predicted_vessels_types = predict_intracranial_vessel_types(graph, case_dir)
 
     # Save the predicted graph in edge form as graph_pred.pickle
-    save_predicted_graph(case_dir, graph, predicted_vessels_types)
+    save_predicted_graph(case_dir, graph, predicted_vessels_types, mode)
