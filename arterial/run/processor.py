@@ -2,7 +2,7 @@
 
 import os
 
-from arterial.segmentation.segmenter import Segmenter
+from arterial.segmentation.segmenter import VesselSegmenter, ThrombusSegmenter
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
 from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
@@ -52,6 +52,7 @@ class ArterialProcessor():
         """
         # Parameters from parser
         self.case_dir = parser.case_dir
+        self.mode = parser.mode
         self.no_display = parser.no_display
         self.skip_segmentation = parser.skip_segmentation
         self.fast_segmentation = parser.fast_segmentation
@@ -62,9 +63,10 @@ class ArterialProcessor():
         self.skip_feature_extraction = parser.skip_feature_extraction
 
         # Initialize module classes
-        self.segmenter = Segmenter(self.case_dir)
-        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.no_display, self.fast_segmentation)
-        self.vessel_labeller = VesselLabeller(self.case_dir)
+        self.vessel_segmenter = VesselSegmenter(self.case_dir)
+        self.thrombus_segmenter = ThrombusSegmenter(self.case_dir)
+        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, self.no_display, self.fast_segmentation)
+        self.vessel_labeller = VesselLabeller(self.case_dir, self.mode)
         self.feature_extractor = FeatureExtractor(self.case_dir)
 
     def perform_analysis(self):
@@ -107,13 +109,22 @@ class ArterialProcessor():
         """
         # Predicts segmentation by nnunet inference
         if not self.skip_segmentation:
-            if self.fast_segmentation:
-                print("Predicting segmentation (fast)...")
-                self.segmenter.predict_fast()
+            if self.mode == "vessels":
+                if self.fast_segmentation:
+                    print("Predicting segmentation (fast)...")
+                    self.vessel_segmenter.predict_fast()
+                    print("done \n")
+                else:
+                    print("Predicting segmentation (full)...")
+                    self.vessel_segmenter.predict_full()
+                    print("done \n")
+            elif self.mode == "intracranial_vessels":
+                print("Predicting intracranial segmentation...")
+                self.vessel_segmenter.predict_intracranial()
                 print("done \n")
-            else:
-                print("Predicting segmentation (full)...")
-                self.segmenter.predict_full()
+            elif self.mode == "thrombus":
+                print("Predicting thrombus segmentation...")
+                self.thrombus_segmenter.predict_patch_recentering()
                 print("done \n")
         else:
             print("Skipping segmentation \n")
@@ -144,20 +155,21 @@ class ArterialProcessor():
             print("Performing centerline extraction...")
             # Applies centerline preprocessing and extraction using Slicer and VMTK
             self.centerline_extractor.extract_centerline()
-            if not self.skip_branching:
-                print("Performing centerline branching...")
-                # Performs centerline model branching with VMTK
-                self.centerline_extractor.extract_branch_model()
-                print("done")
-            else:
-                print("Skipping centerline branching")
-            if not self.skip_clipping:
-                print("Performing surface model clipping...")
-                # Performs surface model clipping with VMTK
-                self.centerline_extractor.extract_clipped_model()
-                print("done")
-            else:
-                print("Skipping surface model clipping")
+            if self.mode == "vessels":
+                if not self.skip_branching:
+                    print("Performing centerline branching...")
+                    # Performs centerline model branching with VMTK
+                    self.centerline_extractor.extract_branch_model()
+                    print("done")
+                else:
+                    print("Skipping centerline branching")
+                if not self.skip_clipping:
+                    print("Performing surface model clipping...")
+                    # Performs surface model clipping with VMTK
+                    self.centerline_extractor.extract_clipped_model()
+                    print("done")
+                else:
+                    print("Skipping surface model clipping")
             # Creates array for easier centerline analysis
             self.centerline_extractor.postprocess_centerline()
             print("done \n")

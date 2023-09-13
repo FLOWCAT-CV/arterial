@@ -9,7 +9,7 @@ import pickle
 
 from arterial.vessel_labelling.preprocessing.utils import extract_features_for_labelling, make_graph_plot
 
-def build_simple_centerline_graph(case_dir):
+def build_simple_centerline_graph(case_dir, mode = "vessels"):
     """
     Creates and featurizes simple centerline graph for vessel labelling.
     
@@ -27,8 +27,15 @@ def build_simple_centerline_graph(case_dir):
     -------
 
     """
+    if mode == "vessels":
+        name_centerline_files = "vessel"
+    elif mode == "intracranial_vessels":
+        name_centerline_files = "intracranial_vessel"
+    elif mode == "thrombus":
+        name_centerline_files = "thrombus"
+
     # Get centerline_segments_array
-    centerline_segments_array = np.load(os.path.join(case_dir, "centerline_segments_array.npy"), allow_pickle = True)
+    centerline_segments_array = np.load(os.path.join(case_dir, "{}_centerline_segments_array.npy".format(name_centerline_files)), allow_pickle = True)
     # Get coordinates array from centerline_segments_array
     coordinate_array = centerline_segments_array[:, 0]
     # Get radius array from centerline_segments_array
@@ -89,6 +96,6 @@ def build_simple_centerline_graph(case_dir):
     # Featurizes simple_centerline_graph
     simple_centerline_graph = extract_features_for_labelling(simple_centerline_graph)
     # Save simplified graph and image for quick visualization
-    with open(os.path.join(case_dir, "graph_simple.pickle"), "wb") as f:
+    with open(os.path.join(case_dir, "{}_graph_simple.pickle".format(name_centerline_files)), "wb") as f:
         pickle.dump(simple_centerline_graph, f, protocol = 4)
-    make_graph_plot(case_dir, simple_centerline_graph, "graph_simple.png", label = "cell_id")
+    make_graph_plot(case_dir, simple_centerline_graph, "{}_graph_simple.png".format(name_centerline_files), label = "cell_id")

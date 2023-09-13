@@ -1,7 +1,7 @@
 #    Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
 from arterial.segmentation.inference import perform_inference_fast, perform_inference_full, perform_inference_intracranial
-from arterial.segmentation.inference import perform_inference_thrombus, perform_inference_thrombus_patch_recentering
+from arterial.segmentation.inference import perform_inference_thrombus, perform_dynamic_iterative_thrombus_inference
 
 class VesselSegmenter():
     """ 
@@ -146,7 +146,7 @@ class ThrombusSegmenter():
     
     def predict_patch_recentering(self):
         """
-        This method calls perform_inference_thrombus_patch_recentering to perform inference using a trained nnunet
+        This method calls perform_dynamic_iterative_thrombus_inference to perform inference using a trained nnunet
         model over a localized bimodal patch (NCCT + CTA) containing a suspected vessel occlusion.
         The CTA should be in nifti format, within the self.case_dir directory and with case_id being 
         the basename of the self.case_dir, the name convention used should be:
@@ -159,7 +159,7 @@ class ThrombusSegmenter():
         >>> {case_id}_thrombus_segmentation.nii.gz
         
         should be generated in the self.case_dir. This class acts as a wrapper
-        for the arterial.segmentation.inference.perform_inference_thrombus_patch_recentering() function. 
+        for the arterial.segmentation.inference.perform_dynamic_iterative_thrombus_inference() function. 
 
         Parmeters
         ---------
@@ -168,4 +168,4 @@ class ThrombusSegmenter():
         -------
 
         """
-        perform_inference_thrombus_patch_recentering(self.case_dir)
+        perform_dynamic_iterative_thrombus_inference(self.case_dir)

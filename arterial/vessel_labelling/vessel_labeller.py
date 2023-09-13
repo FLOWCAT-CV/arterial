@@ -8,7 +8,7 @@ class VesselLabeller():
     VesselLabeller class to perform vessel labelling over centerline model.   
     
     """
-    def __init__(self, case_dir):
+    def __init__(self, case_dir, mode):
         """
         Initializes object of the VesselLabeller class.
 
@@ -23,6 +23,7 @@ class VesselLabeller():
         """
 
         self.case_dir = case_dir
+        self.mode = mode
 
     def preprocessing(self):
         """
@@ -45,7 +46,7 @@ class VesselLabeller():
         -------
 
         """
-        build_simple_centerline_graph(self.case_dir)
+        build_simple_centerline_graph(self.case_dir, self.mode)
 
     def predict(self):
         """
@@ -67,4 +68,4 @@ class VesselLabeller():
         -------
 
         """
-        perform_inference(self.case_dir)
+        perform_inference(self.case_dir, self.mode)

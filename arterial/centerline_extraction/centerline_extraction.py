@@ -7,7 +7,7 @@ import vtk
 import numpy as np
 import nibabel as nib
 
-from utils import aortic_arch_endpoint_check, robust_end_point_detection, inspect_circular_centerlines, compute_frenet_serret, compute_curvature_and_torsion
+from utils import aortic_arch_endpoint_check, robust_end_point_detection, ica_endpoint_check, inspect_circular_centerlines, compute_frenet_serret, compute_curvature_and_torsion
 
 import signal
 from contextlib import contextmanager
@@ -63,7 +63,7 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
     if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
 
     # Get the affine matrix
-    affine = nib.load(os.path.join(case_dir, "{}_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
+    affine = nib.load(os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
 
     print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
     # Now, we iterate over all segments to perform centerline extraction separately
@@ -145,7 +145,7 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"centerlines{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, "centerlines", f"vessel_centerlines_{segment_id}.vtk"))
                 writer.Write()
         except TimeoutException as e:
             print("Timed out for {}.".format(segment_id))
@@ -188,7 +188,7 @@ def intracranial_centerline_extraction(case_dir, segmentation_node, masked_volum
     if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
 
     # Get the affine matrix
-    affine = nib.load(os.path.join(case_dir, "{}_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
+    affine = nib.load(os.path.join(case_dir, "{}_intracranial_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
 
     print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
     # Now, we iterate over all segments to perform centerline extraction separately
@@ -224,7 +224,7 @@ def intracranial_centerline_extraction(case_dir, segmentation_node, masked_volum
                 writer.Write()
 
                 # Extract the centerline of the segment_id segment
-                centerline_poly_data = extract_centerline(segmentation_node, segment_id, masked_volume_array, affine)
+                centerline_poly_data = extract_centerline(segmentation_node, segment_id, masked_volume_array, affine, intracranial = True)
 
                 # # Decimate centerline model (at the moment we do not use it)
                 # decimator = vtk.vtkDecimatePolylineFilter()
@@ -270,12 +270,12 @@ def intracranial_centerline_extraction(case_dir, segmentation_node, masked_volum
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"centerlines{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, "centerlines", f"intracranial_vessel_centerlines_{segment_id}.vtk"))
                 writer.Write()
         except TimeoutException as e:
             print("Timed out for {}.".format(segment_id))
 
-def extract_centerline(segmentation_node, segment_id, masked_volume_array, affine):  
+def extract_centerline(segmentation_node, segment_id, masked_volume_array, affine, intracranial = False):  
     """ 
     Extracts the centerline model node from the segmentation_node for the corresponding 
     segment_id using Slicer's VMTK extension.
@@ -291,6 +291,9 @@ def extract_centerline(segmentation_node, segment_id, masked_volume_array, affin
         of the upper 80% of the segmentation's bounding box.
     affine : numpy.array or array-like object. Shape: 4 x 4
         Affine matrix corresponding to the nifti file. RAS to ijk transformation.
+    intracranial: bool, default: False
+        If not intracranial, checks that the AA endpoints are well-placed. If intracranial, 
+        it checks that both ICAs have endpoints and that the startpoint is the left ICA.
 
     Returns
     -------
@@ -331,20 +334,28 @@ def extract_centerline(segmentation_node, segment_id, masked_volume_array, affin
     vtk_aff.DeepCopy(aff_eye.ravel(), vtk_aff)
 
     # Get endpoints node
-    endpointsNode = slicer.util.getNode(extract_centerline_widget._parameterNode.GetNodeReferenceID("EndPoints"))
+    endpoints_node = slicer.util.getNode(extract_centerline_widget._parameterNode.GetNodeReferenceID("EndPoints"))
 
-    # Check if both ends of the aortic arch have at least one endpoint
-    if segment_id == 0:
-        endpointsNode = aortic_arch_endpoint_check(endpointsNode, masked_volume_array, affine)
+    if intracranial:
+        if segment_id == 0:
+            pass
+            # endpoints_node = ica_endpoint_check(endpoints_node, masked_volume_array, affine)
+    else:
+        # Check if both ends of the aortic arch have at least one endpoint
+        if segment_id == 0:
+            endpoints_node = aortic_arch_endpoint_check(endpoints_node, masked_volume_array, affine)
 
     print("Relocating endpoints for robust centerline extraction...")
     # Relocate endpoints for robust centerline extraction 
-    for idx in range(endpointsNode.GetNumberOfControlPoints()):
-        endpoint = np.array(endpointsNode.GetCurvePoints().GetPoint(idx))
-        newEndpoint = robust_end_point_detection(endpoint, segmentation_array, aff_eye) # Center of mass of closest component method
-        endpointsNode.SetNthControlPointPosition(idx, newEndpoint[0],
-                                                      newEndpoint[1],
-                                                      newEndpoint[2])
+    for idx in range(endpoints_node.GetNumberOfControlPoints()):
+        endpoint = np.array(endpoints_node.GetCurvePoints().GetPoint(idx))
+        if idx == 0:
+            new_endpoint = robust_end_point_detection(endpoint, segmentation_array, aff_eye, n = 30) # Center of mass of closest component method
+        else:
+            new_endpoint = robust_end_point_detection(endpoint, segmentation_array, aff_eye) # Center of mass of closest component method
+        endpoints_node.SetNthControlPointPosition(idx, new_endpoint[0],
+                                                       new_endpoint[1],
+                                                       new_endpoint[2])
 
     print("Extracting centerline...")
     # Create new Surface model node for the centerline model
