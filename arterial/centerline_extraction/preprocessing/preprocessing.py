@@ -219,7 +219,7 @@ def preprocessing_intracranial_vessels(case_dir, master_volume_node):
     # Get voxel size from image
     voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_intracranial_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
     # Compute approximate number of voxels
-    number_of_voxels_threshold = round(1000 * (reference_voxel_size / voxel_size))
+    number_of_voxels_threshold = round(3000 * (reference_voxel_size / voxel_size))
     # Remove small islands
     segment_editor_widget.setActiveEffectByName("Islands")
     effect = segment_editor_widget.activeEffect()

@@ -58,14 +58,14 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", 
         # Perform vessel segmentation and centerline extraction. This generates segmentations and centerlines in case_dir/centerlines and case_dir/segmentations
         if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
             if fast_segmentation:
-                os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+                os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -fast t -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
             else:
-                os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+                os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
         else:
             if fast_segmentation:
-                os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+                os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m vessels -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
             else:
-                os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+                os.system("{} --no-splash --python-script {} -case_dir {} -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
     if mode == "intracranial_vessels":
         # Perform intracranial vessel segmentation and centerline extraction. This generates intracranial_segmentations and intracranial_centerlines in case_dir/centerlines and case_dir/segmentations
         if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     case_dir = args.case_dir
     mode = args.mode
     fast_segmentation = args.fast_segmentation
-
+    
     if mode == "vessels":
         # Load volume and associate to node
         slicer.util.loadLabelVolume(os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir))))

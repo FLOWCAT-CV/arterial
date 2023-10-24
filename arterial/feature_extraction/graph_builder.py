@@ -39,7 +39,7 @@ def build_centerline_graph(case_dir):
     skip_cell_ids = []
     while not sanity_check:
         # Get centerline_segments_array
-        centerline_segments_array = np.load(os.path.join(case_dir, "centerline_segments_array.npy"), allow_pickle = True)
+        centerline_segments_array = np.load(os.path.join(case_dir, "vessel_centerline_segments_array.npy"), allow_pickle = True)
         # Get coordinates array from centerline_segments_array
         coordinate_array = centerline_segments_array[:, 0]
         # Get radius array from centerline_segments_array

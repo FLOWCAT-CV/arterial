@@ -105,7 +105,7 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
             distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
         elif nib.orientations.aff2axcodes(aff) == ("L", "P", "S"):
             distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, label_mask.shape[1], 0.0])))
-    print(distance_to_reference)
+
     # Get order from closest to furthest
     sorted_distance_idx = np.argsort(distance_to_reference)
     for idx in sorted_distance_idx:

@@ -44,7 +44,6 @@ def perform_inference(case_dir, mode = "vessels"):
         node_form_graph = node_transform(graph)
         
         # Load the trained graph U-Net model for inference
-        print(os.environ["arterial_dir"])
         model_path = os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/vessels/model.pth")
         # Use GPU if available
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
