@@ -200,7 +200,7 @@ class ArterialProcessor():
             # Makes and featurizes simple graph
             self.vessel_labeller.preprocessing()
             # Performs inference over simple graph for vessel labelling
-            self.vessel_labeller.predict()
+            # self.vessel_labeller.predict()
             print("done \n")
         else:
             print("Skipping vessel labelling \n")

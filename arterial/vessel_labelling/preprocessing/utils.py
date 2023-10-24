@@ -130,7 +130,7 @@ def make_graph_plot(case_dir, graph, filename, label = None):
     # we use L and S coordinates (the view will be from the coronal plane, P axis)
     node_pos_dict_p = {}
     for n in graph.nodes():
-        node_pos_dict_p[n] = [graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
+        node_pos_dict_p[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
 
     if label is not None:
         edge_labels = nx.get_edge_attributes(graph, label)
@@ -138,6 +138,12 @@ def make_graph_plot(case_dir, graph, filename, label = None):
         nx.draw_networkx_edge_labels(graph, node_pos_dict_p, edge_labels = edge_labels, ax=ax)
     else:
         nx.draw(graph, node_pos_dict_p, node_size=20, ax=ax)
+        
+    # Add labels to the plot
+    plt.text(1, 0.5, 'L', horizontalalignment='right', verticalalignment='center', transform=plt.gca().transAxes)
+    plt.text(0, 0.5, 'R', horizontalalignment='left', verticalalignment='center', transform=plt.gca().transAxes)
+    plt.text(0.5, 1, 'S', horizontalalignment='center', verticalalignment='top', transform=plt.gca().transAxes)
+    plt.text(0.5, 0, 'I', horizontalalignment='center', verticalalignment='bottom', transform=plt.gca().transAxes)
 
     plt.savefig(os.path.join(case_dir, filename))
     plt.close()
