@@ -105,7 +105,7 @@ def extract_features_for_labelling(simple_centerline_graph):
 
     return simple_centerline_graph
 
-def make_plot_graph(case_dir, graph, filename = None, label = None, subplot = None):
+def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = None):
     """
     Makes matplotlib.pyplot figure of the coronal plane of a networkx graph.
 
