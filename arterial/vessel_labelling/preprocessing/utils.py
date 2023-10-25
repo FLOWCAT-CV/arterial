@@ -72,7 +72,7 @@ def extract_features_for_labelling(simple_centerline_graph):
         coordinate_array = simple_centerline_graph[src][dst]["coordinate_array"]
         radius_array = simple_centerline_graph[src][dst]["radius_array"]
 
-        simple_centerline_graph[src][dst]["pos"] = np.sum(coordinate_array, axis = 0) / len(coordinate_array)
+        simple_centerline_graph[src][dst]["pos"] = np.mean(coordinate_array, axis = 0)
         
         # Build edge feature array and dict
         simple_centerline_graph[src][dst]["features_dict"] = {}
@@ -97,15 +97,15 @@ def extract_features_for_labelling(simple_centerline_graph):
         simple_centerline_graph[src][dst]["features_dict"]["distal bifurcation position r"] = coordinate_array[-1][0]
         simple_centerline_graph[src][dst]["features_dict"]["distal bifurcation position a"] = coordinate_array[-1][1]
         simple_centerline_graph[src][dst]["features_dict"]["distal bifurcation position s"] = coordinate_array[-1][2]
-        simple_centerline_graph[src][dst]["features_dict"]["pos r"] = np.sum(coordinate_array, axis = 0)[0] / len(coordinate_array)
-        simple_centerline_graph[src][dst]["features_dict"]["pos a"] = np.sum(coordinate_array, axis = 0)[1] / len(coordinate_array)
-        simple_centerline_graph[src][dst]["features_dict"]["pos s"] = np.sum(coordinate_array, axis = 0)[2] / len(coordinate_array)
+        simple_centerline_graph[src][dst]["features_dict"]["pos r"] = np.mean(coordinate_array, axis = 0)[0]
+        simple_centerline_graph[src][dst]["features_dict"]["pos a"] = np.mean(coordinate_array, axis = 0)[1]
+        simple_centerline_graph[src][dst]["features_dict"]["pos s"] = np.mean(coordinate_array, axis = 0)[2]
         # Now the array
         simple_centerline_graph[src][dst]["features"] = np.array(list(simple_centerline_graph[src][dst]["features_dict"].values()))
 
     return simple_centerline_graph
 
-def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = None):
+def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = None, show = False):
     """
     Makes matplotlib.pyplot figure of the coronal plane of a networkx graph.
 
@@ -167,9 +167,12 @@ def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = No
     plt.text(0.5, 0.01, 'I', horizontalalignment='center', verticalalignment='bottom', transform=ax.transAxes)
 
     if subplot is None:
-        plt.show()
-        plt.savefig(os.path.join(case_dir, filename))
-        plt.close()
+        if filename is not None:
+            plt.savefig(os.path.join(case_dir, filename))
+        if show:
+            plt.show()
+        else:
+            plt.close()
 
 # def make_graph_plot(case_dir, graph, filename, label = None):
 #     """
