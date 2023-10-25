@@ -663,12 +663,12 @@ def select_configuration(case_dir, centerline_graph):
         radius_r, radius_l = [], []
 
         for node in graph:
-            if graph.nodes[node]["vessel type name"] == "RVA":
+            if graph.nodes[node]["vessel_type_name"] == "RVA":
                 try:
                     radius_r.append(graph.nodes[node]["features femoral"]["radius"])
                 except:
                     pass
-            elif graph.nodes[node]["vessel type name"] == "LVA":
+            elif graph.nodes[node]["vessel_type_name"] == "LVA":
                 try:
                     radius_l.append(graph.nodes[node]["features femoral"]["radius"])
                 except:

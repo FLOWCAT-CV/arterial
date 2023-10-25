@@ -234,8 +234,8 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
         # If we had removed edges in the beggining, we add them again to compute accumulated features
         for src, dst in subgraphs_union_edges:
             centerline_graph.add_edge(src, dst, cell_id = centerline_graph.nodes[dst]["cell_id"])
-            centerline_graph[src][dst]["vessel type"] = centerline_graph.nodes[dst]["vessel type"]
-            centerline_graph[src][dst]["vessel type name"] = centerline_graph.nodes[dst]["vessel type name"]
+            centerline_graph[src][dst]["vessel_type"] = centerline_graph.nodes[dst]["vessel_type"]
+            centerline_graph[src][dst]["vessel_type_name"] = centerline_graph.nodes[dst]["vessel_type_name"]
             centerline_graph[src][dst]["is_artificial"] = True
             # Empty indices to identify artificial edges
             centerline_graph[src][dst]["indices"] = np.array([])
@@ -297,7 +297,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                                     centerline_graph.nodes[node][f"features {access}"]["accumulated length from access"] = centerline_graph.nodes[node_aux][f"features {access}"]["accumulated length from access"] + np.linalg.norm(centerline_graph.nodes[node]["pos"] - centerline_graph.nodes[node_aux]["pos"])
         # We also add the vessel label as node feature
         for node in centerline_graph:
-            centerline_graph.nodes[node][f"features {access}"]["vessel type"] = centerline_graph.nodes[node]["vessel type"]
+            centerline_graph.nodes[node][f"features {access}"]["vessel_type"] = centerline_graph.nodes[node]["vessel_type"]
 
     # Overwrite centerline_graph
     with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:

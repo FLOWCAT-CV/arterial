@@ -39,7 +39,7 @@ def build_centerline_graph(case_dir):
     skip_cell_ids = []
     while not sanity_check:
         # Get centerline_segments_array
-        centerline_segments_array = np.load(os.path.join(case_dir, "vessel_centerline_segments_array.npy"), allow_pickle = True)
+        centerline_segments_array = np.load(os.path.join(case_dir, "vessels_centerline_segments_array.npy"), allow_pickle = True)
         # Get coordinates array from centerline_segments_array
         coordinate_array = centerline_segments_array[:, 0]
         # Get radius array from centerline_segments_array
@@ -80,8 +80,8 @@ def build_centerline_graph(case_dir):
                         centerline_graph.add_node(total_nodes, pos = position)
                         centerline_graph.nodes[total_nodes]["radius"] = radius_array[cell_id][idx]
                         centerline_graph.nodes[total_nodes]["cell_id"] = cell_id
-                        centerline_graph.nodes[total_nodes]["vessel type"] = predicted_vessel_types[cell_id]
-                        centerline_graph.nodes[total_nodes]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                        centerline_graph.nodes[total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
+                        centerline_graph.nodes[total_nodes]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                         total_nodes += 1
                         previous_position = position
                     # If distance from last sampled node is larger than selected SAMPLE_NODE_EVERY_MM, add a node with cell_id and an edge to the previous sample 
@@ -90,12 +90,12 @@ def build_centerline_graph(case_dir):
                         centerline_graph.add_node(total_nodes, pos = position)
                         centerline_graph.nodes[total_nodes]["radius"] = radius_array[cell_id][idx]
                         centerline_graph.nodes[total_nodes]["cell_id"] = cell_id
-                        centerline_graph.nodes[total_nodes]["vessel type"] = predicted_vessel_types[cell_id]
-                        centerline_graph.nodes[total_nodes]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                        centerline_graph.nodes[total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
+                        centerline_graph.nodes[total_nodes]["vessel_type name"] = predicted_vessel_type_names[cell_id]
                         centerline_graph.add_edge(total_nodes - 1, total_nodes)
                         centerline_graph[total_nodes - 1][total_nodes]["cell_id"] = cell_id
-                        centerline_graph[total_nodes - 1][total_nodes]["vessel type"] = predicted_vessel_types[cell_id]
-                        centerline_graph[total_nodes - 1][total_nodes]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                        centerline_graph[total_nodes - 1][total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
+                        centerline_graph[total_nodes - 1][total_nodes]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                         centerline_graph[total_nodes - 1][total_nodes]["indices"] = np.arange(previous_idx, idx)
                         centerline_graph[total_nodes - 1][total_nodes]["coordinate_array"] = coordinate_array[cell_id][centerline_graph[total_nodes - 1][total_nodes]["indices"]]
                         centerline_graph[total_nodes - 1][total_nodes]["radius_array"] = radius_array[cell_id][centerline_graph[total_nodes - 1][total_nodes]["indices"]]
@@ -111,12 +111,12 @@ def build_centerline_graph(case_dir):
                             centerline_graph.add_node(total_nodes, pos = position)
                             centerline_graph.nodes[total_nodes]["radius"] = radius_array[cell_id][idx]
                             centerline_graph.nodes[total_nodes]["cell_id"] = cell_id
-                            centerline_graph.nodes[total_nodes]["vessel type"] = predicted_vessel_types[cell_id]
-                            centerline_graph.nodes[total_nodes]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                            centerline_graph.nodes[total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
+                            centerline_graph.nodes[total_nodes]["vessel_type name"] = predicted_vessel_type_names[cell_id]
                             centerline_graph.add_edge(total_nodes - 1, total_nodes)
                             centerline_graph[total_nodes - 1][total_nodes]["cell_id"] = cell_id
-                            centerline_graph[total_nodes - 1][total_nodes]["vessel type"] = predicted_vessel_types[cell_id]
-                            centerline_graph[total_nodes - 1][total_nodes]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                            centerline_graph[total_nodes - 1][total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
+                            centerline_graph[total_nodes - 1][total_nodes]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                             centerline_graph[total_nodes - 1][total_nodes]["indices"] = np.arange(previous_idx, idx)
                             centerline_graph[total_nodes - 1][total_nodes]["coordinate_array"] = coordinate_array[cell_id][centerline_graph[total_nodes - 1][total_nodes]["indices"]]
                             centerline_graph[total_nodes - 1][total_nodes]["radius_array"] = radius_array[cell_id][centerline_graph[total_nodes - 1][total_nodes]["indices"]]
@@ -127,11 +127,11 @@ def build_centerline_graph(case_dir):
                             centerline_graph.nodes[total_nodes - 1]["pos"] = position
                             centerline_graph.nodes[total_nodes - 1]["radius"] = radius_array[cell_id][idx]
                             centerline_graph.nodes[total_nodes - 1]["cell_id"] = cell_id
-                            centerline_graph.nodes[total_nodes - 1]["vessel type"] = predicted_vessel_types[cell_id]
-                            centerline_graph.nodes[total_nodes - 1]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                            centerline_graph.nodes[total_nodes - 1]["vessel_type"] = predicted_vessel_types[cell_id]
+                            centerline_graph.nodes[total_nodes - 1]["vessel_type name"] = predicted_vessel_type_names[cell_id]
                             centerline_graph[total_nodes - 2][total_nodes - 1]["cell_id"] = cell_id
-                            centerline_graph[total_nodes - 2][total_nodes - 1]["vessel type"] = predicted_vessel_types[cell_id]
-                            centerline_graph[total_nodes - 2][total_nodes - 1]["vessel type name"] = predicted_vessel_type_names[cell_id]
+                            centerline_graph[total_nodes - 2][total_nodes - 1]["vessel_type"] = predicted_vessel_types[cell_id]
+                            centerline_graph[total_nodes - 2][total_nodes - 1]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                             centerline_graph[total_nodes - 2][total_nodes - 1]["indices"] = np.append(centerline_graph[total_nodes - 2][total_nodes - 1]["indices"], np.arange(previous_idx, idx))
                             centerline_graph[total_nodes - 2][total_nodes - 1]["coordinate_array"] = coordinate_array[cell_id][centerline_graph[total_nodes - 2][total_nodes - 1]["indices"]]
                             centerline_graph[total_nodes - 2][total_nodes - 1]["radius_array"] = radius_array[cell_id][centerline_graph[total_nodes - 2][total_nodes - 1]["indices"]]

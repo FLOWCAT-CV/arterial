@@ -42,7 +42,7 @@ def get_single_segments_vessel_type(centerline_graph):
         vessel_type_list = []
         # Iterates over all edges of the simple graph to find unique vessel types
         for node in centerline_graph:
-            vessel_type = centerline_graph.nodes[node]["vessel type name"]
+            vessel_type = centerline_graph.nodes[node]["vessel_type_name"]
             if vessel_type != "other" and vessel_type not in vessel_type_list:
                 vessel_type_list.append(vessel_type)
 
@@ -229,7 +229,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
         aortic_arch_coordinates = np.ndarray([0, 3])
         # Store all aortic arch coordinates
         for node in centerline_graph:
-            if centerline_graph.nodes[node]["vessel type name"] == "AA":
+            if centerline_graph.nodes[node]["vessel_type_name"] == "AA":
                 aortic_arch_coordinates = np.append(aortic_arch_coordinates, [centerline_graph.nodes[node]["pos"]], axis = 0)
         # Compute center of mass as mean position of all aortic arch nodes
         return np.mean(aortic_arch_coordinates, axis = 0)
@@ -346,7 +346,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
 
     # Select the key for node identifier acoording to the selector
     if identifier_type == "vessel_type":
-        key_name = "vessel type name"
+        key_name = "vessel_type_name"
     elif identifier_type == "cell_id":
         key_name = "cell_id"
     else:

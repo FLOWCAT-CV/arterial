@@ -52,8 +52,7 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", 
     """
     # Define paths from enviornment variables. These should be set prior to execution in ~/.bashrc or equivalent
     SLICER_PATH = os.environ["slicer_path"]
-    # RUN_CENTERLINE_EXTRACTION_SCRIPT = os.path.join(os.environ["arterial_dir"], "centerline_extraction/run_centerline_extraction_slicer.py")
-    RUN_CENTERLINE_EXTRACTION_SCRIPT = "/home/vhir/github/new_arterial/arterial/arterial/centerline_extraction/run_centerline_extraction_slicer.py"
+    RUN_CENTERLINE_EXTRACTION_SCRIPT = os.path.join(os.environ["arterial_dir"], "centerline_extraction/run_centerline_extraction_slicer.py")
     if mode == "vessels":
         # Perform vessel segmentation and centerline extraction. This generates segmentations and centerlines in case_dir/centerlines and case_dir/segmentations
         if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
@@ -65,7 +64,7 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", 
             if fast_segmentation:
                 os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m vessels -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
             else:
-                os.system("{} --no-splash --python-script {} -case_dir {} -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+                os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
     if mode == "intracranial_vessels":
         # Perform intracranial vessel segmentation and centerline extraction. This generates intracranial_segmentations and intracranial_centerlines in case_dir/centerlines and case_dir/segmentations
         if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1

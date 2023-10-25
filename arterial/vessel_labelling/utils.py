@@ -144,11 +144,9 @@ def save_predicted_graph(case_dir, graph, predicted_vessels, mode = "vessels"):
     
     """
     if mode == "vessels":
-        name_centerline_files = "vessel"
         edge_types = dict(zip([idx for idx in range(14)], 
                             ["other", "AA", "BT", "RCCA", "LCCA", "RSA", "LSA", "RVA", "LVA", "RICA", "LICA", "RECA", "LECA", "BA"]))
     elif mode == "intracranial_vessels":
-        name_centerline_files = "intracranial_vessel"
         edge_types = dict(zip([idx for idx in range(8)], 
                         ["other", "LICA", "RICA", "BA", "LM1", "RM1", "LM2", "RM2", "LA1"]))
     # Define edge_types dict
@@ -167,14 +165,14 @@ def save_predicted_graph(case_dir, graph, predicted_vessels, mode = "vessels"):
     for src, dst in graph.edges:
         predicted_graph.add_edge(src, dst)
         predicted_graph[src][dst]["cell_id"] = graph[src][dst]["cell_id"]
-        predicted_graph[src][dst]["vessel type"] = predicted_vessels[graph[src][dst]["cell_id"]]
-        predicted_graph[src][dst]["vessel type name"] = edge_types[predicted_vessels[graph[src][dst]["cell_id"]]]
+        predicted_graph[src][dst]["vessel_type"] = predicted_vessels[graph[src][dst]["cell_id"]]
+        predicted_graph[src][dst]["vessel_type_name"] = edge_types[predicted_vessels[graph[src][dst]["cell_id"]]]
         predicted_graph[src][dst]["features"] = graph[src][dst]["features"]
 
     # Save the graph and image for quick visualization
-    with open(os.path.join(case_dir, "{}_graph_pred.pickle".format(name_centerline_files)), "wb") as f:
+    with open(os.path.join(case_dir, "{}_graph_pred.pickle".format(mode)), "wb") as f:
         pickle.dump(predicted_graph, f, protocol = 4)
-    make_graph_plot(case_dir, predicted_graph, "{}_graph_pred.png".format(name_centerline_files), label = "vessel type name")
+    make_graph_plot(case_dir, predicted_graph, "{}_graph_pred.png".format(mode), label = "vessel_type_name")
 
 class ArterialDatasetInference(InMemoryDataset):
     """

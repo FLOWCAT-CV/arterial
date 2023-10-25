@@ -24,7 +24,7 @@ def get_aortic_arch_node_coordinates(centerline_graph):
     # Iterate over all nodes
     for node in centerline_graph:
         # Collect node posiiton of those with AA vessel type
-        if centerline_graph.nodes[node]["vessel type name"] == "AA":
+        if centerline_graph.nodes[node]["vessel_type_name"] == "AA":
             aortic_arch_coordinates = np.append(aortic_arch_coordinates, [centerline_graph.nodes[node]["pos"]], axis = 0)
 
     return aortic_arch_coordinates
@@ -64,14 +64,14 @@ def get_aortic_arch_type(centerline_graph):
     B, D = None, None
     # Search for A, B and D
     for node in centerline_graph:
-        if centerline_graph.nodes[node]["vessel type name"] == "AA" and centerline_graph.nodes[node]["pos"][2] + centerline_graph.nodes[node]["radius"] > A:
+        if centerline_graph.nodes[node]["vessel_type_name"] == "AA" and centerline_graph.nodes[node]["pos"][2] + centerline_graph.nodes[node]["radius"] > A:
             # A will approximately be the position of the highest AA point plus its radius
             A = centerline_graph.nodes[node]["pos"][2] + centerline_graph.nodes[node]["radius"]
-        if centerline_graph.nodes[node]["vessel type name"] == "BT" and centerline_graph.nodes[node]["features femoral"]["blanking"] == 0 and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_bt_node_distance:
+        if centerline_graph.nodes[node]["vessel_type_name"] == "BT" and centerline_graph.nodes[node]["features femoral"]["blanking"] == 0 and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_bt_node_distance:
             # B will be the BT node closest to the AA without blanking
             B = centerline_graph.nodes[node]["pos"][2]
             closest_bt_node_distance = np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1))
-        if centerline_graph.nodes[node]["vessel type name"] == "LCCA" and centerline_graph.nodes[node]["features femoral"]["blanking"] == 0 and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_lcca_node_distance:
+        if centerline_graph.nodes[node]["vessel_type_name"] == "LCCA" and centerline_graph.nodes[node]["features femoral"]["blanking"] == 0 and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_lcca_node_distance:
             # D will be computed at the LCCA node closest to the AA without blanking
             D = 2 * centerline_graph.nodes[node]["radius"]
             closest_lcca_node_distance = np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1))
@@ -117,7 +117,7 @@ def get_bovine_arch(centerline_graph):
     closest_lcca_node = None
     # Search for the closest LCCA node
     for node in centerline_graph:
-        if centerline_graph.nodes[node]["vessel type name"] == "LCCA" and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_lcca_node_distance:
+        if centerline_graph.nodes[node]["vessel_type_name"] == "LCCA" and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_lcca_node_distance:
             closest_lcca_node = node
             closest_lcca_node_distance = np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1))
 
@@ -127,7 +127,7 @@ def get_bovine_arch(centerline_graph):
         for neighbor in centerline_graph.neighbors(closest_lcca_node):
             for src, dst in centerline_graph.edges(neighbor):
                 if not centerline_graph[src][dst]["is_artificial"]:
-                    vessel_type_names_in_contact.append(centerline_graph[src][dst]["vessel type name"])
+                    vessel_type_names_in_contact.append(centerline_graph[src][dst]["vessel_type_name"])
         # If the BT (type 2) is found in contact, bovine arch is detected
         if "BT" in vessel_type_names_in_contact:
             bovine_arch = 1
@@ -174,10 +174,10 @@ def get_arsa(centerline_graph):
     closest_rsa_node, closest_lsa_node = None, None
     # Iterate over all graph nodes to find RSA and LSA origin nodes
     for node in centerline_graph:
-        if centerline_graph.nodes[node]["vessel type name"] == "RSA" and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_rsa_node_distance:
+        if centerline_graph.nodes[node]["vessel_type_name"] == "RSA" and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_rsa_node_distance:
             closest_rsa_node = node
             closest_rsa_node_distance = np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1))
-        if centerline_graph.nodes[node]["vessel type name"] == "LSA" and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_lsa_node_distance:
+        if centerline_graph.nodes[node]["vessel_type_name"] == "LSA" and np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1)) < closest_lsa_node_distance:
             closest_lsa_node = node
             closest_lsa_node_distance = np.amin(np.linalg.norm(aortic_arch_coordinates - centerline_graph.nodes[node]["pos"], axis = 1))
     # If RSA origin is found, get segments in contact of non-artificial edges
@@ -186,7 +186,7 @@ def get_arsa(centerline_graph):
         for neighbor in centerline_graph.neighbors(closest_rsa_node):
             for src, dst in centerline_graph.edges(neighbor):
                 if not centerline_graph[src][dst]["is_artificial"]:
-                    vessel_type_names_in_contact.append(centerline_graph[src][dst]["vessel type name"])
+                    vessel_type_names_in_contact.append(centerline_graph[src][dst]["vessel_type_name"])
         # If AA is in contact of the RSA origin and the closest RSA node has a smaller hierarchy 
         # than the closest LSA node, ARSA is detected
         if "AA" in vessel_type_names_in_contact and centerline_graph.nodes[closest_rsa_node]["hierarchy femoral"] < centerline_graph.nodes[closest_lsa_node]["hierarchy femoral"]:
