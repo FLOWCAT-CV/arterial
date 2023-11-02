@@ -234,7 +234,7 @@ def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = No
     nx.draw_networkx_nodes(graph, node_pos_dict_p, node_size=20, ax=ax)
 
     # Create a list of colors
-    colors = plt.cm.seismic(np.linspace(0, 1, len(graph.edges())))
+    colors = plt.cm.jet(np.linspace(0, 1, len(graph.edges())))
 
     # Draw edges
     for (_, _, data), color in zip(graph.edges(data=True), colors):

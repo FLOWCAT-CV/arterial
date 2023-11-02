@@ -261,7 +261,44 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
 
     # Finally, we delete the additional segments and save the array as a npy file
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
+    # Clean centerline segments
+    final_centerline_segments_array = clean_centerlines(final_centerline_segments_array)
     np.save(os.path.join(case_dir, "{}_centerline_segments_array.npy".format(mode)), final_centerline_segments_array)
+
+def clean_centerlines(centerline_segments_array):
+    """
+    Iterates over all segments and over all points inside each segment to find repeated points.
+    If a repeated point is found, it is deleted.
+
+    Also, we delete a segment if the first and last point are the same.
+
+    Parameters
+    ----------
+    centerline_segments_array : numpy array
+        Array containing centerline segments.
+
+    Returns
+    -------
+    centerline_segments_array : numpy array
+        Array containing centerline segments without repeated points.
+    """
+    for segment_idx in range(len(centerline_segments_array)):
+        remove_point_idx = []
+        # We look at consecutive points. If two consecutive points are the same, we remove one of them
+        for point_idx in range(1, len(centerline_segments_array[segment_idx][0])):
+            if np.linalg.norm(centerline_segments_array[segment_idx][0][point_idx - 1] - centerline_segments_array[segment_idx][0][point_idx]) < 1e-2:
+                remove_point_idx.append(point_idx)
+        centerline_segments_array[segment_idx][0] = np.delete(centerline_segments_array[segment_idx][0], remove_point_idx, axis = 0)
+        centerline_segments_array[segment_idx][1] = np.delete(centerline_segments_array[segment_idx][1], remove_point_idx, axis = 0)
+    
+    # We delete segments that have the same first and last point
+    remove_segment_idx = []
+    for segment_idx in range(len(centerline_segments_array)):
+        if np.linalg.norm(centerline_segments_array[segment_idx][0][0] - centerline_segments_array[segment_idx][0][-1]) < 1e-2:
+            remove_segment_idx.append(segment_idx)
+    centerline_segments_array = np.delete(centerline_segments_array, remove_segment_idx, axis = 0)
+
+    return centerline_segments_array
 
 # def perform_segmentation_unification(case_dir):
 #     """

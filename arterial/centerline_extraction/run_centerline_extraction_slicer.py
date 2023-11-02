@@ -35,12 +35,12 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "extracrani
         Path to case directory. 
     mode: string, default = "extracranial_vessels"
         Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels`
-        or ```thrombus```. 
+        or `thrombus`. 
     no_display : bool, default = False
         Boolean variable to be used when running analysis on a headless server.
-        In addition, add ```$xvfb-run --auto-servernum --server-num=1``` at the beggining
+        In addition, add `$xvfb-run --auto-servernum --server-num=1` at the beggining
         of the command line call when executing the script from the command line.
-        E.g.: ```$xvfb-run --auto-servernum --server-num=1 python perform_analysis.py -case_dir {case_dir} -no_display {True}```
+        E.g.: `$xvfb-run --auto-servernum --server-num=1 python perform_analysis.py -case_dir {case_dir} -no_display {True}`
     fast_segmentation : bool, default = False
             Boolean variable to be used when running analysis derived from fast segmentation (lowres).
             In this case, segmentation of the cerebral arteries is less reliable, so a higher fraction
@@ -62,13 +62,12 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "extracrani
             os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
     else:
         if fast_segmentation:
-            os.system("{} --no-main-window --no-splash --disable-terminal-outputs --python-script {} -case_dir {} -m {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
+            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
         else:
-            os.system("{} --no-main-window --no-splash --disable-terminal-outputs --python-script {} -case_dir {} -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
+            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
 
 if __name__ == "__main__":
     # Script to be executed by PythonSlicer interpreter
-    # Will only be executed when this script is called from a direct terminal command
     import slicer
 
     import argparse
