@@ -7,9 +7,10 @@ import networkx as nx
 
 import pickle
 
-from arterial.vessel_labelling.preprocessing.utils import extract_features_for_labelling, make_graph_plot
+from arterial.vessel_labelling.preprocessing.utils import extract_features_for_labelling
+from arterial.vessel_labelling.utils import make_graph_plot
 
-def build_simple_centerline_graph(case_dir, mode = "vessels"):
+def build_simple_centerline_graph(case_dir, mode = "extracranial_vessels"):
     """
     Creates and featurizes simple centerline graph for vessel labelling.
     
@@ -22,6 +23,8 @@ def build_simple_centerline_graph(case_dir, mode = "vessels"):
     ---------
     case_dir : string or path-like object
         Path to case directory. 
+    mode : string, optional
+        Mode of the vessel labeller. The default is "extracranial_vessels", it can also be "intracranial_vessels".
 
     Returns
     -------
@@ -71,9 +74,7 @@ def build_simple_centerline_graph(case_dir, mode = "vessels"):
             for auxNodes in removed_nodes:
                 aux.remove(auxNodes)
             for _, node2 in enumerate(aux):
-                C1 = simple_centerline_graph.nodes[node]["pos"]
-                C2 = simple_centerline_graph.nodes[node2]["pos"]
-                if C1[0] == C2[0] and C1[1] == C2[1] and C1[2] == C2[2]:
+                if np.linalg.norm(simple_centerline_graph.nodes[node]["pos"] - simple_centerline_graph.nodes[node2]["pos"]) < 1e-6:
                     simple_centerline_graph = nx.contracted_nodes(simple_centerline_graph, node, node2)
                     removed_nodes.append(node2)
                     simple_centerline_graph.nodes[node].pop("contraction")

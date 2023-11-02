@@ -12,6 +12,7 @@ import pickle
 from vtk.util.numpy_support import vtk_to_numpy
 
 from arterial.feature_extraction.local_features.utils import get_max_hierarchy, compute_spherical_angles, compute_curvature_and_torsion, find_point_id
+from arterial.io.load_and_save_operations import save_pickle
 
 def perform_local_feature_extraction(case_dir, centerline_graph):
     """
@@ -47,10 +48,10 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
 
     """
     # Get CTA nifti (data and aff)
-    if os.path.isfile(os.path.join(case_dir, "{}.nii.gz".format(os.path.basename(case_dir)))):
-        cta_nifti = nib.load(os.path.join(case_dir, "{}.nii.gz".format(os.path.basename(case_dir))))
+    if os.path.isfile(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir)))):
+        cta_nifti = nib.load(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir))))
     else:
-        cta_nifti = nib.load(os.path.join(case_dir, "{}_segmentation.nii.gz".format(os.path.basename(case_dir))))
+        cta_nifti = nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
     cta_array_data = cta_nifti.get_fdata()
     # Compute translation to eliminate if from branch model points and equate them to those in centerline_segments_array (RAS with no translation)
     aff = cta_nifti.affine
@@ -300,7 +301,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
             centerline_graph.nodes[node][f"features {access}"]["vessel_type"] = centerline_graph.nodes[node]["vessel_type"]
 
     # Overwrite centerline_graph
-    with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
-        pickle.dump(centerline_graph, f, protocol = 4)
+    save_pickle(centerline_graph, os.path.join(case_dir, "dense_graph.pickle"))
 
     return centerline_graph

@@ -25,7 +25,7 @@ def time_limit(seconds):
     finally:
         signal.alarm(0)
 
-def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
+def centerline_extraction(case_dir, mode, segmentation_node, masked_volume_array):
     """
     Extracts centerline using Slicer's VMTK module. Processes all segments in the input 
     segmentation_node individually to generate independent centerline models for each 
@@ -48,6 +48,9 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
     case_dir : string or path-like object 
         Path to the directory containing the binary mask nifti. All segmentations will be 
         saved in this directory.
+    mode: string, default = "extracranial_vessels"
+            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
+            or `thrombus`. 
     segmentation_node : slicer segmentation_node
         Segmentation node containing one or more separate segments.
     masked_volume_array : numpy.array
@@ -63,7 +66,7 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
     if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
 
     # Get the affine matrix
-    affine = nib.load(os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
+    affine = nib.load(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), mode))).affine
 
     print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
     # Now, we iterate over all segments to perform centerline extraction separately
@@ -95,24 +98,17 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(surface_model)
-                writer.SetFileName(os.path.join(case_dir, "segmentations", f"vessel_segmentation_{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, "segmentations", f"{mode}_segmentation_{segment_id}.vtk"))
                 writer.Write()
 
                 # Extract the centerline of the segment_id segment
-                centerline_poly_data = extract_centerline(segmentation_node, segment_id, masked_volume_array, affine)
-
-                # # Decimate centerline model (at the moment we do not use it)
-                # decimator = vtk.vtkDecimatePolylineFilter()
-                # decimator.SetTargetReduction(0.5)
-                # decimator.AddInputData(centerline_poly_data)
-                # decimator.Update()
-                # centerline_poly_data = decimator.GetOutput()
+                centerline_poly_data = extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine)
 
                 # Saving centerlines separately
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"vessel_centerlines_{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, "centerlines", f"{mode}_centerlines_{segment_id}.vtk"))
                 writer.Write()
 
                 # For the largest segment, we check the existence of circular centerlines. Needs further testing
@@ -145,137 +141,12 @@ def centerline_extraction(case_dir, segmentation_node, masked_volume_array):
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"vessel_centerlines_{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, "centerlines", f"{mode}_centerlines_{segment_id}.vtk"))
                 writer.Write()
         except TimeoutException as e:
             print("Timed out for {}.".format(segment_id))
 
-def intracranial_centerline_extraction(case_dir, segmentation_node, masked_volume_array):
-    """
-    Extracts centerline using Slicer's VMTK module. Processes all segments in the input 
-    segmentation_node individually to generate independent centerline models for each 
-    segmentation. 
-
-    Uses VMTK's auto-endpoint detection optimized for improved robustness.
-    
-    Writes centerlines{idx}.vtk for idx in range(N), where N is the number of independent 
-    segments, containing the vtkPolyData object of the centerline models, for the number 
-    of present segments, as well as a decimated surface model, (decimatedSegmnetation{idx}.vtk) 
-    reduced by 70% from the original amount of triangles for speed.
-
-    Saves centerlines and surface models as:
-
-    >>> case_dir/centerlines/centerlines{idx}.vtk
-    >>> case_dir/segmentations/segmentation{idx}.vtk
-
-    Paremeters
-    ----------
-    case_dir : string or path-like object 
-        Path to the directory containing the binary mask nifti. All segmentations will be 
-        saved in this directory.
-    segmentation_node : slicer segmentation_node
-        Segmentation node containing one or more separate segments.
-    masked_volume_array : numpy.array
-        Binary array of the segmentation mask after removal of the foreground voxels
-        of the upper 80% of the segmentation's bounding box.
-
-    Returns
-    -------
-    
-    """
-    # Create directories to store centerline and segmentation volume models
-    if not os.path.isdir(os.path.join(case_dir, "centerlines")): os.mkdir(os.path.join(case_dir, "centerlines"))
-    if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
-
-    # Get the affine matrix
-    affine = nib.load(os.path.join(case_dir, "{}_intracranial_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
-
-    print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
-    # Now, we iterate over all segments to perform centerline extraction separately
-    for segment_id in range(segmentation_node.GetSegmentation().GetNumberOfSegments()):
-        try:
-            with time_limit(3 * 60):
-                print("Segment {}".format(segment_id))
-                print("Saving segmentations...")
-                # Saving segmentation (undivided)
-                surface_model = vtk.vtkPolyData()
-                segmentation_node.GetClosedSurfaceRepresentation(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id), surface_model)
-
-                # Decimating model
-                decimator = vtk.vtkDecimatePro()
-                decimator.SetTargetReduction(0.7)
-                decimator.AddInputData(surface_model)
-                decimator.Update()
-                surface_model = decimator.GetOutput()
-                # We can to compute the normals_filter for all mesh triangles to ensure correct orientation
-                normals_filter = vtk.vtkPolyDataNormals()
-                normals_filter.SetInputData(surface_model)
-                normals_filter.SetFeatureAngle(80)
-                normals_filter.AutoOrientNormalsOn()
-                normals_filter.UpdateInformation()
-                normals_filter.Update()
-                surface_model = normals_filter.GetOutput()
-
-                # Saving decimated model
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(surface_model)
-                writer.SetFileName(os.path.join(case_dir, "segmentations", f"intracranial_vessel_segmentation_{segment_id}.vtk"))
-                writer.Write()
-
-                # Extract the centerline of the segment_id segment
-                centerline_poly_data = extract_centerline(segmentation_node, segment_id, masked_volume_array, affine, intracranial = True)
-
-                # # Decimate centerline model (at the moment we do not use it)
-                # decimator = vtk.vtkDecimatePolylineFilter()
-                # decimator.SetTargetReduction(0.5)
-                # decimator.AddInputData(centerline_poly_data)
-                # decimator.Update()
-                # centerline_poly_data = decimator.GetOutput()
-
-                # Saving centerlines separately
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"intracranial_vessel_centerlines_{segment_id}.vtk"))
-                writer.Write()
-
-                # For the largest segment, we check the existence of circular centerlines. Needs further testing
-                # if segment_id == 0:
-                #     centerline_poly_data = inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, segmentation_node, segment_id, affine)
-
-                # Smooth centerline model
-                smoothing_filter = vtk.vtkSmoothPolyDataFilter()
-                smoothing_filter.SetInputData(centerline_poly_data)
-                smoothing_filter.SetNumberOfIterations(50)
-                smoothing_filter.SetRelaxationFactor(0.1)
-                smoothing_filter.FeatureEdgeSmoothingOff()
-                smoothing_filter.BoundarySmoothingOn()
-                smoothing_filter.Update()
-                centerline_poly_data = smoothing_filter.GetOutput()
-
-                # # Decimate centerline model
-                # decimator = vtk.vtkDecimatePolylineFilter()
-                # decimator.SetTargetReduction(0.8)
-                # decimator.AddInputData(centerline_poly_data)
-                # decimator.Update()
-                # centerline_poly_data = decimator.GetOutput()
-
-                # Compute Frenet-Serret frame vectors at each point
-                centerline_poly_data = compute_frenet_serret(centerline_poly_data)
-                # Compute curvature and smoothed curvature
-                centerline_poly_data = compute_curvature_and_torsion(centerline_poly_data)
-
-                # Overwriting centerlines separately after circular centerline inspection and extraction
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"intracranial_vessel_centerlines_{segment_id}.vtk"))
-                writer.Write()
-        except TimeoutException as e:
-            print("Timed out for {}.".format(segment_id))
-
-def extract_centerline(segmentation_node, segment_id, masked_volume_array, affine, intracranial = False):  
+def extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine):  
     """ 
     Extracts the centerline model node from the segmentation_node for the corresponding 
     segment_id using Slicer's VMTK extension.
@@ -284,6 +155,9 @@ def extract_centerline(segmentation_node, segment_id, masked_volume_array, affin
     ---------- 
     segmentation_node : vtkMRMLSegmentationNode
         MRML segmentation node.
+    mode: string, default = "extracranial_vessels"
+            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
+            or `thrombus`. 
     segment_id : integer
         Segment identifier in the segmentation_node.
     masked_volume_array : numpy.array
@@ -336,11 +210,11 @@ def extract_centerline(segmentation_node, segment_id, masked_volume_array, affin
     # Get endpoints node
     endpoints_node = slicer.util.getNode(extract_centerline_widget._parameterNode.GetNodeReferenceID("EndPoints"))
 
-    if intracranial:
+    if mode == "intracranial_vessels":
         if segment_id == 0:
             pass
             # endpoints_node = ica_endpoint_check(endpoints_node, masked_volume_array, affine)
-    else:
+    elif mode == "extracranial_vessels":
         # Check if both ends of the aortic arch have at least one endpoint
         if segment_id == 0:
             endpoints_node = aortic_arch_endpoint_check(endpoints_node, masked_volume_array, affine)

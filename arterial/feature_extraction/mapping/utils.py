@@ -483,12 +483,12 @@ def supersegment_built(case_dir, centerline_graph, predicted_configurations):
                 # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
                 node_pos_dict_p = {}
                 for n in supersegment.nodes():
-                    node_pos_dict_p[n] = [supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
+                    node_pos_dict_p[n] = [-supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
 
                 nx.draw(supersegment, node_pos_dict_p, node_size=10, node_color=color_map, ax=ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns])
                 ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_title(configuration_titles[(4 * idx_access + idx)], fontsize=12)
-                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_xlim([8, 200])
-                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_ylim([-10, 280])
+                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_xlim([-200, 10])
+                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_ylim([-10, 350])
             
         plt.savefig(os.path.join(case_dir, "supersegments.png"))
 

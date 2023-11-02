@@ -15,14 +15,14 @@ class ArterialProcessor():
     command line call. Wraps all modules' classes and their methods within one object.
     
     """
-    def __init__(self, parser):
+    def __init__(self, args):
         """
         Initializes object of the ArterialProcessor class, and creates objects for all module central classes
         as attributes for the ArterialProcessor object.
 
         Parameters
         ----------
-        parser : argparse.ArgumentParser object
+        args : argparse.ArgumentParser object
             Contains all parsed arguments from the perform_analysis.py call as attributes.
             These are:
             - case_dir : string or path-like object
@@ -50,17 +50,17 @@ class ArterialProcessor():
         -------
         
         """
-        # Parameters from parser
-        self.case_dir = parser.case_dir
-        self.mode = parser.mode
-        self.no_display = parser.no_display
-        self.skip_segmentation = parser.skip_segmentation
-        self.fast_segmentation = parser.fast_segmentation
-        self.skip_centerline_extraction = parser.skip_centerline_extraction
-        self.skip_branching = parser.skip_branching
-        self.skip_clipping = parser.skip_clipping
-        self.skip_vessel_labelling = parser.skip_vessel_labelling
-        self.skip_feature_extraction = parser.skip_feature_extraction
+        # Parameters from args
+        self.case_dir = args.case_dir
+        self.mode = args.mode
+        self.no_display = args.no_display
+        self.skip_segmentation = args.skip_segmentation
+        self.fast_segmentation = args.fast_segmentation
+        self.skip_centerline_extraction = args.skip_centerline_extraction
+        self.skip_branching = args.skip_branching
+        self.skip_clipping = args.skip_clipping
+        self.skip_vessel_labelling = args.skip_vessel_labelling
+        self.skip_feature_extraction = args.skip_feature_extraction
 
         # Initialize module classes
         self.vessel_segmenter = VesselSegmenter(self.case_dir)
@@ -73,7 +73,7 @@ class ArterialProcessor():
         """
         Calls wrapper method from each of the Arterial modules.
 
-        Binary arguments from parser are used to specify 
+        Binary arguments from args are used to specify 
 
         """
         print("Performing analysis over case {}. \n".format(os.path.basename(self.case_dir)))
@@ -87,7 +87,8 @@ class ArterialProcessor():
         self.perform_vessel_labelling()
         step2 = time()
         print("Vessel labelling took {:.2f} s".format(step2 - step1))
-        self.perform_feature_extraction()
+        if self.mode == "extracranial_vessels":
+            self.perform_feature_extraction()   
         step3 = time()
         print("Feature extraction took {:.2f} s".format(step3 - step2))
         print("Total time for analysis: {:.2f} s".format(step3 - start))
@@ -109,7 +110,7 @@ class ArterialProcessor():
         """
         # Predicts segmentation by nnunet inference
         if not self.skip_segmentation:
-            if self.mode == "vessels":
+            if self.mode == "extracranial_vessels":
                 if self.fast_segmentation:
                     print("Predicting segmentation (fast)...")
                     self.vessel_segmenter.predict_fast()
@@ -155,7 +156,7 @@ class ArterialProcessor():
             print("Performing centerline extraction...")
             # Applies centerline preprocessing and extraction using Slicer and VMTK
             self.centerline_extractor.extract_centerline()
-            if self.mode == "vessels":
+            if self.mode == "extracranial_vessels":
                 if not self.skip_branching:
                     print("Performing centerline branching...")
                     # Performs centerline model branching with VMTK
@@ -200,7 +201,7 @@ class ArterialProcessor():
             # Makes and featurizes simple graph
             self.vessel_labeller.preprocessing()
             # Performs inference over simple graph for vessel labelling
-            # self.vessel_labeller.predict()
+            self.vessel_labeller.predict()
             print("done \n")
         else:
             print("Skipping vessel labelling \n")

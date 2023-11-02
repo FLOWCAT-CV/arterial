@@ -86,8 +86,6 @@ def compute_curvature_and_torsion(curve, node_idx):
         Array containing the radius of curvature at each point of the curve.
 
     """
-    # Change the sign of the first coordinate of the curve points to make pass it to a positively oriented system
-    curve[:, 0] = - curve[:, 0]
     # Compute the time tangent of the curve
     time_tangent = np.gradient(curve, axis = 0)
     # Compute the inverse of the derivative of the arclength wrt time

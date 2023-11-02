@@ -12,8 +12,8 @@ def main():
         help="If using a remote Linux, this should be used following correct Slicer installation, and should be coulpled "
         "with the use of `xvfb-run --auto-servernum --server-num=1` upon use before calling this script (prior to the python command). "
         "Not required, default = False.")
-    parser.add_argument('-m', '--mode', type=str, required=False, default='vessels',
-        help='Determines whether the analysis is performed for vessels, intracranial_vessels or thrombus. Not required.')
+    parser.add_argument('-m', '--mode', type=str, required=False, default='extracranial_vessels',
+        help='Determines whether the analysis is performed for extracranial_vessels, intracranial_vessels or thrombus. Not required.')
     parser.add_argument("-ss", "--skip_segmentation", type=bool, required=False, default=False, 
         help="Boolean argument to determine if segmentation is predicted or not. Use (True) if segmentation is already "
         "predicted, to skip nnUNet inference and save time. If True, there should exist a nifti file with the binary map "

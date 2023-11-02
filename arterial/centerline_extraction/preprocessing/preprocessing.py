@@ -9,7 +9,7 @@ import nibabel as nib
 
 from preprocessing.utils import get_bounding_box_limits_3d, patchwise_smoothing, get_compatible_patch_shape
 
-def preprocessing_vessels(case_dir, master_volume_node, fast_segmentation = False):
+def preprocessing_extracranial_vessels(case_dir, master_volume_node, fast_segmentation = False):
     """
     Performs segmentation of a binary mask using Slicer's segmentEditorWidget to create
     volume model of the segmented bodies. Also, it applies preprocessing of the resulting
@@ -97,7 +97,7 @@ def preprocessing_vessels(case_dir, master_volume_node, fast_segmentation = Fals
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
     # Get voxel size from image
-    voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
+    voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
     # Compute approximate number of voxels
     number_of_voxels_threshold = round(8000 * (reference_voxel_size / voxel_size))
     # Remove small islands
@@ -118,13 +118,13 @@ def preprocessing_vessels(case_dir, master_volume_node, fast_segmentation = Fals
     decimator.Update()
     # Save segmentation as vtk
     vtk_writer = vtk.vtkPolyDataWriter()
-    vtk_writer.SetFileName(os.path.join(case_dir, "vessel_segmentation.vtk"))
+    vtk_writer.SetFileName(os.path.join(case_dir, "extracranial_vessels_segmentation.vtk"))
     vtk_writer.SetInputConnection(decimator.GetOutputPort())
     vtk_writer.Write()
     # Save segmentation as stl
     stl_writer = vtk.vtkSTLWriter()
     stl_writer.SetFileTypeToBinary()
-    stl_writer.SetFileName(os.path.join(case_dir, "vessel_segmentation.stl"))
+    stl_writer.SetFileName(os.path.join(case_dir, "extracranial_vessels_segmentation.stl"))
     stl_writer.SetInputConnection(decimator.GetOutputPort())
     stl_writer.Write()
 
@@ -217,7 +217,7 @@ def preprocessing_intracranial_vessels(case_dir, master_volume_node):
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
     # Get voxel size from image
-    voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_intracranial_vessel_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
+    voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_intracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
     # Compute approximate number of voxels
     number_of_voxels_threshold = round(3000 * (reference_voxel_size / voxel_size))
     # Remove small islands
@@ -238,13 +238,13 @@ def preprocessing_intracranial_vessels(case_dir, master_volume_node):
     decimator.Update()
     # Save segmentation as vtk
     vtk_writer = vtk.vtkPolyDataWriter()
-    vtk_writer.SetFileName(os.path.join(case_dir, "intracranial_vessel_segmentation.vtk"))
+    vtk_writer.SetFileName(os.path.join(case_dir, "intracranial_vessels_segmentation.vtk"))
     vtk_writer.SetInputConnection(decimator.GetOutputPort())
     vtk_writer.Write()
     # Save segmentation as stl
     stl_writer = vtk.vtkSTLWriter()
     stl_writer.SetFileTypeToBinary()
-    stl_writer.SetFileName(os.path.join(case_dir, "intracranial_vessel_segmentation.stl"))
+    stl_writer.SetFileName(os.path.join(case_dir, "intracranial_vessels_segmentation.stl"))
     stl_writer.SetInputConnection(decimator.GetOutputPort())
     stl_writer.Write()
 

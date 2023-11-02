@@ -10,7 +10,7 @@ class CenterlineExtractor():
     segmentation.   
         
     """
-    def __init__(self, case_dir, mode = "vessels", no_display = False, fast_segmentation = False):
+    def __init__(self, case_dir, mode = "extracranial_vessels", no_display = False, fast_segmentation = False):
         """
         Initializes object of the CenterlineExtractor class.
 
@@ -18,9 +18,9 @@ class CenterlineExtractor():
         ----------
         case_dir : string or path-like object
             Path to case directory.
-        mode: string, default = "vessels"
-            Determines whether the centerline is extracted from ```vessels```, ```intracranial_vessels``` 
-            or ```thrombus```. 
+        mode: string, default = "extracranial_vessels"
+            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
+            or `thrombus`. 
         no_display : bool, default = False
             Boolean variable to be used when running analysis on a headless server.
             In addition, add ```$xvfb-run --auto-servernum --server-num=1``` at the beggining

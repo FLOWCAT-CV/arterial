@@ -2,7 +2,7 @@
 
 import os
 
-def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", no_display = False, fast_segmentation = False):
+def perform_preprocessing_and_centerline_extraction(case_dir, mode = "extracranial_vessels", no_display = False, fast_segmentation = False):
     """
     Wrapper function to make terminal command calls for centerline preprocessing and extraction,
     using Slicer [1] and VMTK [2-4]. Since PythonSlicer is needed, we need to call terminal commands to execute
@@ -33,8 +33,8 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", 
     ----------
     case_dir : string or path-like object
         Path to case directory. 
-    mode: string, default = "vessels"
-        Determines whether the centerline is extracted from ```vessels```, ```intracranial_vessels``` 
+    mode: string, default = "extracranial_vessels"
+        Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels`
         or ```thrombus```. 
     no_display : bool, default = False
         Boolean variable to be used when running analysis on a headless server.
@@ -53,30 +53,18 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "vessels", 
     # Define paths from enviornment variables. These should be set prior to execution in ~/.bashrc or equivalent
     SLICER_PATH = os.environ["slicer_path"]
     RUN_CENTERLINE_EXTRACTION_SCRIPT = os.path.join(os.environ["arterial_dir"], "centerline_extraction/run_centerline_extraction_slicer.py")
-    if mode == "vessels":
-        # Perform vessel segmentation and centerline extraction. This generates segmentations and centerlines in case_dir/centerlines and case_dir/segmentations
-        if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
-            if fast_segmentation:
-                os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -fast t -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-            else:
-                os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+
+    # Perform vessel segmentation and centerline extraction. This generates segmentations and centerlines in case_dir/centerlines and case_dir/segmentations
+    if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
+        if fast_segmentation:
+            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -fast t -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
         else:
-            if fast_segmentation:
-                os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m vessels -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-            else:
-                os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-    if mode == "intracranial_vessels":
-        # Perform intracranial vessel segmentation and centerline extraction. This generates intracranial_segmentations and intracranial_centerlines in case_dir/centerlines and case_dir/segmentations
-        if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
-            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m intracranial_vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
+    else:
+        if fast_segmentation:
+            os.system("{} --no-main-window --no-splash --disable-terminal-outputs --python-script {} -case_dir {} -m {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
         else:
-            os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m intracranial_vessels --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-    elif mode == "thrombus":
-        # Perform thrombus segmentation and centerline extraction. This generates thrombus_segmentations and thrombus_centerlines in case_dir/centerlines and case_dir/segmentations
-        if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
-            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m thrombus --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
-        else:
-            os.system("{} --no-main-window --no-splash --python-script {} -case_dir {} -m thrombus --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir))
+            os.system("{} --no-main-window --no-splash --disable-terminal-outputs --python-script {} -case_dir {} -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
 
 if __name__ == "__main__":
     # Script to be executed by PythonSlicer interpreter
@@ -85,15 +73,15 @@ if __name__ == "__main__":
 
     import argparse
 
-    from preprocessing.preprocessing import preprocessing_vessels, preprocessing_intracranial_vessels, preprocessing_thrombus
-    from centerline_extraction import centerline_extraction, intracranial_centerline_extraction, thrombus_centerline_extraction
+    from preprocessing.preprocessing import preprocessing_extracranial_vessels, preprocessing_intracranial_vessels, preprocessing_thrombus
+    from centerline_extraction import centerline_extraction, thrombus_centerline_extraction
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-case_dir', '--case_dir', type=str, required=True, 
         help='path binary nifti to be processed. Required.')
-    parser.add_argument('-mode', '--mode', type=str, required=False, default='vessels',
-        help='Determines whether the centerline is extracted from vessels or thrombus. Not required.')
+    parser.add_argument('-mode', '--mode', type=str, required=False, default='extracranial_vessels',
+        help='Determines whether the centerline is extracted from extracranial vessels, intracranial vessels or thrombus. Not required.')
     parser.add_argument("-fast", "--fast_segmentation", type=str, default=False, required=False,
         help='flag to indicate if segmentation was acquired in fast or full mode. It will change '
              'the preprocessing of the centerline extraction process. Defaults to False. Not required.')
@@ -104,29 +92,22 @@ if __name__ == "__main__":
     mode = args.mode
     fast_segmentation = args.fast_segmentation
     
-    if mode == "vessels":
-        # Load volume and associate to node
-        slicer.util.loadLabelVolume(os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir))))
-        master_volume_node = getNode("{}_vessel_segmentation".format(os.path.basename(case_dir)))
+    # Load volume
+    slicer.util.loadLabelVolume(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), mode)))
+    # Associate to volume node
+    master_volume_node = getNode("{}_{}_segmentation".format(os.path.basename(case_dir), mode))
 
+    if mode == "extracranial_vessels":
         # Perform segmentation from binary mask
-        segmentation_node, masked_volume_array = preprocessing_vessels(case_dir, master_volume_node, fast_segmentation)
+        segmentation_node, masked_volume_array = preprocessing_extracranial_vessels(case_dir, master_volume_node, fast_segmentation)
         # Perform centerline extraction. Creates centerlines.vtk
-        centerline_extraction(case_dir, segmentation_node, masked_volume_array)
+        centerline_extraction(case_dir, mode, segmentation_node, masked_volume_array)
     elif mode == "intracranial_vessels":
-        # Load volume and associate to node
-        slicer.util.loadLabelVolume(os.path.join(case_dir, "{}_intracranial_vessel_segmentation.nii.gz".format(os.path.basename(case_dir))))
-        master_volume_node = getNode("{}_intracranial_vessel_segmentation".format(os.path.basename(case_dir)))
-
         # Perform segmentation from binary mask
         segmentation_node, masked_volume_array = preprocessing_intracranial_vessels(case_dir, master_volume_node)
         # Perform centerline extraction. Creates centerlines.vtk
-        intracranial_centerline_extraction(case_dir, segmentation_node, masked_volume_array)
+        centerline_extraction(case_dir, mode, segmentation_node, masked_volume_array)
     elif mode == "thrombus":
-        # Load volume and associate to node
-        slicer.util.loadLabelVolume(os.path.join(case_dir, "{}_thrombus_segmentation.nii.gz".format(os.path.basename(case_dir))))
-        master_volume_node = getNode("{}_thrombus_segmentation".format(os.path.basename(case_dir)))
-
         # Perform segmentation from binary mask
         segmentation_node, masked_volume_array = preprocessing_thrombus(case_dir, master_volume_node)
         # Perform centerline extraction. Creates centerlines.vtk

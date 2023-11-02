@@ -29,7 +29,7 @@ def perform_centerline_branching(case_dir):
     
     """
     # List all centerline model to be branched
-    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith("vessel_centerlines")])
+    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith("extracranial_vessels_centerlines")])
     # Create dir to store all branch_models
     if not os.path.isdir(os.path.join(case_dir, "branch_models")): os.mkdir(os.path.join(case_dir, "branch_models"))
 
@@ -208,7 +208,7 @@ def perform_surface_model_clipping(case_dir):
     
     """
     # List all surface models to be clipped
-    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk") and surface_model_file.startswith("vessel_segmentation")])
+    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk") and surface_model_file.startswith("extracranial_vessels_segmentations")])
     # Create dir to store all clipped_models
     if not os.path.isdir(os.path.join(case_dir, "clipped_models")): os.mkdir(os.path.join(case_dir, "clipped_models"))
     for idx, surface_model_file in enumerate(surface_model_list):

@@ -5,9 +5,9 @@ import os
 import numpy as np
 import networkx as nx
 
-import pickle
-
 import matplotlib.pyplot as plt
+
+from arterial.io.load_and_save_operations import load_pickle
 
 def predicted_vessels_dict(case_dir):
     """
@@ -29,14 +29,13 @@ def predicted_vessels_dict(case_dir):
 
     """
     # Load predicted graph
-    with open(os.path.join(case_dir, "graph_pred.pickle"), "rb") as f:
-        graph_pred = pickle.load(f)
+    graph_pred = load_pickle(os.path.join(case_dir, "extracranial_vessels_graph_simple_pred.pickle"))
     # Declare empty dicts
     predicted_vessel_types, predicted_vessel_type_names = {}, {}
     # Build dicts from graph edges and their cell_ids, vessel types and vessel type names
     for src, dst in graph_pred.edges:
-        predicted_vessel_types[graph_pred[src][dst]["cell_id"]] = graph_pred[src][dst]["vessel type"]
-        predicted_vessel_type_names[graph_pred[src][dst]["cell_id"]] = graph_pred[src][dst]["vessel type name"]
+        predicted_vessel_types[graph_pred[src][dst]["cell_id"]] = graph_pred[src][dst]["vessel_type"]
+        predicted_vessel_type_names[graph_pred[src][dst]["cell_id"]] = graph_pred[src][dst]["vessel_type_name"]
 
     return predicted_vessel_types, predicted_vessel_type_names
 
@@ -153,7 +152,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
 
     """
     # Get centerline_segments_array
-    centerline_segments_array = np.load(os.path.join(case_dir, "centerline_segments_array.npy"), allow_pickle = True)
+    centerline_segments_array = np.load(os.path.join(case_dir, "extracranial_vessels_centerline_segments_array.npy"), allow_pickle = True)
     # Get coordinates array from centerline_segments_array
     coordinate_array = centerline_segments_array[:, 0]
     # Get radius array from centerline_segments_array
@@ -375,8 +374,8 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
         
         # We add the edge to the graph
         centerline_graph.add_edge(main_graph_node, candidate_node, cell_id = centerline_graph.nodes[candidate_node]["cell_id"])
-        centerline_graph[main_graph_node][candidate_node]["vessel type"] = predicted_vessel_types[centerline_graph[main_graph_node][candidate_node]["cell_id"]]
-        centerline_graph[main_graph_node][candidate_node]["vessel type name"] = predicted_vessel_type_names[centerline_graph[main_graph_node][candidate_node]["cell_id"]]
+        centerline_graph[main_graph_node][candidate_node]["vessel_type"] = predicted_vessel_types[centerline_graph[main_graph_node][candidate_node]["cell_id"]]
+        centerline_graph[main_graph_node][candidate_node]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[main_graph_node][candidate_node]["cell_id"]]
         centerline_graph[main_graph_node][candidate_node]["indices"] = np.array([])
         centerline_graph[main_graph_node][candidate_node]["coordinate_array"] = np.ndarray([0, 3])
         centerline_graph[main_graph_node][candidate_node]["radius_array"] = np.array([])
@@ -574,7 +573,7 @@ def make_graph_plot(case_dir, graph, filename, label = None):
     # we use L and S coordinates (the view will be from the coronal plane, P axis)
     node_pos_dict_p = {}
     for n in graph.nodes():
-        node_pos_dict_p[n] = [graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
+        node_pos_dict_p[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
 
     if label is not None:
         edge_labels = nx.get_edge_attributes(graph, label)

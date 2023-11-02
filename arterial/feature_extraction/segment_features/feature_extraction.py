@@ -2,11 +2,8 @@
 
 import os
 
-import networkx as nx
-
-import pickle
-
 from arterial.feature_extraction.segment_features.utils import get_single_segments_cell_ids, get_single_segments_vessel_type, plot_single_segments
+from arterial.io.load_and_save_operations import load_pickle, save_pickle
 
 def perform_segment_feature_extraction(case_dir, centerline_graph):
     """
@@ -42,8 +39,7 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
     """
 
     # Load simple graph
-    with open(os.path.join(case_dir, "graph_pred.pickle"), "rb") as f:
-        simple_centerline_graph = pickle.load(f)
+    simple_centerline_graph = load_pickle(os.path.join(case_dir, "extracranial_vessels_graph_simple_pred.pickle"))
     # Get featurized segment of the graph
     segments_cell_id = get_single_segments_cell_ids(centerline_graph)
     # Save features from segment to simple graph edges with the same cell id
@@ -51,23 +47,21 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
         for src, dst in simple_centerline_graph.edges:
             if simple_centerline_graph[src][dst]["cell_id"] == cell_id and segments_cell_id[cell_id] is not None:
                 if "features" in segments_cell_id[cell_id].graph.keys():
-                    simple_centerline_graph[src][dst]["segment features"] = segments_cell_id[cell_id].graph["features"]
+                    simple_centerline_graph[src][dst]["segment_features"] = segments_cell_id[cell_id].graph["features"]
 
     # Overwrite simple graph
-    with open(os.path.join(case_dir, "graph_pred.pickle"), "wb") as f:
-        pickle.dump(simple_centerline_graph, f, protocol = 4)
+    save_pickle(simple_centerline_graph, os.path.join(case_dir, "extracranial_vessels_graph_simple_pred.pickle"))
 
     # Initialize segment features dict in centerline_graph.graph
-    centerline_graph.graph["segment features"] = {}
+    centerline_graph.graph["segment_features"] = {}
     # Extract vessel type segments
     segments_vessel_type = get_single_segments_vessel_type(centerline_graph)
     for vessel_type in segments_vessel_type.keys():
         if segments_vessel_type[vessel_type] is not None:
-            centerline_graph.graph["segment features"][vessel_type] = segments_vessel_type[vessel_type].graph["features"]
+            centerline_graph.graph["segment_features"][vessel_type] = segments_vessel_type[vessel_type].graph["features"]
 
     # Overwrite centerline graph
-    with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
-        pickle.dump(centerline_graph, f, protocol = 4)
+    save_pickle(centerline_graph, os.path.join(case_dir, "dense_graph.pickle"))
  
     # Create single segments plot
     plot_single_segments(case_dir, centerline_graph, segments_vessel_type)

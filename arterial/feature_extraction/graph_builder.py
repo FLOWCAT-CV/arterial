@@ -5,9 +5,8 @@ import os
 import numpy as np
 import networkx as nx
 
-import pickle
-
 from arterial.feature_extraction.utils import predicted_vessels_dict, get_hierarchical_order, unify_subgraphs, sanity_check_for_random_islands, make_graph_plot
+from arterial.io.load_and_save_operations import save_pickle
 
 def build_centerline_graph(case_dir):
     """
@@ -39,13 +38,13 @@ def build_centerline_graph(case_dir):
     skip_cell_ids = []
     while not sanity_check:
         # Get centerline_segments_array
-        centerline_segments_array = np.load(os.path.join(case_dir, "vessels_centerline_segments_array.npy"), allow_pickle = True)
+        centerline_segments_array = np.load(os.path.join(case_dir, "extracranial_vessels_centerline_segments_array.npy"), allow_pickle = True)
         # Get coordinates array from centerline_segments_array
         coordinate_array = centerline_segments_array[:, 0]
         # Get radius array from centerline_segments_array
         radius_array = centerline_segments_array[:, 1]
         # Inverse of the node density, sample a centerline node every SAMPLE_NODE_EVERY_MM milimitiers
-        SAMPLE_NODE_EVERY_MM = 1
+        SAMPLE_NODE_EVERY_MM = 2
         # Predicted vessel types and vessel type names
         predicted_vessel_types, predicted_vessel_type_names = predicted_vessels_dict(case_dir)
 
@@ -91,7 +90,7 @@ def build_centerline_graph(case_dir):
                         centerline_graph.nodes[total_nodes]["radius"] = radius_array[cell_id][idx]
                         centerline_graph.nodes[total_nodes]["cell_id"] = cell_id
                         centerline_graph.nodes[total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
-                        centerline_graph.nodes[total_nodes]["vessel_type name"] = predicted_vessel_type_names[cell_id]
+                        centerline_graph.nodes[total_nodes]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                         centerline_graph.add_edge(total_nodes - 1, total_nodes)
                         centerline_graph[total_nodes - 1][total_nodes]["cell_id"] = cell_id
                         centerline_graph[total_nodes - 1][total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
@@ -112,7 +111,7 @@ def build_centerline_graph(case_dir):
                             centerline_graph.nodes[total_nodes]["radius"] = radius_array[cell_id][idx]
                             centerline_graph.nodes[total_nodes]["cell_id"] = cell_id
                             centerline_graph.nodes[total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
-                            centerline_graph.nodes[total_nodes]["vessel_type name"] = predicted_vessel_type_names[cell_id]
+                            centerline_graph.nodes[total_nodes]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                             centerline_graph.add_edge(total_nodes - 1, total_nodes)
                             centerline_graph[total_nodes - 1][total_nodes]["cell_id"] = cell_id
                             centerline_graph[total_nodes - 1][total_nodes]["vessel_type"] = predicted_vessel_types[cell_id]
@@ -128,7 +127,7 @@ def build_centerline_graph(case_dir):
                             centerline_graph.nodes[total_nodes - 1]["radius"] = radius_array[cell_id][idx]
                             centerline_graph.nodes[total_nodes - 1]["cell_id"] = cell_id
                             centerline_graph.nodes[total_nodes - 1]["vessel_type"] = predicted_vessel_types[cell_id]
-                            centerline_graph.nodes[total_nodes - 1]["vessel_type name"] = predicted_vessel_type_names[cell_id]
+                            centerline_graph.nodes[total_nodes - 1]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
                             centerline_graph[total_nodes - 2][total_nodes - 1]["cell_id"] = cell_id
                             centerline_graph[total_nodes - 2][total_nodes - 1]["vessel_type"] = predicted_vessel_types[cell_id]
                             centerline_graph[total_nodes - 2][total_nodes - 1]["vessel_type_name"] = predicted_vessel_type_names[cell_id]
@@ -203,7 +202,7 @@ def build_centerline_graph(case_dir):
         # The rightmost_node node can be used for hierarchical indexing from radial access                          
         rightmost_node_position = coordinate_array[0][0]
         for node in centerline_graph:
-            if centerline_graph.nodes[node]["pos"][0] < rightmost_node_position[0] and centerline_graph.degree(node) == 1 and centerline_graph.nodes[node]["pos"][2] < range_pos * 0.6 + lowest_s_pos:
+            if centerline_graph.nodes[node]["pos"][0] > rightmost_node_position[0] and centerline_graph.degree(node) == 1 and centerline_graph.nodes[node]["pos"][2] < range_pos * 0.6 + lowest_s_pos:
                 rightmost_node = node
                 rightmost_node_position = centerline_graph.nodes[node]["pos"]
 
@@ -232,9 +231,8 @@ def build_centerline_graph(case_dir):
         centerline_graph = get_hierarchical_order(centerline_graph, "radial", centerline_graph.graph["rightmost"])    
 
         # Save resulting graph
-        with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
-            pickle.dump(centerline_graph, f, protocol = 4)
+        save_pickle(centerline_graph, os.path.join(case_dir, "dense_graph.pickle"))
         # Generate plot of dense graph for quick visualization
-        make_graph_plot(case_dir, centerline_graph, "graph.png")
+        make_graph_plot(case_dir, centerline_graph, "dense_graph.png")
 
         return centerline_graph

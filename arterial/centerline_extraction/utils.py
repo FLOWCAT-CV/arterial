@@ -1,6 +1,5 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
  
-import os
 import slicer
 import vtk
 
@@ -51,7 +50,7 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(masked_volume_array[0])
-    properties = measure.regionprops(label_mask.astype(np.int), label_mask.astype(np.int))
+    properties = measure.regionprops(label_mask.astype(int), label_mask.astype(int))
     
     # Get rid of all components below the threshold_counts
     # This is done because we expect here to only have bottom slices of the
@@ -101,7 +100,9 @@ def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
     for idx in range(endpoints_node.GetNumberOfControlPoints()):
         endpoint = np.matmul(np.linalg.inv(aff), np.append(np.array(endpoints_node.GetCurvePoints().GetPoint(idx)), 1.0))[:3]
         # Reference point set at [350, 0, 0] in LAS coordinates
-        if nib.orientations.aff2axcodes(aff) == ("L", "A", "S"):
+        if nib.orientations.aff2axcodes(aff) == ("R", "A", "S"):
+            distance_to_reference.append(np.linalg.norm(endpoint - np.array([150.0 * factor, 0.0, 0.0])))
+        elif nib.orientations.aff2axcodes(aff) == ("L", "A", "S"):
             distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
         elif nib.orientations.aff2axcodes(aff) == ("L", "P", "S"):
             distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, label_mask.shape[1], 0.0])))
@@ -167,7 +168,7 @@ def ica_endpoint_check(endpoints_node, masked_volume_array, aff):
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(masked_volume_array[0])
-    properties = measure.regionprops(label_mask.astype(np.int), label_mask.astype(np.int))
+    properties = measure.regionprops(label_mask.astype(int), label_mask.astype(int))
     
     # Get rid of all components below the threshold_counts
     # This is done because we expect here to only have bottom slices of the
@@ -299,7 +300,7 @@ def robust_end_point_detection(endpoint, segmentation, aff, n = 15):
     # Get distance transform for each and get only closest component of the inverted masks
     # Distance transforms encode the distance of all foreground voxels
     # to the closest background element
-    distance_labels = np.empty_like(labels, dtype=np.float)
+    distance_labels = np.empty_like(labels, dtype=float)
     for idx in range(len(labels)):
         distance_labels[idx] = ndimage.distance_transform_edt(inverted_label_mask_one_hot[idx])[inverted_label_mask_one_hot.shape[1] // 2][inverted_label_mask_one_hot.shape[2] // 2][inverted_label_mask_one_hot.shape[3] // 2]
     # We keep only the closest component to the original endpoint
@@ -309,13 +310,13 @@ def robust_end_point_detection(endpoint, segmentation, aff, n = 15):
          np.max([0, R - n]): np.min([segmentation.shape[2], R + n])] = label_mask_one_hot[np.argmin(distance_labels)]
     
     # Get the centroid of the foregroud region and turn it into the new endpoint
-    properties = measure.regionprops(mask.astype(np.int), mask.astype(np.int))
+    properties = measure.regionprops(mask.astype(int), mask.astype(int))
     center_of_mass = np.array(properties[0].centroid)[[2, 1, 0]]
     
     # Return the new position of the endpoint in RAS coordinates
     return np.matmul(aff, np.append(center_of_mass, 1.0))[:3]
 
-def inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, segmentation_node, segment_id, aff):
+def inspect_circular_centerlines(centerline_poly_data, surface_model, segmentation_node, segment_id, aff):
     """ 
     Analyzes surface model and centerline model to recognize large surface areas without associated centerline.
     This can happen due to either the presence of circular segments (VMTK does not contemplate this possibility) or due
@@ -556,12 +557,6 @@ def inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, 
                     print(" Performing circular centerline extraction")
                     # Apply the centerline extraction algorithm for circular segments
                     centerline_poly_data = extract_centerline_circular_segment(circular_segment_model_node, centerline_poly_data, segmentation_node, segment_id, aff)
-                    # Overwriting centerlines separately after circular centerline inspection and extraction
-                    writer = vtk.vtkPolyDataWriter()
-                    writer.SetFileVersion(42)
-                    writer.SetInputData(centerline_poly_data)
-                    writer.SetFileName(os.path.join(case_dir, "centerlines", f"centerlines{segment_id}.vtk"))
-                    writer.Write()
                 else:
                     print(" Ignoring segment (it is most likely a cerebral vessel, not fined tuned for circular centerline extraction)")
                 print()

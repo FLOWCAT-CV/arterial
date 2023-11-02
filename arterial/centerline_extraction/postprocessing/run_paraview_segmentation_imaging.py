@@ -52,7 +52,7 @@ if __name__ == "__main__":
     paraview.simple._DisableFirstRenderCameraReset()
 
     # Create a new 'Legacy VTK Reader'
-    segmentation_vtk = LegacyVTKReader(registrationName='segmentation.vtk', FileNames=[os.path.join(case_dir, "segmentation.vtk")])
+    segmentation_vtk = LegacyVTKReader(registrationName='extracranial_vessels_segmentation.vtk', FileNames=[os.path.join(case_dir, "extracranial_vessels_segmentation.vtk")])
 
     # Set active source
     SetActiveSource(segmentation_vtk)

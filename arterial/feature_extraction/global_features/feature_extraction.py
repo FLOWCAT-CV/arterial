@@ -5,6 +5,7 @@ import os
 import pickle
 
 from arterial.feature_extraction.global_features.utils import get_aortic_arch_type, get_bovine_arch, get_arsa
+from arterial.io.load_and_save_operations import save_pickle
 
 def perform_global_feature_extraction(case_dir, centerline_graph):
     """
@@ -37,13 +38,12 @@ def perform_global_feature_extraction(case_dir, centerline_graph):
     
     """
     # Extract aortic arch type
-    centerline_graph.graph["aortic arch type"] = get_aortic_arch_type(centerline_graph)
+    centerline_graph.graph["aortic_arch_type"] = get_aortic_arch_type(centerline_graph)
     # Extract presence of bovine arch
-    centerline_graph.graph["bovine arch"] = get_bovine_arch(centerline_graph)
+    centerline_graph.graph["bovine_arch"] = get_bovine_arch(centerline_graph)
     # Extract presence of aberrant RSA
     centerline_graph.graph["arsa"] = get_arsa(centerline_graph)
     # Overwrite centerline_graph
-    with open(os.path.join(case_dir, "graph.pickle"), "wb") as f:
-        pickle.dump(centerline_graph, f, protocol = 4)
+    save_pickle(centerline_graph, os.path.join(case_dir, "dense_graph.pickle"))
 
     return centerline_graph
