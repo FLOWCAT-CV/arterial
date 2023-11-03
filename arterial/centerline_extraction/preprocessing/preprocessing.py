@@ -56,7 +56,7 @@ def preprocessing_extracranial_vessels(case_dir, master_volume_node, fast_segmen
         masked_volume_array[int(np.round((max_is - min_is) * 0.85)):] = 0
     else:
         _, _, _, _, min_is, max_is = get_bounding_box_limits_3d(masked_volume_array)
-        masked_volume_array[int(np.round((max_is - min_is) * 0.95)):] = 0
+        masked_volume_array[int(np.round((max_is - min_is) * 0.90)):] = 0
     # Update volume in slicer
     slicer.util.updateVolumeFromArray(master_volume_node, masked_volume_array)
 
