@@ -879,8 +879,8 @@ def select_configuration(case_dir, centerline_graph):
                 supersegment.graph["features"][feature] = supersegment.graph[feature]
 
         # Specially added for database preparation
-        supersegment.graph["time to first series"] = patient_configuration["time first angiography"]
-        if patient_configuration["time first angiography"] <= 15:
+        supersegment.graph["time to first series"] = patient_configuration["Time first angiography"]
+        if patient_configuration["Time first angiography"] <= 15:
             supersegment.graph["time to first series over 15 min"] = 0
         else:
             supersegment.graph["time to first series over 15 min"] = 1
