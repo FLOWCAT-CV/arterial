@@ -491,6 +491,7 @@ def supersegment_built(case_dir, centerline_graph, predicted_configurations):
                 ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_ylim([-10, 350])
             
         plt.savefig(os.path.join(case_dir, "supersegments.png"))
+        plt.close()
 
     supersegments = {}
 
@@ -863,12 +864,12 @@ def select_configuration(case_dir, centerline_graph):
 
         if not os.path.isdir(os.path.join(case_dir, "thrombectomy_configuration")): os.mkdir(os.path.join(case_dir, "thrombectomy_configuration"))
 
-        for supersegment_path in [supersegment_path for supersegment_path in os.listdir(os.path.join(case_dir, "supersegments")) if supersegment_path.endswith(".pickle") and supersegment_path.startswith(str(configuration_id))]:
-            print("Selecting supersegment:", supersegment_path)
-            shutil.copyfile(os.path.join(case_dir, "supersegments", supersegment_path), os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
-            with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "rb") as f:
-                supersegment = pickle.load(f)
-            make_supersegment_plot(case_dir, supersegment, patient_configuration)
+        supersegment_path = "{} + {} + {}.pickle".format(patient_configuration["Access"].lower(), patient_configuration["Laterality"].lower(), patient_configuration["Antero-posterior"].lower())
+        print("Selecting supersegment:", supersegment_path)
+        shutil.copyfile(os.path.join(case_dir, "supersegments", supersegment_path), os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
+        with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "rb") as f:
+            supersegment = pickle.load(f)
+        make_supersegment_plot(case_dir, supersegment, patient_configuration)
 
         supersegment = add_configuration_features(supersegment, patient_configuration)
 
