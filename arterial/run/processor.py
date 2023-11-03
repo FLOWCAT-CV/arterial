@@ -155,7 +155,7 @@ class ArterialProcessor():
         if not self.skip_centerline_extraction:
             print("Performing centerline extraction...")
             # Applies centerline preprocessing and extraction using Slicer and VMTK
-            # self.centerline_extractor.extract_centerline()
+            self.centerline_extractor.extract_centerline()
             if self.mode == "extracranial_vessels":
                 if not self.skip_branching:
                     print("Performing centerline branching...")
