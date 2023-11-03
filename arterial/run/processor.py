@@ -80,18 +80,26 @@ class ArterialProcessor():
         start = time()
         self.perform_segmentation()
         step0 = time()
+        segmentation_time = step0 - start
         print("Segmentation took {:.2f} s".format(step0 - start))
         self.perform_centerline_extraction()
         step1 = time()
+        centerline_extraction_time = step1 - step0
         print("Centerline extraction took {:.2f} s".format(step1 - step0))
         self.perform_vessel_labelling()
         step2 = time()
+        vessel_labelling_time = step2 - step1
         print("Vessel labelling took {:.2f} s".format(step2 - step1))
         if self.mode == "extracranial_vessels":
             self.perform_feature_extraction()   
         step3 = time()
+        feature_extraction_time = step3 - step2
         print("Feature extraction took {:.2f} s".format(step3 - step2))
         print("Total time for analysis: {:.2f} s".format(step3 - start))
+
+        times = [segmentation_time, centerline_extraction_time, vessel_labelling_time, feature_extraction_time]
+
+        return times
 
     def perform_segmentation(self):
         """
