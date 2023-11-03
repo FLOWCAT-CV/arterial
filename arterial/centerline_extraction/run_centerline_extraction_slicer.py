@@ -57,7 +57,7 @@ def perform_preprocessing_and_centerline_extraction(case_dir, mode = "extracrani
     # Perform vessel segmentation and centerline extraction. This generates segmentations and centerlines in case_dir/centerlines and case_dir/segmentations
     if no_display: # Use if remote server is used, in combination with xvfb-run --auto-servernum --server-num=1
         if fast_segmentation:
-            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -fast t -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
+            os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m {} -fast t --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
         else:
             os.system("{} --disable-terminal-outputs --python-script {} -case_dir {} -m {} --exit-after-startup".format(SLICER_PATH, RUN_CENTERLINE_EXTRACTION_SCRIPT, case_dir, mode))
     else:

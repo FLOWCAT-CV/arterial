@@ -195,7 +195,7 @@ def join_head_and_neck_segmentations(case_dir):
     # Generate new nifti file for segmentation
     segmentation_nifti = nib.Nifti1Image(segmentation_array, cta_nifti.affine, cta_nifti.header)
     # Save new nifti files
-    nib.save(segmentation_nifti, os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir))))
+    nib.save(segmentation_nifti, os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
 
 def crop_intracranial_cta(case_dir):
     """
