@@ -827,7 +827,7 @@ def select_configuration(case_dir, centerline_graph):
             node_pos_dict_P[n] = [supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
 
         nx.draw(supersegment, node_pos_dict_P, node_size=10, node_color=colorMap)
-        ax.set_title(patient_configuration["Access"] + " + " + patient_configuration["Laterality"] + " + " + patient_configuration["Antero-posterior"] + ". time: " + str(patient_configuration["time first angiography"]), fontsize=12)
+        ax.set_title(patient_configuration["Access"] + " + " + patient_configuration["Laterality"] + " + " + patient_configuration["Antero-posterior"] + ". time: " + str(patient_configuration["Time first angiography"]), fontsize=12)
         ax.set_xlim([8, 200])
         ax.set_ylim([-10, 280])
             
