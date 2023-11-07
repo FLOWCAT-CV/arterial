@@ -66,7 +66,7 @@ def get_hierarchical_order(graph, access = "femoral", start_node = 0):
     # We use this list to get the source nodes with the same hierarchy value at each iteration
     source_nodes = [start_node]
     # We use this list to avoid repetition of any already analyzed nodes
-    used_nodes = [start_node]
+    used_nodes = []
     # Hierarchy of start_node is 0
     graph.nodes[start_node]["hierarchy {}".format(access)] = 0
     # Initialize hierarchy value
