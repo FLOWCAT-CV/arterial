@@ -55,6 +55,17 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
     cta_array_data = cta_nifti.get_fdata()
     # Compute translation to eliminate if from branch model points and equate them to those in centerline_segments_array (RAS with no translation)
     aff = cta_nifti.affine
+    # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
+    orientation = nib.aff2axcodes(aff)
+    if orientation == ('R', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([0, 0, 0])
+    elif orientation == ('L', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, 0, 0])
+    elif orientation == ('L', 'P', 'S'):
+        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
+
+    # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
+    lpi_corner_coordinates = np.dot(aff, np.append(lpi_corner_voxel_coordinates, 1))[:3]
     # Compute translation from affine matrix
     translation = np.transpose(aff[:3, 3])
     # Load branch_model
@@ -69,8 +80,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
     accumulated_number_of_points = 0
     for idx in range(branch_model.GetNumberOfCells()):         
         for idx2 in range(branch_model.GetCell(idx).GetNumberOfPoints()):
-            branch_model_coordinates[idx2 + accumulated_number_of_points] = branch_model.GetCell(idx).GetPoints().GetPoint(idx2) - translation
-            branch_model_coordinates[idx2 + accumulated_number_of_points][0] = - branch_model_coordinates[idx2 + accumulated_number_of_points][0]
+            branch_model_coordinates[idx2 + accumulated_number_of_points] = branch_model.GetCell(idx).GetPoints().GetPoint(idx2) - lpi_corner_coordinates
             blanking[idx2 + accumulated_number_of_points] = vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx]
         accumulated_number_of_points += branch_model.GetCell(idx).GetNumberOfPoints()
 

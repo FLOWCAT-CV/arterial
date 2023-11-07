@@ -78,4 +78,4 @@ def save_json(json_object, path):
 
     """
     with open(path, "w") as f:
-        json.dump(json_object, f)
+        json.dump(json_object, f, indent = 4)

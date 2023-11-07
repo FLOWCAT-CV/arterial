@@ -810,16 +810,16 @@ def select_configuration(case_dir, centerline_graph):
         _ = plt.figure(figsize = [5, 10])
         ax = plt.gca()
 
-        highlightNode = None
+        highlight_node = None
         for node in supersegment:
             if supersegment.nodes[node]["hierarchy"] == 0:
-                highlightNode = node
+                highlight_node = node
             
         colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
         colorMap = [colorPalette[not supersegment.nodes[node]["is_supersegment"]] for node in supersegment] 
         
-        if highlightNode is not None:
-            colorMap[highlightNode] = "chartreuse"
+        if highlight_node is not None:
+            colorMap[highlight_node] = "chartreuse"
 
         # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
         node_pos_dict_P = {}
