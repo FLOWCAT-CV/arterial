@@ -47,14 +47,14 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
         accesses.
 
     """
-    # Get CTA nifti (data and aff)
+    # Load nifti to define data, image_shape and aff
     if os.path.isfile(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir)))):
-        cta_nifti = nib.load(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir))))
+        nifti = nib.load(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir))))
     else:
-        cta_nifti = nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
-    cta_array_data = cta_nifti.get_fdata()
-    # Compute translation to eliminate if from branch model points and equate them to those in centerline_segments_array (RAS with no translation)
-    aff = cta_nifti.affine
+        nifti = nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
+    cta_array_data = nifti.get_fdata()
+    image_shape = cta_array_data.shape
+    aff = nifti.affine
     # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
     orientation = nib.aff2axcodes(aff)
     if orientation == ('R', 'A', 'S'):
