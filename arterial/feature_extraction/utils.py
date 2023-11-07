@@ -94,11 +94,11 @@ def get_hierarchical_order(graph, access = "femoral", start_node = 0):
 
         # Check if analysis is finished. If no more target nodes are present and the number of used nodes is 
         # equal to the number of nodes in the graph, the analysis is done
-        if len(target_nodes) == 0 and len(used_nodes) >= len(graph.nodes()):
+        if len(target_nodes) == 0 and len(np.unique(used_nodes)) == len(graph.nodes()):
             hierarchy_done = True
         # If no more target nodes are present but there are still unused nodes, get the first unused node and 
         # attribute it with the following hierarchy value
-        elif len(target_nodes) == 0 and len(used_nodes) < len(graph.nodes()):
+        elif len(target_nodes) == 0 and len(np.unique(used_nodes)) < len(graph.nodes()):
             for node in graph.nodes():
                 if node not in used_nodes:
                     # Add node to source nodes
@@ -269,32 +269,32 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                     if predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]] in [predicted_vessel_type_names[cell_id] for cell_id in subgraphs_cell_ids[subgraph_idx]] and not found_union:
                     # Check if the same vessel type exists in the larger subgraphs
                         # If it exists and has a different cell_id, store all node coordinates
-                        for node_nubgraph_idx in subgraphs[subgraph_idx]:
-                            if predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]] == predicted_vessel_type_names[subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["cell_id"]] and subgraphs[idx].nodes[candidate_node]["cell_id"] != subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["cell_id"]:
+                        for node_subgraph_idx in subgraphs[subgraph_idx]:
+                            if predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]] == predicted_vessel_type_names[subgraphs[subgraph_idx].nodes[node_subgraph_idx]["cell_id"]] and subgraphs[idx].nodes[candidate_node]["cell_id"] != subgraphs[subgraph_idx].nodes[node_subgraph_idx]["cell_id"]:
                                 # In the rare event that the connection node is found to be the centerline_graph.graph["rightmost"], then choose its neighbor
-                                if node_nubgraph_idx == centerline_graph.graph["rightmost"]:
-                                    node_nubgraph_idx = subgraphs[subgraph_idx].neighbors(centerline_graph.graph["rightmost"]).__next__()
+                                if node_subgraph_idx == centerline_graph.graph["rightmost"]:
+                                    node_subgraph_idx = subgraphs[subgraph_idx].neighbors(centerline_graph.graph["rightmost"]).__next__()
                                 # In the case that we are looking at the same subgraph as the candidate node, forbid union with segments in contact
                                 if subgraph_idx == idx:
                                     cell_ids_in_contact = []
                                     for neighbor in subgraphs[subgraph_idx].neighbors(opposite_nodes_for_subgraphs_union[idx][candidate_idx]):
                                         cell_ids_in_contact.append(subgraphs[subgraph_idx].nodes[neighbor]["cell_id"])
-                                    if subgraphs[idx].nodes[node_nubgraph_idx]["cell_id"] in cell_ids_in_contact:
+                                    if subgraphs[idx].nodes[node_subgraph_idx]["cell_id"] in cell_ids_in_contact:
                                         pass
                                     else:
-                                        candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["pos"]], axis = 0)
-                                        candidate_main_graph_nodes.append(node_nubgraph_idx)
+                                        candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_subgraph_idx]["pos"]], axis = 0)
+                                        candidate_main_graph_nodes.append(node_subgraph_idx)
                                         candidate_subgraph_idx = subgraph_idx
                                         found_union = True
                                 # This tries to forbid union in the scenario where the same vessel type is found in the main subgraph and a secondary subgraph 
                                 # and the one in the main subgraph is above the secondarty subgraph by a large margin (30 mm). This cound create weird union, 
                                 # so it is better not to have this union at all and search for an alternative union
-                                elif subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["pos"][2] - subgraphs[idx].nodes[candidate_node]["pos"][2] > 30:
+                                elif subgraphs[subgraph_idx].nodes[node_subgraph_idx]["pos"][2] - subgraphs[idx].nodes[candidate_node]["pos"][2] > 30:
                                     pass
                                 # Otherwise, go on with analysis
                                 else:
-                                    candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["pos"]], axis = 0)
-                                    candidate_main_graph_nodes.append(node_nubgraph_idx)
+                                    candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_subgraph_idx]["pos"]], axis = 0)
+                                    candidate_main_graph_nodes.append(node_subgraph_idx)
                                     candidate_subgraph_idx = subgraph_idx
                                     found_union = True
                 # Check if the preferred vessel type exists in the larger subgraphs
@@ -302,27 +302,27 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                 for subgraph_idx in range(max([idx, 1])):
                     if preferred_vessel_types[predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]]] in [predicted_vessel_type_names[cell_id] for cell_id in subgraphs_cell_ids[subgraph_idx]] and not found_union:
                         # If it exists, store all node coordinates
-                        for node_nubgraph_idx in subgraphs[subgraph_idx]:
-                            if preferred_vessel_types[predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]]] == predicted_vessel_type_names[subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["cell_id"]]:
+                        for node_subgraph_idx in subgraphs[subgraph_idx]:
+                            if preferred_vessel_types[predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]]] == predicted_vessel_type_names[subgraphs[subgraph_idx].nodes[node_subgraph_idx]["cell_id"]]:
                                 # In the rare event that the connection node is found to be the centerline_graph.graph["rightmost"], then choose its neighbor
-                                if node_nubgraph_idx == centerline_graph.graph["rightmost"]:
-                                    node_nubgraph_idx = subgraphs[subgraph_idx].neighbors(centerline_graph.graph["rightmost"]).__next__()
+                                if node_subgraph_idx == centerline_graph.graph["rightmost"]:
+                                    node_subgraph_idx = subgraphs[subgraph_idx].neighbors(centerline_graph.graph["rightmost"]).__next__()
                                 # In the case that we are looking at the same subgraph as the candidate node, group cell_ids in contact with candidate node. Forbid union with segments in contact
                                 if subgraph_idx == idx:
                                     cell_ids_in_contact = []
                                     for neighbor in subgraphs[subgraph_idx].neighbors(opposite_nodes_for_subgraphs_union[idx][candidate_idx]):
                                         cell_ids_in_contact.append(subgraphs[subgraph_idx].nodes[neighbor]["cell_id"])
-                                    if subgraphs[idx].nodes[node_nubgraph_idx]["cell_id"] in cell_ids_in_contact:
+                                    if subgraphs[idx].nodes[node_subgraph_idx]["cell_id"] in cell_ids_in_contact:
                                         pass
                                     else:
-                                        candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["pos"]], axis = 0)
-                                        candidate_main_graph_nodes.append(node_nubgraph_idx)
+                                        candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_subgraph_idx]["pos"]], axis = 0)
+                                        candidate_main_graph_nodes.append(node_subgraph_idx)
                                         candidate_subgraph_idx = subgraph_idx
                                         found_union = True
                                 # Otherwise, go on with analysis
                                 else:
-                                    candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_nubgraph_idx]["pos"]], axis = 0)
-                                    candidate_main_graph_nodes.append(node_nubgraph_idx)
+                                    candidate_main_graph_coordinates = np.append(candidate_main_graph_coordinates, [subgraphs[subgraph_idx].nodes[node_subgraph_idx]["pos"]], axis = 0)
+                                    candidate_main_graph_nodes.append(node_subgraph_idx)
                                     candidate_subgraph_idx = subgraph_idx
                                     found_union = True
             # If none of the above have worked, pool all node coordinates from main subgraph
