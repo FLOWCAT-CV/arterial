@@ -7,8 +7,6 @@ import math
 import numpy as np
 import nibabel as nib
 
-import pickle
-
 from vtk.util.numpy_support import vtk_to_numpy
 
 from arterial.feature_extraction.local_features.utils import get_max_hierarchy, compute_spherical_angles, compute_curvature_and_torsion, find_point_id
@@ -96,7 +94,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
             centerline_graph[src][dst]["is_artificial"] = False
         # We need to iterate over all graph nodes and generalize the feature extraction process depending on the degree of the node
         for node in centerline_graph:
-            # We accumulate the distance to every neighbor node to compute the average distance to neighboring nodes
             # Endpoints (degree == 1)
             # For endpoints, we gather information from the endpoint node's relationship to its neighbor (node_end)
             if centerline_graph.degree[node] == 1:
@@ -122,7 +119,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 else:
                     # To compute the curvature, we take the position of the first three nodes (we compute curvature at a scale of node distances)
                     for node_end_2 in centerline_graph.neighbors(node_end):
-                        if node_end_2 != node and centerline_graph.nodes[node_end_2][f"hierarchy {access}"] < centerline_graph.nodes[node_end][f"hierarchy {access}"]:
+                        if node_end_2 != node and centerline_graph.nodes[node_end_2][f"hierarchy {access}"] > centerline_graph.nodes[node_end][f"hierarchy {access}"]:
                             break
                     points = np.array([
                         centerline_graph.nodes[node]["pos"],
@@ -234,12 +231,8 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
             centerline_graph.nodes[node][f"features {access}"]["direction azimuth"] = azimuth
             # Other features
             centerline_graph.nodes[node][f"features {access}"]["blanking"] = blanking[find_point_id(node_pos, branch_model_coordinates)]
-            node_pos_aux = node_pos.copy()
-            # We have to change sign of first component before ijk transformation and add translation
-            node_pos_aux[0] = -node_pos_aux[0]
-            node_pos_aux = node_pos_aux + translation
             # Tranform to ijk
-            node_pos_ijk = np.matmul(np.linalg.inv(aff), np.append(node_pos_aux, 1.0))[:3]
+            node_pos_ijk = np.matmul(np.linalg.inv(aff), np.append(node_pos + lpi_corner_coordinates, 1.0))[:3]
             centerline_graph.nodes[node][f"features {access}"]["HU intensity"] = cta_array_data[np.round(node_pos_ijk).astype(int)[0], np.round(node_pos_ijk).astype(int)[1], np.round(node_pos_ijk).astype(int)[2]]
 
         # If we had removed edges in the beggining, we add them again to compute accumulated features
