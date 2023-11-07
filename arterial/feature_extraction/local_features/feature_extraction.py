@@ -191,7 +191,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 else:
                     # To compute the curvature, we take the position of the first three nodes (we compute curvature at a scale of node distances)
                     for node_aux_2 in centerline_graph.neighbors(node_aux):
-                        if node_aux_2 != node and centerline_graph.nodes[node_aux_2][f"hierarchy {access}"] > centerline_graph.nodes[node_aux][f"hierarchy {access}"]:
+                        if node_aux_2 != node and centerline_graph.nodes[node_aux_2][f"hierarchy {access}"] < centerline_graph.nodes[node_aux][f"hierarchy {access}"]:
                             break
                     points = np.array([
                         centerline_graph.nodes[node]["pos"],
