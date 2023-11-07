@@ -258,9 +258,12 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
         for node in centerline_graph:
             if centerline_graph.nodes[node][f"hierarchy {access}"] == 0:
                 break
+
+        num_max_iterations = 200
         for feature_key in centerline_graph.nodes[node][f"features {access}"].keys():
             # We create an auxiliary node variable in case we have to look further than the first-degree neighborhood 
             current_node = node
+            iteration = 0
             while math.isnan(centerline_graph.nodes[node][f"features {access}"][feature_key]) or math.isinf(centerline_graph.nodes[node][f"features {access}"][feature_key]):
                 for neighbor in centerline_graph.neighbors(current_node):
                     # Now we choose first following node to also include first node
@@ -271,6 +274,9 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
                 # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
                 current_node = neighbor
+                iteration += 1
+                if iteration > num_max_iterations:
+                    raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
         
         # Now we check all other nodes (differently from looking at the first node, we look at nodes with lower hierarchy)
         for node in centerline_graph:
@@ -278,6 +284,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 for feature_key in centerline_graph.nodes[node][f"features {access}"].keys():
                     # We create an auxiliary node variable in case we have to look further than the first-degree neighborhood 
                     current_node = node
+                    iteration = 0
                     while math.isnan(centerline_graph.nodes[node][f"features {access}"][feature_key]) or math.isinf(centerline_graph.nodes[node][f"features {access}"][feature_key]):
                         for neighbor in centerline_graph.neighbors(current_node):
                             # Now we choose first following node to also include first node
@@ -288,6 +295,9 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                         # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
                         # This is very unlikely to continue further than one node doe to the low frequency of nan or inf values, but we are inclusive just in case
                         current_node = neighbor
+                        iteration += 1
+                        if iteration > num_max_iterations:
+                            raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
 
         # If we are now performing final feature extraction for supersegment treatment, we compute accumulative features that rely on a proper hierarchical ordering (need subgraph union)
         # Accumulative features

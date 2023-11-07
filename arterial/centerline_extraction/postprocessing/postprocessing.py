@@ -37,7 +37,7 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
     centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith(mode)])
     final_centerline_segments_array = np.ndarray([0, 2])
 
-    # Define affine matrix and invert
+    # Load nifti to define image_shape and aff
     nifti = nib.load(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), mode)))
     image_shape = nifti.get_fdata().shape
     aff = nifti.affine
