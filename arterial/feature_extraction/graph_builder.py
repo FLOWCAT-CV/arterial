@@ -194,20 +194,6 @@ def build_centerline_graph(case_dir):
         else:
             sanity_check = True
     else:
-        # Loop over the subgraphs and get hierarchical indexing for each (separately). We have to divide the graphs into subgraphs for the hierarchical indexing to be 
-        # applied properly, so that graph unification can be performed
-        for idx, subgraph in enumerate(subgraphs):
-            start_node = [node for node in subgraph][0]
-            # # For the start_node of disconnected subgraphs, get the node with the lowest S coordinate for hierarchical ordering (it is only an approximation for vessel labelling, not very relevant)
-            if idx > 0:
-                min_s = subgraph.nodes[start_node]["pos"][2]
-                for node in subgraphs[idx]:
-                    if subgraph.nodes[node]["pos"][2] < min_s and subgraph.degree(node) == 1:
-                        min_s = subgraph.nodes[node]["pos"][2]
-                        start_node = node
-            subgraph = get_hierarchical_order(subgraph, "femoral", start_node)
-            subgraphs[idx] = subgraph
-
         # Initialize rightmost node
         rightmost_node = 0
         # Once we go out of the while loop, we compute the range of the s coordinate
@@ -222,6 +208,20 @@ def build_centerline_graph(case_dir):
 
         # Store rightmost in global attributes
         centerline_graph.graph["rightmost"] = rightmost_node
+        
+        # Loop over the subgraphs and get hierarchical indexing for each (separately). We have to divide the graphs into subgraphs for the hierarchical indexing to be 
+        # applied properly, so that graph unification can be performed
+        for idx, subgraph in enumerate(subgraphs):
+            start_node = [node for node in subgraph][0]
+            # # For the start_node of disconnected subgraphs, get the node with the lowest S coordinate for hierarchical ordering (it is only an approximation for vessel labelling, not very relevant)
+            if idx > 0:
+                min_s = subgraph.nodes[start_node]["pos"][2]
+                for node in subgraphs[idx]:
+                    if subgraph.nodes[node]["pos"][2] < min_s and subgraph.degree(node) == 1:
+                        min_s = subgraph.nodes[node]["pos"][2]
+                        start_node = node
+            subgraph = get_hierarchical_order(subgraph, "femoral", start_node)
+            subgraphs[idx] = subgraph
 
         # Perform graph unification
         centerline_graph = unify_subgraphs(case_dir, centerline_graph, subgraphs)
