@@ -194,21 +194,6 @@ def build_centerline_graph(case_dir):
         else:
             sanity_check = True
     else:
-        # Initialize rightmost node just in case
-        rightmost_node = 0
-        # Once we go out of the while loop, we compute the range of the s coordinate
-        # We limit the rightmost node search to the lowest 60% of the image
-        range_pos = highest_s_pos - lowest_s_pos
-        # The rightmost_node node can be used for hierarchical indexing from radial access                          
-        rightmost_node_position = coordinate_array[0][0]
-        for node in centerline_graph:
-            if centerline_graph.nodes[node]["pos"][0] > rightmost_node_position[0] and centerline_graph.degree(node) == 1 and centerline_graph.nodes[node]["pos"][2] < range_pos * 0.6 + lowest_s_pos:
-                rightmost_node = node
-                rightmost_node_position = centerline_graph.nodes[node]["pos"]
-
-        # Store rightmost in global attributes
-        centerline_graph.graph["rightmost"] = rightmost_node
-        
         # Loop over the subgraphs and get hierarchical indexing for each (separately). We have to divide the graphs into subgraphs for the hierarchical indexing to be 
         # applied properly, so that graph unification can be performed
         for idx, subgraph in enumerate(subgraphs):
@@ -222,6 +207,21 @@ def build_centerline_graph(case_dir):
                         start_node = node
             subgraph = get_hierarchical_order(subgraph, "femoral", start_node)
             subgraphs[idx] = subgraph
+
+        # Initialize rightmost node
+        rightmost_node = 0
+        # Once we go out of the while loop, we compute the range of the s coordinate
+        # We limit the rightmost node search to the lowest 60% of the image
+        range_pos = highest_s_pos - lowest_s_pos
+        # The rightmost_node node can be used for hierarchical indexing from radial access                          
+        rightmost_node_position = coordinate_array[0][0]
+        for node in centerline_graph:
+            if centerline_graph.nodes[node]["pos"][0] > rightmost_node_position[0] and centerline_graph.degree(node) == 1 and centerline_graph.nodes[node]["pos"][2] < range_pos * 0.6 + lowest_s_pos:
+                rightmost_node = node
+                rightmost_node_position = centerline_graph.nodes[node]["pos"]
+
+        # Store rightmost in global attributes
+        centerline_graph.graph["rightmost"] = rightmost_node
 
         # Perform graph unification
         centerline_graph = unify_subgraphs(case_dir, centerline_graph, subgraphs)
