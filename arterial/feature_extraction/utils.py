@@ -467,7 +467,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
 
         remove_nodes = []
         for node in centerline_graph:
-            if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_subgraphs, axis = 1)) < 1e-5:
+            if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_subgraphs, axis = 1)) < 1e-5 and node != centerline_graph.graph["rightmost"]:
                 remove_nodes.append(node)
 
         for node in remove_nodes:
