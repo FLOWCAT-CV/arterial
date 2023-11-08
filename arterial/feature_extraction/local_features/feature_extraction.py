@@ -269,7 +269,11 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 current_node = neighbor
                 iteration += 1
                 if iteration > num_max_iterations:
-                    raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
+                    centerline_graph.nodes[node][f"features {access}"][feature_key] = 0 # From experience, we see that this only happens with blanking in node 0 (very rare)
+                                                                                        # We will just hard-code it to 0
+                    print("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
+                    print(centerline_graph.nodes[node][f"features {access}"])
+                    # raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
         
         # Now we check all other nodes (differently from looking at the first node, we look at nodes with lower hierarchy)
         for node in centerline_graph:
@@ -290,7 +294,11 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                         current_node = neighbor
                         iteration += 1
                         if iteration > num_max_iterations:
-                            raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
+                            enterline_graph.nodes[node][f"features {access}"][feature_key] = 0 # From experience, we see that this only happens with blanking in node 0 (very rare)
+                                                                                                # We will just hard-code it to 0
+                            print("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
+                            print(centerline_graph.nodes[node][f"features {access}"])
+                            # raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
 
         # If we are now performing final feature extraction for supersegment treatment, we compute accumulative features that rely on a proper hierarchical ordering (need subgraph union)
         # # Accumulative features
