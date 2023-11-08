@@ -216,7 +216,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
             centerline_graph.nodes[node][f"features {access}"]["radius"] = radius_branch_model[find_point_id(node_pos, branch_model_coordinates)]
             # Segment length
             centerline_graph.nodes[node][f"features {access}"]["segment length"] = sum([np.linalg.norm(points[idx - 1] - points[idx]) for idx in range(1, len(points))]) / len(points)
-            # Curvature and torsion
+            # Curvature and torsion (perhaps we could use the data from )
             if len(points) == 3:
                 curvature, torsion = compute_curvature_and_torsion(points, 1)
             else:
@@ -261,7 +261,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 for neighbor in centerline_graph.neighbors(current_node):
                     # Now we choose first following node to also include first node
                     if centerline_graph.nodes[current_node][f"hierarchy {access}"] < centerline_graph.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(centerline_graph.nodes[neighbor][f"features {access}"][feature_key]) and not math.isinf(centerline_graph.nodes[neighbor][f"features {access}"][feature_key]):
-                        print(feature_key, node, neighbor, centerline_graph.nodes[neighbor][f"features {access}"][feature_key])
                         centerline_graph.nodes[node][f"features {access}"][feature_key] = centerline_graph.nodes[neighbor][f"features {access}"][feature_key]
                         break
                 # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
@@ -286,7 +285,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                         for neighbor in centerline_graph.neighbors(current_node):
                             # Now we choose first following node to also include first node
                             if centerline_graph.nodes[current_node][f"hierarchy {access}"] > centerline_graph.nodes[neighbor][f"hierarchy {access}"] and not math.isnan(centerline_graph.nodes[neighbor][f"features {access}"][feature_key]) and not math.isinf(centerline_graph.nodes[neighbor][f"features {access}"][feature_key]):
-                                print(feature_key, node, neighbor, centerline_graph.nodes[neighbor][f"features {access}"][feature_key])
                                 centerline_graph.nodes[node][f"features {access}"][feature_key] = centerline_graph.nodes[neighbor][f"features {access}"][feature_key]
                                 break
                         # We update currentnode in case we do not find valid values for the nan or inf features. Search will continue from node to node until we find closes node with valid values
@@ -294,7 +292,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                         current_node = neighbor
                         iteration += 1
                         if iteration > num_max_iterations:
-                            enterline_graph.nodes[node][f"features {access}"][feature_key] = 0 # From experience, we see that this only happens with blanking in node 0 (very rare)
+                            centerline_graph.nodes[node][f"features {access}"][feature_key] = 0 # From experience, we see that this only happens with blanking in node 0 (very rare)
                                                                                                 # We will just hard-code it to 0
                             print("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
                             print(centerline_graph.nodes[node][f"features {access}"])
