@@ -263,6 +263,9 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
     # Clean centerline segments
     final_centerline_segments_array = clean_centerlines(final_centerline_segments_array)
+    # For extracranial analysis, we will remove cerebral vessels detected with high confidence
+    if mode == "extracranial_vessels":
+        final_centerline_segments_array = remove_intracranial_arteries(final_centerline_segments_array)
     np.save(os.path.join(case_dir, "{}_centerline_segments_array.npy".format(mode)), final_centerline_segments_array)
 
 def clean_centerlines(centerline_segments_array):
@@ -300,83 +303,48 @@ def clean_centerlines(centerline_segments_array):
 
     return centerline_segments_array
 
-# def perform_segmentation_unification(case_dir):
-#     """
-#     Reads all segmentations in case_dir/segmentations 
-#     files and creates unified segmentation. 
-    
-#     Saves unified segmentation as:
+def remove_intracranial_arteries(centerline_segments_array):
+    """
+    Iterates over all segments and, depending on the average S coordinate of the segment and the mean
+    radius, it removes segments that were confidently identified with high probability as intracranial.
 
-#     >>> case_dir/segmentation.vtk
+    Parameters
+    ----------
+    centerline_segments_array : numpy array
+        Array containing centerline segments.
 
-#     If enviorment variable `paraview_path` is set, also runs Paraview 
-#     processing to get images of segmentation from all angles in a full 
-#     axial rotation. Saves images as:
+    Returns
+    -------
+    centerline_segments_array : numpy array
+        Array containing centerline segments without intracranial arteries.
+    """
+    # First, get full range of S coordinates
+    s_coordinates = []
+    for cell_id in range(len(centerline_segments_array)):
+        s_coordinates.append(centerline_segments_array[cell_id][0][:, 2])
+    s_coordinates = np.concatenate(s_coordinates)
+    s_min = np.min(s_coordinates)
+    s_max = np.max(s_coordinates)
+    s_range = s_max - s_min
 
-#     >>> case_dir/segmentation_images/{idx}.png
+    cell_ids_to_remove = []
+    # For each segment, compute average S coordinate and mean radius
+    for cell_id in range(len(centerline_segments_array)):
+        coordinate_array = centerline_segments_array[cell_id][0]
+        radius_array = centerline_segments_array[cell_id][1]
 
-#     Parameters
-#     ----------
-#     case_dir : string or path-like object
-#         Path to case directory. 
+        # Compute average S coordinate
+        average_s_coordinate = np.mean(coordinate_array[:, 2])
+        average_radius = np.mean(radius_array)
 
-#     Returns
-#     -------
+        # Scale average s coordinate to [0, 1]
+        scaled_average_s_coordinate = (average_s_coordinate - s_min) / s_range
 
-#     """
-#     print("Unifying all segmentations...")
-#     surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk") and surface_model_file.startswith("extracranial_vessels_segmentation")])
+        # If scaled average s coordinate is greater than 0.7 and mean radius is less than 2 mm, we remove the segment
+        if scaled_average_s_coordinate > 0.8 and average_radius < 2:
+            cell_ids_to_remove.append(cell_id)
 
-#     if len(surface_model_list) == 1:
-#         shutil.copyfile(os.path.join(case_dir, "segmentations", "extracranial_vessels_segmentation_0.vtk"), os.path.join(case_dir, "extracranial_vessels_segmentation.vtk"))
-#     else:
-#         # Initialize empty final segmentation polydata
-#         final_segmentation = vtk.vtkPolyData()
-#         # Initialize append polydata filter
-#         append_poly_data_filter = vtk.vtkAppendPolyData()
-#         append_poly_data_filter.AddInputData(final_segmentation)
-#         for surface_model_id, _ in enumerate(surface_model_list):
-#             # Load segmentation         
-#             segmentation_path = os.path.join(case_dir, "segmentations", "vessel_segmentation_{}.vtk".format(surface_model_id))
-#             vtk_poly_data_reader = vtk.vtkPolyDataReader()
-#             vtk_poly_data_reader.SetFileName(segmentation_path)
-#             vtk_poly_data_reader.Update()
-#             segmentation = vtk_poly_data_reader.GetOutput()
+    # Delete segments
+    centerline_segments_array = np.delete(centerline_segments_array, cell_ids_to_remove, axis = 0)
 
-#             if segmentation.GetNumberOfCells() == 0:
-#                 print("Error in segmentation {}. Skipping".format(surface_model_id))
-#             else:
-#                 print("Processing segmentation {}...".format(surface_model_id))
-#                 # Add new segmentation model and update
-#                 append_poly_data_filter.AddInputData(segmentation)
-#                 append_poly_data_filter.Update()
-#                 final_segmentation = append_poly_data_filter.GetOutput()
-
-#         # We can to recompute the normals for all mesh triangles
-#         normals = vtk.vtkPolyDataNormals()
-#         normals.SetInputData(final_segmentation)
-#         normals.SetFeatureAngle(80)
-#         normals.AutoOrientNormalsOn()
-#         normals.UpdateInformation()
-#         normals.Update()
-#         final_segmentation = normals.GetOutput()
-
-#         # We also pass a clean vtkPolyData filter for good measure
-#         clean_poly_data = vtk.vtkCleanPolyData()
-#         clean_poly_data.SetInputData(final_segmentation)
-#         clean_poly_data.Update()
-#         final_segmentation = clean_poly_data.GetOutput()
-
-#         writer = vtk.vtkPolyDataWriter()
-#         writer.SetFileVersion(42)
-#         writer.SetInputData(final_segmentation)
-#         writer.SetFileName(os.path.join(case_dir, "extracranial_vessels_segmentation.vtk"))
-#         writer.Write()
-
-#     # Get png files (only if Paraview is available and path to python interpreter is set)
-#     if os.environ.get('paraview_path') is not None:
-#         print("Getting images of segmentation... \n")
-#         get_rotation_png_files(case_dir)
-#     else:
-#         print("Please set a `paraview_path` environment variable to get images from segmentation using Paraview.")
-#         print("It should look something like (MacOS): /Applications/ParaView-5.10.1.app/Contents/bin/pvpython \n")
+    return centerline_segments_array
