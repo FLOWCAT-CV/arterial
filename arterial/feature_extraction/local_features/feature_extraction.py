@@ -293,19 +293,23 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                             # raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
 
         # If we are now performing final feature extraction for supersegment treatment, we compute accumulative features that rely on a proper hierarchical ordering (need subgraph union)
-        # # Accumulative features
+        # Accumulative features
         for hierarchy in range(get_max_hierarchy(centerline_graph, access) + 1):
-            for node in centerline_graph:
-                if centerline_graph.nodes[node][f"hierarchy {access}"] == hierarchy:
-                    # For the first node, we just set to 0
-                    if hierarchy == 0:
+            nodes_hierarchy = [node for node in centerline_graph if centerline_graph.nodes[node][f"hierarchy {access}"] == hierarchy]
+            for node in nodes_hierarchy:
+                # For the first node, we just set to 0
+                if hierarchy == 0:
+                    centerline_graph.nodes[node][f"features {access}"]["accumulated length from access"] = 0
+                else:
+                    neighbor_found = False
+                    for neighbor in centerline_graph.neighbors(node):
+                        if centerline_graph.nodes[node][f"hierarchy {access}"] > centerline_graph.nodes[neighbor][f"hierarchy {access}"]:
+                            # We add the distance between nodes instead (marked by empty indices vector in edge features)
+                            centerline_graph.nodes[node][f"features {access}"]["accumulated length from access"] = centerline_graph.nodes[neighbor][f"features {access}"]["accumulated length from access"] + np.linalg.norm(centerline_graph.nodes[node]["pos"] - centerline_graph.nodes[neighbor]["pos"])
+                            neighbor_found = True
+                            break
+                    if not neighbor_found:
                         centerline_graph.nodes[node][f"features {access}"]["accumulated length from access"] = 0
-                    else:
-                        for node_aux in centerline_graph.neighbors(node):
-                            if centerline_graph.nodes[node][f"hierarchy {access}"] > centerline_graph.nodes[node_aux][f"hierarchy {access}"]:
-                                # We add the distance between nodes instead (marked by empty indices vector in edge features)
-                                centerline_graph.nodes[node][f"features {access}"]["accumulated length from access"] = centerline_graph.nodes[node_aux][f"features {access}"]["accumulated length from access"] + np.linalg.norm(centerline_graph.nodes[node]["pos"] - centerline_graph.nodes[node_aux]["pos"])
-                                break
 
         # We also add the vessel label as node feature
         for node in centerline_graph:

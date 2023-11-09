@@ -215,7 +215,8 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
         opposite_nodes_for_subgraph_union = []
         for cell_id in subgraph_cell_ids:
             # For all other subgraphs, we search for all vesselTypes
-            if predicted_vessel_type_names[cell_id] not in ["AA", "other"]:
+            # We added a condition to avoid inconections at a proximal level, since sometimes cut proximal vessels (e.g., BT) get labelled as "other" and these inconections drive later errors
+            if predicted_vessel_type_names[cell_id] not in ["AA", "other"] or (predicted_vessel_type_names[cell_id] == "other" and np.mean(coordinate_array[cell_id][0], axis = 0)[2] < 1.5 * np.mean(aortic_arch_coordinates_array, axis = 0)[2]):
                 # Gather both extremal nodes from each segment
                 extremal_node_0 = None
                 extremal_node_1 = None
@@ -384,12 +385,12 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
         # First of all, it only makes sense to split the segment if the node has degree 2 (otherwise it will already be a border between different segments)
         if centerline_graph.degree(main_graph_node) == 3:
             # The position of the main_graph_node will be the division point between segments
-            cutOffIdx = np.argmin(np.linalg.norm(coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]] - centerline_graph.nodes[main_graph_node]["pos"], axis = 1))
+            cut_off_idx = np.argmin(np.linalg.norm(coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]] - centerline_graph.nodes[main_graph_node]["pos"], axis = 1))
             # Check if segment goes downstream with respect to hierarchy. If it is, go against hierarchy. If it is not (normal case), go with hierarchy
             downstream = False
             for neighbor in centerline_graph.neighbors(main_graph_node):
-                # If neighbor with higher hierarchy has smaller indices indices than cutOffIdx, the segment is downstream. Otherwise it is not
-                if centerline_graph.nodes[main_graph_node]["cell_id"] == centerline_graph.nodes[neighbor]["cell_id"] and centerline_graph.nodes[neighbor]["hierarchy femoral"] > centerline_graph.nodes[main_graph_node]["hierarchy femoral"] and np.mean(centerline_graph[neighbor][main_graph_node]["indices"]) < cutOffIdx:
+                # If neighbor with higher hierarchy has smaller indices indices than cut_off_idx, the segment is downstream. Otherwise it is not
+                if centerline_graph.nodes[main_graph_node]["cell_id"] == centerline_graph.nodes[neighbor]["cell_id"] and centerline_graph.nodes[neighbor]["hierarchy femoral"] > centerline_graph.nodes[main_graph_node]["hierarchy femoral"] and np.mean(centerline_graph[neighbor][main_graph_node]["indices"]) < cut_off_idx:
                     downstream = True
             # We keep main_graph_node as initial previous_node for recursive node analysis
             previous_node = main_graph_node
@@ -406,8 +407,8 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                         centerline_graph.nodes[neighbor]["cell_id"] = next_cell_id
                         # Update edge cell_id
                         centerline_graph[previous_node][neighbor]["cell_id"] = next_cell_id
-                        # Update edge indices with cutOffIdx
-                        centerline_graph[previous_node][neighbor]["indices"] = centerline_graph[previous_node][neighbor]["indices"] - cutOffIdx
+                        # Update edge indices with cut_off_idx
+                        centerline_graph[previous_node][neighbor]["indices"] = centerline_graph[previous_node][neighbor]["indices"] - cut_off_idx
                         # Eliminate negative edges if found (this)
                         while centerline_graph[previous_node][neighbor]["indices"][0] < 0 and len(centerline_graph[previous_node][neighbor]["indices"]) > 1:
                             centerline_graph[previous_node][neighbor]["indices"] = np.delete(centerline_graph[previous_node][neighbor]["indices"], 0)
@@ -423,8 +424,8 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                         centerline_graph.nodes[neighbor]["cell_id"] = next_cell_id
                         # Update edge cell_id
                         centerline_graph[previous_node][neighbor]["cell_id"] = next_cell_id
-                        # Update edge indices with cutOffIdx
-                        centerline_graph[previous_node][neighbor]["indices"] = centerline_graph[previous_node][neighbor]["indices"] - cutOffIdx
+                        # Update edge indices with cut_off_idx
+                        centerline_graph[previous_node][neighbor]["indices"] = centerline_graph[previous_node][neighbor]["indices"] - cut_off_idx
                         while centerline_graph[previous_node][neighbor]["indices"][0] < 0 and len(centerline_graph[previous_node][neighbor]["indices"]) > 1:
                             centerline_graph[previous_node][neighbor]["indices"] = np.delete(centerline_graph[previous_node][neighbor]["indices"], 0)
                             centerline_graph[previous_node][neighbor]["coordinate_array"] = np.delete(centerline_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
@@ -439,16 +440,16 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
             # Now update the coordinate_array and the radius_array
             # Create a new object at the end of the array
             coordinate_array = np.hstack((coordinate_array, np.empty(1)))
-            # The new cell will contain all points from the original cell_id from cutOffIdx onwards
-            coordinate_array[next_cell_id] = coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]][cutOffIdx:]
-            # The original cell will only keep points up until cutOffIdx (included)
-            coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]] = coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]][:cutOffIdx + 1]
+            # The new cell will contain all points from the original cell_id from cut_off_idx onwards
+            coordinate_array[next_cell_id] = coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
+            # The original cell will only keep points up until cut_off_idx (included)
+            coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]] = coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
             # Create a new object at the end of the array
             radius_array = np.hstack((radius_array, np.empty(1)))
-            # The new cell will contain all points from the original cell_id from cutOffIdx onwards
-            radius_array[next_cell_id] = radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]][cutOffIdx:]
-            # The original cell will only keep points up until cutOffIdx (included)
-            radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]] = radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]][:cutOffIdx + 1]
+            # The new cell will contain all points from the original cell_id from cut_off_idx onwards
+            radius_array[next_cell_id] = radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
+            # The original cell will only keep points up until cut_off_idx (included)
+            radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]] = radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
             # Also, add new cell_id to label dicts
             predicted_vessel_types[next_cell_id] = predicted_vessel_types[centerline_graph.nodes[main_graph_node]["cell_id"]]
             predicted_vessel_type_names[next_cell_id] = predicted_vessel_type_names[centerline_graph.nodes[main_graph_node]["cell_id"]]
