@@ -214,9 +214,8 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
         candidates_for_subgraph_union = []
         opposite_nodes_for_subgraph_union = []
         for cell_id in subgraph_cell_ids:
-            # For all other subgraphs, we search for all vesselTypes
-            # We added a condition to avoid inconections at a proximal level, since sometimes cut proximal vessels (e.g., BT) get labelled as "other" and these inconections drive later errors
-            if predicted_vessel_type_names[cell_id] not in ["AA", "other"] or (predicted_vessel_type_names[cell_id] == "other" and np.mean(coordinate_array[cell_id], axis = 0)[2] < max(1.5 * np.mean(aortic_arch_coordinates_array, axis = 0)[2], 100)):
+            # For all other subgraphs, we search for all vessel_types
+            if predicted_vessel_type_names[cell_id] not in ["AA", "other"]:
                 # Gather both extremal nodes from each segment
                 extremal_node_0 = None
                 extremal_node_1 = None
@@ -463,32 +462,51 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     # One exception will be when the rightmost node is found in a secondary subgraph. In this case, we will keep the subgraph and connect it to the main graph
     # by connecting the closest degree 1 node to the closest node from the main graph
     if len(subgraphs_aux) > 1:
-        positions_main_graph = []
-        for subgraph_node in subgraphs_aux[0]:
-            positions_main_graph.append(subgraphs_aux[0].nodes[subgraph_node]["pos"])
-
         for subgraph in subgraphs_aux[1:]:
             if centerline_graph.graph["rightmost"] in subgraph:
-                # Join the closest degree 1 node to the closest node from the main graph
-                closest_node = None
-                closest_distance = np.inf
+                # Join the closest degree 1 node from the subgraph to the closest node from the main graph
+                deg_1_nodes = []
                 for node in subgraph:
                     if subgraph.degree(node) == 1:
-                        if np.amin(np.linalg.norm(subgraph.nodes[node]["pos"] - positions_main_graph, axis = 1)) < closest_distance:
+                        deg_1_nodes.append(node)
+                # Find closest node from main graph and choose the closest pair
+                closest_nodes = []
+                closest_distances = []
+                for deg_1_node in deg_1_nodes:
+                    closest_node = None
+                    closest_distance = np.inf
+                    for node in centerline_graph:
+                        distance = np.linalg.norm(centerline_graph.nodes[node]["pos"] - subgraph.nodes[deg_1_node]["pos"])
+                        if distance < closest_distance:
                             closest_node = node
-                            closest_distance = np.amin(np.linalg.norm(subgraph.nodes[node]["pos"] - positions_main_graph, axis = 1))
+                            closest_distance = distance
+
+                    closest_nodes.append(closest_node)
+                    closest_distances.append(closest_distance)
+
+                # Choose the closest pair
+                closest_node = closest_nodes[np.argmin(closest_distances)]
+                deg_1_node = deg_1_nodes[np.argmin(closest_distances)]
+
+                # If the deg_1_node is the rightmost, choose the neighbor
+                if deg_1_node == centerline_graph.graph["rightmost"]:
+                    deg_1_node = centerline_graph.neighbors(centerline_graph.graph["rightmost"]).__next__()
+
                 # Add edge to main graph
-                centerline_graph.add_edge(closest_node, centerline_graph.graph["rightmost"], cell_id = subgraph.nodes[closest_node]["cell_id"])
-                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["vessel_type"] = predicted_vessel_types[centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["cell_id"]]
-                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["cell_id"]]
-                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["indices"] = np.array([])
-                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["coordinate_array"] = np.ndarray([0, 3])
-                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["radius_array"] = np.array([])
+                centerline_graph.add_edge(closest_node, deg_1_node, cell_id = subgraph.nodes[closest_node]["cell_id"])
+                centerline_graph[closest_node][deg_1_node]["vessel_type"] = predicted_vessel_types[centerline_graph[closest_node][deg_1_node]["cell_id"]]
+                centerline_graph[closest_node][deg_1_node]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[closest_node][deg_1_node]["cell_id"]]
+                centerline_graph[closest_node][deg_1_node]["indices"] = np.array([])
+                centerline_graph[closest_node][deg_1_node]["coordinate_array"] = np.ndarray([0, 3])
+                centerline_graph[closest_node][deg_1_node]["radius_array"] = np.array([])
             else:
+                positions_subgraph = []
+                for subgraph_node in subgraph:
+                        positions_subgraph.append(subgraph.nodes[subgraph_node]["pos"])
                 # Remove subgraph
                 remove_nodes = []
-                for node in subgraph:
-                    if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_main_graph, axis = 1)) < 1e-5:
+                for node in centerline_graph:
+                    if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_subgraph, axis = 1)) < 1e-5:
                         remove_nodes.append(node)
 
                 for node in remove_nodes:

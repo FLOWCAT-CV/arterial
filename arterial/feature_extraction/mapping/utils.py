@@ -122,8 +122,8 @@ def supersegment_prediction(centerline_graph):
                 supersegment_candidate_one_hot[vessel_type_one_hot_code[highlight]] += 1
 
         if counter_highlights is not None:
-            for counterHighlight in counter_highlights:
-                supersegment_candidate_one_hot[vessel_type_one_hot_code[counterHighlight]] -= 1
+            for counter_highlight in counter_highlights:
+                supersegment_candidate_one_hot[vessel_type_one_hot_code[counter_highlight]] -= 1
             
         return supersegment_candidate_one_hot
 
@@ -205,8 +205,8 @@ def supersegment_prediction(centerline_graph):
     for access in ["femoral", "radial"]:
         configurations_one_hot[access] = []
         for configuration in configurations[access]:
-            configSequence, highlights, counter_highlights, _ = configuration
-            configurations_one_hot[access].append(vessel_type_sequence_to_one_hot(configSequence, highlights, counter_highlights))
+            config_sequence, highlights, counter_highlights, _ = configuration
+            configurations_one_hot[access].append(vessel_type_sequence_to_one_hot(config_sequence, highlights, counter_highlights))
 
     # Define predicted configurations (cell_ids sequences)
     predicted_configurations = {}
@@ -373,10 +373,10 @@ def supersegment_prediction(centerline_graph):
                         delete_idx.append(idx_a)
 
         # Delete discarded sequences
-        supersegment_candidates_cell_ids[access] = list(np.delete(np.array(supersegment_candidates_cell_ids[access], dtype = object), delete_idx))
-        supersegment_candidates_vessel_types[access] = list(np.delete(np.array(supersegment_candidates_vessel_types[access], dtype = object), delete_idx))
-        bifurcating_segments_candidates_cell_ids[access] = list(np.delete(np.array(bifurcating_segments_candidates_cell_ids[access], dtype = object), delete_idx))
-        bifurcating_segments_candidates_vessel_types[access] = list(np.delete(np.array(bifurcating_segments_candidates_vessel_types[access], dtype = object), delete_idx))
+        supersegment_candidates_cell_ids[access] = [item for idx, item in enumerate(supersegment_candidates_cell_ids[access]) if idx not in delete_idx]
+        supersegment_candidates_vessel_types[access] = [item for idx, item in enumerate(supersegment_candidates_vessel_types[access]) if idx not in delete_idx]
+        bifurcating_segments_candidates_cell_ids[access] = [item for idx, item in enumerate(bifurcating_segments_candidates_cell_ids[access]) if idx not in delete_idx]
+        bifurcating_segments_candidates_vessel_types[access] = [item for idx, item in enumerate(bifurcating_segments_candidates_vessel_types[access]) if idx not in delete_idx]
 
     # Build a one-hot encoded version of the paths (encoding vessel_type). We use the same name convention as in the vessel labelling problem
     supersegment_candidates_one_hot = {}
@@ -516,6 +516,8 @@ def supersegment_built(case_dir, centerline_graph, predicted_configurations):
             configuration_name = "{} + {}".format(access, configuration_names[config_idx])
             # Get predicted confirguration
             supersegment_segments, bifurcating_segments = predicted_configuration
+            if type(supersegment_segments) is not list:
+                supersegment_segments = [supersegment_segments]
             # Initialize a graph with networkx for each supersegment 
             supersegment = centerline_graph.copy()
             # Define empty list to store centerline_graph nodes connected by edges with cell_id in supersegment_segments

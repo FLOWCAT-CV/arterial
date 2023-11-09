@@ -1127,7 +1127,7 @@ def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
     # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
     node_pos_dict_P = {}
     for n in centerline_graph.nodes():
-        node_pos_dict_P[n] = [centerline_graph.nodes(data=True)[n]["pos"][0], centerline_graph.nodes(data=True)[n]["pos"][2]]
+        node_pos_dict_P[n] = [-centerline_graph.nodes(data=True)[n]["pos"][0], centerline_graph.nodes(data=True)[n]["pos"][2]]
     # Draw centerline_graph
     for _ in range(1):
         nx.draw(centerline_graph, node_pos_dict_P, node_size=10, ax=ax)
