@@ -78,7 +78,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
         for idx2 in range(branch_model.GetCell(idx).GetNumberOfPoints()):
             branch_model_coordinates[idx2 + accumulated_number_of_points] = branch_model.GetCell(idx).GetPoints().GetPoint(idx2) - lpi_corner_coordinates
             blanking[idx2 + accumulated_number_of_points] = vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx]
-        print(vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx])
         accumulated_number_of_points += branch_model.GetCell(idx).GetNumberOfPoints()
 
     # Get subgraph union edges, should be at global features of centerline graph
