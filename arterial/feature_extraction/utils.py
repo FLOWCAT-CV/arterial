@@ -216,7 +216,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
         for cell_id in subgraph_cell_ids:
             # For all other subgraphs, we search for all vesselTypes
             # We added a condition to avoid inconections at a proximal level, since sometimes cut proximal vessels (e.g., BT) get labelled as "other" and these inconections drive later errors
-            if predicted_vessel_type_names[cell_id] not in ["AA", "other"] or (predicted_vessel_type_names[cell_id] == "other" and np.mean(coordinate_array[cell_id][0], axis = 0)[2] < 1.5 * np.mean(aortic_arch_coordinates_array, axis = 0)[2]):
+            if predicted_vessel_type_names[cell_id] not in ["AA", "other"] or (predicted_vessel_type_names[cell_id] == "other" and np.mean(coordinate_array[cell_id], axis = 0)[2] < max(1.5 * np.mean(aortic_arch_coordinates_array, axis = 0)[2], 100)):
                 # Gather both extremal nodes from each segment
                 extremal_node_0 = None
                 extremal_node_1 = None
