@@ -22,8 +22,8 @@ import argparse
 from arterial.run.processor import ArterialProcessor
 # from pyvirtualdisplay import Display
 
-nhc = "12158461"
-db = "/media/Disk_B/databases/arterial/errors/KeyError"
+nhc = "16809822"
+db = "/media/Disk_B/databases/arterial/errors/ConnectivityError"
 
 # display = Display(visible=0, size=(1400, 900))
 # display.start()

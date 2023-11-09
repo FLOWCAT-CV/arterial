@@ -158,7 +158,7 @@ def build_centerline_graph(case_dir):
                 for _, node2 in enumerate(aux):
                     coordinate_1 = centerline_graph.nodes[node]["pos"]
                     coordinate_2 = centerline_graph.nodes[node2]["pos"]
-                    if coordinate_1[0] == coordinate_2[0] and coordinate_1[1] == coordinate_2[1] and coordinate_1[2] == coordinate_2[2]:
+                    if np.linalg.norm(coordinate_1 - coordinate_2) < 1e-2:
                         centerline_graph = nx.contracted_nodes(centerline_graph, node, node2)
                         contracted_nodes.append(node2)
                         centerline_graph.nodes[node].pop("contraction")           

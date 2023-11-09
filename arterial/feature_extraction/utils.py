@@ -207,7 +207,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
             for point in coordinate_array[cell_id]:
                 aortic_arch_coordinates_array = np.append(aortic_arch_coordinates_array, [point], axis = 0)
 
-    # Now, we can use the segmentsArray to get the extremal points for all cells
+    # Now, we can use the centerline segments array to get the extremal points for all cells
     candidates_for_subgraphs_union = []
     opposite_nodes_for_subgraphs_union = []
     for idx, subgraph_cell_ids in enumerate(subgraphs_cell_ids):
@@ -224,16 +224,17 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                         extremal_node_0 = node
                     if (subgraphs[idx].nodes[node]["pos"] == coordinate_array[cell_id][-1]).all() and extremal_node_1 not in candidates_for_subgraph_union: 
                         extremal_node_1 = node
-                # 0 is more proximal than 1 and 0 has degree 1, store node
-                if np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_0]["pos"], axis = 1)) < np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_1]["pos"], axis = 1)):
-                    if subgraphs[idx].degree(extremal_node_0) == 1:
-                        candidates_for_subgraph_union.append(extremal_node_0)
-                        opposite_nodes_for_subgraph_union.append(extremal_node_1)
-                # 1 is more proximal than 0 and 1 has degree 1, store node
-                elif np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_0]["pos"], axis = 1)) >= np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_1]["pos"], axis = 1)):
-                    if subgraphs[idx].degree(extremal_node_1) == 1:
-                        candidates_for_subgraph_union.append(extremal_node_1)
-                        opposite_nodes_for_subgraph_union.append(extremal_node_0)
+                if extremal_node_0 is not None and extremal_node_1 is not None:
+                    # 0 is more proximal than 1 and 0 has degree 1, store node
+                    if np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_0]["pos"], axis = 1)) < np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_1]["pos"], axis = 1)):
+                        if subgraphs[idx].degree(extremal_node_0) == 1:
+                            candidates_for_subgraph_union.append(extremal_node_0)
+                            opposite_nodes_for_subgraph_union.append(extremal_node_1)
+                    # 1 is more proximal than 0 and 1 has degree 1, store node
+                    elif np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_0]["pos"], axis = 1)) >= np.amin(np.linalg.norm(aortic_arch_coordinates_array - subgraphs[idx].nodes[extremal_node_1]["pos"], axis = 1)):
+                        if subgraphs[idx].degree(extremal_node_1) == 1:
+                            candidates_for_subgraph_union.append(extremal_node_1)
+                            opposite_nodes_for_subgraph_union.append(extremal_node_0)
             # If two nodes are found close by (within 20 mm) and they share the same vesselType, only proximalest (to AA) will be chosen (rarely happens)
             delete_close_nodes = []
             for idx_node_a, node_a in enumerate(candidates_for_subgraph_union):
