@@ -8,7 +8,7 @@ import nibabel as nib
 
 from vtk.util.numpy_support import vtk_to_numpy
 
-from arterial.feature_extraction.local_features.utils import get_max_hierarchy, featurize_node, sanity_check, add_cumulative_features
+from arterial.feature_extraction.local_features.utils import featurize_node, sanity_check, add_cumulative_features
 from arterial.io.load_and_save_operations import save_pickle
 
 def perform_local_feature_extraction(case_dir, centerline_graph):
