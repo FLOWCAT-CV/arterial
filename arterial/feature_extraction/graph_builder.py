@@ -225,6 +225,13 @@ def build_centerline_graph(case_dir):
 
         # Perform graph unification
         centerline_graph = unify_subgraphs(case_dir, centerline_graph, subgraphs)
+        # Remove nodes with degree 0
+        remove_nodes = []
+        for node in centerline_graph:
+            if centerline_graph.degree(node) == 0:
+                remove_nodes.append(node)
+        for node in remove_nodes:
+            centerline_graph.remove_node(node)
 
         # Get hierarchical order again after graph unification from both accessess
         centerline_graph = get_hierarchical_order(centerline_graph, "femoral", 0)
