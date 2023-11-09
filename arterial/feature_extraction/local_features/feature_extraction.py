@@ -64,8 +64,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
     lpi_corner_coordinates = np.dot(aff, np.append(lpi_corner_voxel_coordinates, 1))[:3]
-    # Compute translation from affine matrix
-    translation = np.transpose(aff[:3, 3])
     # Load branch_model
     vtk_poly_data_reader = vtk.vtkPolyDataReader()
     vtk_poly_data_reader.SetFileName(os.path.join(case_dir, "branch_model.vtk"))
@@ -80,6 +78,7 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
         for idx2 in range(branch_model.GetCell(idx).GetNumberOfPoints()):
             branch_model_coordinates[idx2 + accumulated_number_of_points] = branch_model.GetCell(idx).GetPoints().GetPoint(idx2) - lpi_corner_coordinates
             blanking[idx2 + accumulated_number_of_points] = vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx]
+        print(vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx])
         accumulated_number_of_points += branch_model.GetCell(idx).GetNumberOfPoints()
 
     # Get subgraph union edges, should be at global features of centerline graph
@@ -270,7 +269,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                 if iteration > num_max_iterations:
                     centerline_graph.nodes[node][f"features {access}"][feature_key] = 0 # From experience, we see that this only happens with blanking in node 0 (very rare)
                                                                                         # We will just hard-code it to 0
-                    print("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
                     # raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
         
         # Now we check all other nodes (differently from looking at the first node, we look at nodes with lower hierarchy)
@@ -293,7 +291,6 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
                         if iteration > num_max_iterations:
                             centerline_graph.nodes[node][f"features {access}"][feature_key] = 0 # From experience, we see that this only happens with blanking in node 0 (very rare)
                                                                                                 # We will just hard-code it to 0
-                            print("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
                             # raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
 
         # If we are now performing final feature extraction for supersegment treatment, we compute accumulative features that rely on a proper hierarchical ordering (need subgraph union)
