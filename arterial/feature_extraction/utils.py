@@ -460,19 +460,39 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     subgraphs_aux = [centerline_graph.subgraph(components) for components in nx.connected_components(centerline_graph)]
 
     # If more than one subgraph is still found, it is probably a problematic one. We remove all nodes from all remaining secondary subgraphs
+    # One exception will be when the rightmost node is found in a secondary subgraph. In this case, we will keep the subgraph and connect it to the main graph
+    # by connecting the closest degree 1 node to the closest node from the main graph
     if len(subgraphs_aux) > 1:
-        positions_subgraphs = []
+        positions_main_graph = []
+        for subgraph_node in subgraphs_aux[0]:
+            positions_main_graph.append(subgraphs_aux[0].nodes[subgraph_node]["pos"])
+
         for subgraph in subgraphs_aux[1:]:
-            for subgraphNode in subgraph:
-                positions_subgraphs.append(subgraph.nodes[subgraphNode]["pos"])
+            if centerline_graph.graph["rightmost"] in subgraph:
+                # Join the closest degree 1 node to the closest node from the main graph
+                closest_node = None
+                closest_distance = np.inf
+                for node in subgraph:
+                    if subgraph.degree(node) == 1:
+                        if np.amin(np.linalg.norm(subgraph.nodes[node]["pos"] - positions_main_graph, axis = 1)) < closest_distance:
+                            closest_node = node
+                            closest_distance = np.amin(np.linalg.norm(subgraph.nodes[node]["pos"] - positions_main_graph, axis = 1))
+                # Add edge to main graph
+                centerline_graph.add_edge(closest_node, centerline_graph.graph["rightmost"], cell_id = subgraph.nodes[closest_node]["cell_id"])
+                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["vessel_type"] = predicted_vessel_types[centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["cell_id"]]
+                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["cell_id"]]
+                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["indices"] = np.array([])
+                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["coordinate_array"] = np.ndarray([0, 3])
+                centerline_graph[closest_node][centerline_graph.graph["rightmost"]]["radius_array"] = np.array([])
+            else:
+                # Remove subgraph
+                remove_nodes = []
+                for node in subgraph:
+                    if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_main_graph, axis = 1)) < 1e-5:
+                        remove_nodes.append(node)
 
-        remove_nodes = []
-        for node in centerline_graph:
-            if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_subgraphs, axis = 1)) < 1e-5 and node != centerline_graph.graph["rightmost"]:
-                remove_nodes.append(node)
-
-        for node in remove_nodes:
-            centerline_graph.remove_node(node)
+                for node in remove_nodes:
+                    centerline_graph.remove_node(node)
 
     # Add edges to remove to global attributes
     centerline_graph.graph["subgraphs_union_edges"] = subgraphs_union_edges
