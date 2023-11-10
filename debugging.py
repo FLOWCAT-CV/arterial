@@ -22,8 +22,10 @@ import argparse
 from arterial.run.processor import ArterialProcessor
 # from pyvirtualdisplay import Display
 
-nhc = "16809822"
-db = "/media/Disk_B/databases/arterial/errors/ConnectivityError"
+# nhc = "11346052"
+# nhc = "11608756"
+nhc = "17282737"
+db = "/media/Disk_B/databases/arterial/errors/KeyError"
 
 # display = Display(visible=0, size=(1400, 900))
 # display.start()
@@ -33,10 +35,10 @@ args.mode = "extracranial_vessels"
 args.no_display = False
 args.skip_segmentation = os.path.exists(os.path.join(args.case_dir, f"{nhc}_extracranial_vessels_segmentation.nii.gz"))
 args.fast_segmentation = False
-args.skip_centerline_extraction = os.path.exists(os.path.join(args.case_dir, "branch_model.vtk")) and os.path.exists(os.path.join(args.case_dir, "extracranial_vessels_centerline_segments_array.npy"))
+args.skip_centerline_extraction = False
 args.skip_branching = os.path.exists(os.path.join(args.case_dir, "branch_model.vtk"))
 args.skip_clipping = True
-args.skip_vessel_labelling = os.path.exists(os.path.join(args.case_dir, "extracranial_vessels_graph_simple_pred.pickle"))
+args.skip_vessel_labelling = False
 args.skip_feature_extraction = False
 processor = ArterialProcessor(args)
 times = processor.perform_analysis()

@@ -244,20 +244,20 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
                     endpoint2 = final_centerline_segments_array[idx2][0][-1]
                     for idx3 in range(len(final_centerline_segments_array)):
                         if np.linalg.norm(endpoint1 - final_centerline_segments_array[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint1 - final_centerline_segments_array[idx3][0][-1]) < 1e-4:
-                            first_segment_idx = idx2
-                            second_segment_idx = idx1
+                            first_cell_id = idx2
+                            second_cell_id = idx1
                             break
                         elif np.linalg.norm(endpoint2 - final_centerline_segments_array[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint2 - final_centerline_segments_array[idx3][0][-1]) < 1e-4:
-                            first_segment_idx = idx1
-                            second_segment_idx = idx2
+                            first_cell_id = idx1
+                            second_cell_id = idx2
                             break
                     # Now we can build the final segment, both with positions and radii
-                    final_segment_positions = np.append(np.flip(final_centerline_segments_array[first_segment_idx][0], axis = 0), final_centerline_segments_array[second_segment_idx][0], axis = 0)
-                    final_segment_radius = np.append(np.flip(final_centerline_segments_array[first_segment_idx][1], axis = 0), final_centerline_segments_array[second_segment_idx][1], axis = 0)
-                    final_centerline_segments_array[first_segment_idx][0] = final_segment_positions
-                    final_centerline_segments_array[first_segment_idx][1] = final_segment_radius
+                    final_segment_positions = np.append(np.flip(final_centerline_segments_array[first_cell_id][0], axis = 0), final_centerline_segments_array[second_cell_id][0], axis = 0)
+                    final_segment_radius = np.append(np.flip(final_centerline_segments_array[first_cell_id][1], axis = 0), final_centerline_segments_array[second_cell_id][1], axis = 0)
+                    final_centerline_segments_array[first_cell_id][0] = final_segment_positions
+                    final_centerline_segments_array[first_cell_id][1] = final_segment_radius
                     # We also keep the alternative index to delete it once the analysis is finished
-                    delete_idx.append(second_segment_idx)
+                    delete_idx.append(second_cell_id)
 
     # Finally, we delete the additional segments and save the array as a npy file
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
@@ -285,21 +285,21 @@ def clean_centerlines(centerline_segments_array):
     centerline_segments_array : numpy array
         Array containing centerline segments without repeated points.
     """
-    for segment_idx in range(len(centerline_segments_array)):
+    for cell_id in range(len(centerline_segments_array)):
         remove_point_idx = []
         # We look at consecutive points. If two consecutive points are the same, we remove one of them
-        for point_idx in range(1, len(centerline_segments_array[segment_idx][0])):
-            if np.linalg.norm(centerline_segments_array[segment_idx][0][point_idx - 1] - centerline_segments_array[segment_idx][0][point_idx]) < 1e-2:
+        for point_idx in range(1, len(centerline_segments_array[cell_id][0])):
+            if np.linalg.norm(centerline_segments_array[cell_id][0][point_idx - 1] - centerline_segments_array[cell_id][0][point_idx]) < 1e-2:
                 remove_point_idx.append(point_idx)
-        centerline_segments_array[segment_idx][0] = np.delete(centerline_segments_array[segment_idx][0], remove_point_idx, axis = 0)
-        centerline_segments_array[segment_idx][1] = np.delete(centerline_segments_array[segment_idx][1], remove_point_idx, axis = 0)
+        centerline_segments_array[cell_id][0] = np.delete(centerline_segments_array[cell_id][0], remove_point_idx, axis = 0)
+        centerline_segments_array[cell_id][1] = np.delete(centerline_segments_array[cell_id][1], remove_point_idx, axis = 0)
     
     # We delete segments that have the same first and last point
-    remove_segment_idx = []
-    for segment_idx in range(len(centerline_segments_array)):
-        if np.linalg.norm(centerline_segments_array[segment_idx][0][0] - centerline_segments_array[segment_idx][0][-1]) < 1e-2:
-            remove_segment_idx.append(segment_idx)
-    centerline_segments_array = np.delete(centerline_segments_array, remove_segment_idx, axis = 0)
+    remove_cell_id = []
+    for cell_id in range(len(centerline_segments_array)):
+        if np.linalg.norm(centerline_segments_array[cell_id][0][0] - centerline_segments_array[cell_id][0][-1]) < 1e-2:
+            remove_cell_id.append(cell_id)
+    centerline_segments_array = np.delete(centerline_segments_array, remove_cell_id, axis = 0)
 
     return centerline_segments_array
 

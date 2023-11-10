@@ -62,7 +62,7 @@ def build_centerline_graph(case_dir):
         highest_s_pos = -10000
         # We only link nodes from the same centerline first, and afterwards we contract nodes with the same position
         for cell_id, curve in enumerate(coordinate_array):
-            if cell_id not in skip_cell_ids:
+            if cell_id not in skip_cell_ids and cell_id in predicted_vessel_types:
                 # Initialize distance for node sampling
                 distance = 0
                 # We keep track of last node 
