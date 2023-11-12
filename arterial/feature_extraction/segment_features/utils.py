@@ -1152,11 +1152,20 @@ def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
         node_pos_dict_P = {}
         for n in segments_vessel_type[vessel_type].nodes():
             node_pos_dict_P[n] = [-segments_vessel_type[vessel_type].nodes(data=True)[n]["pos"][0], segments_vessel_type[vessel_type].nodes(data=True)[n]["pos"][2]]
-        for _ in range(1):
-            nx.draw(segments_vessel_type[vessel_type], node_pos_dict_P, node_size = 10, ax = ax[idx // columns, idx % columns])
-            ax[idx // columns, idx % columns].set_title(vessel_type, fontsize=12)
-            ax[idx // columns, idx % columns].set_xlim(xlim)
-            ax[idx // columns, idx % columns].set_ylim(ylim)
+        
+        # If there are multiple axes, use them
+        if isinstance(ax, np.ndarray):
+            for _ in range(1):
+                nx.draw(segments_vessel_type[vessel_type], node_pos_dict_P, node_size = 10, ax = ax[idx // columns, idx % columns])
+                ax[idx // columns, idx % columns].set_title(vessel_type, fontsize=12)
+                ax[idx // columns, idx % columns].set_xlim(xlim)
+                ax[idx // columns, idx % columns].set_ylim(ylim)
+        else:
+            for _ in range(1):
+                nx.draw(segments_vessel_type[vessel_type], node_pos_dict_P, node_size = 10, ax = ax)
+                ax.set_title(vessel_type, fontsize=12)
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
 
     # Save plot
     plt.savefig(os.path.join(case_dir, "single_segments.png"))

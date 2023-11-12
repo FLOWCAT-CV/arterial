@@ -456,12 +456,18 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
             # Update next_cell_id
             next_cell_id += 1
 
+    nodes_in_subgraph_union_edges = []
+    for src, dst in subgraphs_union_edges:
+        nodes_in_subgraph_union_edges.append(src)
+        nodes_in_subgraph_union_edges.append(dst)
+
     # Check for separate subgraphs after graph unification
     subgraphs_aux = [centerline_graph.subgraph(components) for components in nx.connected_components(centerline_graph)]
 
     # If more than one subgraph is still found, it is probably a problematic one. We remove all nodes from all remaining secondary subgraphs
     # One exception will be when the rightmost node is found in a secondary subgraph. In this case, we will keep the subgraph and connect it to the main graph
     # by connecting the closest degree 1 node to the closest node from the main graph
+    all_remove_nodes = []
     if len(subgraphs_aux) > 1:
         for subgraph in subgraphs_aux[1:]:
             if centerline_graph.graph["rightmost"] in subgraph:
@@ -500,6 +506,9 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                 centerline_graph[closest_node][deg_1_node]["indices"] = np.array([])
                 centerline_graph[closest_node][deg_1_node]["coordinate_array"] = np.ndarray([0, 3])
                 centerline_graph[closest_node][deg_1_node]["radius_array"] = np.array([])
+
+                # Add to the subgraphs_union_edges
+                subgraphs_union_edges.append([closest_node, deg_1_node])
             else:
                 positions_subgraph = []
                 for subgraph_node in subgraph:
@@ -512,6 +521,22 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
 
                 for node in remove_nodes:
                     centerline_graph.remove_node(node)
+
+                all_remove_nodes += remove_nodes
+
+    # Check if any of the nodes in remove_nodes is in the nodes_in_subgraph_union_edges
+    for node in all_remove_nodes:
+        if node in nodes_in_subgraph_union_edges:
+            # We remove the edge in the subgraph_union_edges
+            for edge in subgraphs_union_edges:
+                if node in edge:
+                    subgraphs_union_edges.remove(edge)
+
+    # Check if any of the nodes in the subgraphs_union_edges has degree 1. If it has, remove the edge from the graph and from subgraphs_union_edges
+    for edge in subgraphs_union_edges:
+        if centerline_graph.degree(edge[0]) == 1 or centerline_graph.degree(edge[1]) == 1:
+            centerline_graph.remove_edge(edge[0], edge[1])
+            subgraphs_union_edges.remove(edge)
 
     # Add edges to remove to global attributes
     centerline_graph.graph["subgraphs_union_edges"] = subgraphs_union_edges

@@ -41,6 +41,8 @@ def perform_centerline_branching(case_dir):
         radius_array_name = "Radius"
         # Call vmtkbranchextractor command in the command line
         os.system("vmtkbranchextractor -ifile {} -ofile {} -radiusarray {}".format(centerline_model, branch_model, radius_array_name))
+        # Assert that branch_model has been created., otherwise raise error
+        assert os.path.exists(branch_model), "Branch model {} not found. Branch extraction failed.".format(idx)
 
     # Unify all clipped models
     perform_branch_model_unification(case_dir)
@@ -220,6 +222,8 @@ def perform_surface_model_clipping(case_dir):
         radius_array_name = "Radius"
         # Call vmtkbranchclipper command in the command line
         os.system("vmtkbranchclipper -ifile {} -centerlinesfile {} -ofile {} -radiusarray {}".format(surface_model, branch_model, clipped_model, radius_array_name))
+        # Assert that clipped_model has been created., otherwise raise error
+        assert os.path.exists(clipped_model), "Clipped model {} not found. Clipping failed.".format(idx)
 
     # Unify all clipped models
     perform_clipped_model_unification(case_dir)

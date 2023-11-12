@@ -47,6 +47,9 @@ def build_centerline_graph(case_dir):
         SAMPLE_NODE_EVERY_MM = 2
         # Predicted vessel types and vessel type names
         predicted_vessel_types, predicted_vessel_type_names = predicted_vessels_dict(case_dir)
+        # If there are no AA vessels in predicted_vessel_types, we raise an error
+        if "AA" not in predicted_vessel_type_names.keys():
+            raise ValueError("No AA vessels were predicted. Feature extraction will not be reliable.")
 
         # Initialize graph with networkx
         centerline_graph = nx.Graph()

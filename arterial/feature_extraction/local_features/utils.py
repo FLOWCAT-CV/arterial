@@ -184,7 +184,6 @@ def find_neighbour_points(node, centerline_graph, access):
                 centerline_graph.nodes[node_aux]["pos"],
                 centerline_graph.nodes[node_aux_2]["pos"]
             ])
-
     return points
 
 def sanity_check(centerline_graph, access = "femoral"):

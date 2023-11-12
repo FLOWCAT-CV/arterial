@@ -8,6 +8,8 @@ import nibabel as nib
 from scipy.ndimage import gaussian_laplace
 from skimage.measure import label, regionprops
 
+from arterial.centerline_extraction.preprocessing.utils import get_bounding_box_limits_3d
+
 def get_largest_connected_component(segmentation):
     """
     This function is used to filter the segmentation's smaller components
@@ -343,3 +345,30 @@ def recenter_thrombus_patch(case_dir):
 
     else:
         print("No thrombus was found in the segmentation.")
+
+def volume_sanity_check(case_dir):
+    """
+    Check that the volume of the segmentation is within the expected range.
+    Otherwise, image will be read as an artifact and an error will be raised.
+
+    Parameters
+    ----------
+    case_dir : string or path-like object   
+        Path to case directory.
+
+    """
+    seg = nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
+    data = seg.get_fdata()
+    # Compute volume of the bouding box taking into account voxel size
+    min_lr, max_lr, min_pa, max_pa, min_is, max_is = get_bounding_box_limits_3d(data)
+    # Compute segmentation volume taking into account voxel size
+    segmentation_volume = np.sum(data > 0) * np.prod(seg.header.get_zooms())
+    bouding_box_volume = (max_lr - min_lr) * (max_pa - min_pa) * (max_is - min_is) * np.prod(seg.header.get_zooms())
+    if segmentation_volume < 4.5e4:
+        raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
+    if bouding_box_volume < 3.5e6:
+        raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
+    if bouding_box_volume > 3.5e7:
+        raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
+    if segmentation_volume < 5e4 and bouding_box_volume < 6e6:
+        raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
