@@ -5,6 +5,7 @@
 *.pkl
 *tests/
 batch_processing*
+debugging.py
 *__pycache__/
 *.pyc
 .*

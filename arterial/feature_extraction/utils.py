@@ -469,6 +469,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     # by connecting the closest degree 1 node to the closest node from the main graph
     all_remove_nodes = []
     if len(subgraphs_aux) > 1:
+        main_subgraph = subgraphs_aux[0]
         for subgraph in subgraphs_aux[1:]:
             if centerline_graph.graph["rightmost"] in subgraph:
                 # Join the closest degree 1 node from the subgraph to the closest node from the main graph
@@ -482,11 +483,13 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                 for deg_1_node in deg_1_nodes:
                     closest_node = None
                     closest_distance = np.inf
-                    for node in centerline_graph:
-                        distance = np.linalg.norm(centerline_graph.nodes[node]["pos"] - subgraph.nodes[deg_1_node]["pos"])
-                        if distance < closest_distance:
-                            closest_node = node
-                            closest_distance = distance
+                    for node in main_subgraph:
+
+                        if main_subgraph.degree(node) > 2:
+                            distance = np.linalg.norm(main_subgraph.nodes[node]["pos"] - subgraph.nodes[deg_1_node]["pos"])
+                            if distance < closest_distance:
+                                closest_node = node
+                                closest_distance = distance
 
                     closest_nodes.append(closest_node)
                     closest_distances.append(closest_distance)
@@ -500,7 +503,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                     deg_1_node = centerline_graph.neighbors(centerline_graph.graph["rightmost"]).__next__()
 
                 # Add edge to main graph
-                centerline_graph.add_edge(closest_node, deg_1_node, cell_id = subgraph.nodes[closest_node]["cell_id"])
+                centerline_graph.add_edge(closest_node, deg_1_node, cell_id = main_subgraph.nodes[closest_node]["cell_id"])
                 centerline_graph[closest_node][deg_1_node]["vessel_type"] = predicted_vessel_types[centerline_graph[closest_node][deg_1_node]["cell_id"]]
                 centerline_graph[closest_node][deg_1_node]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[closest_node][deg_1_node]["cell_id"]]
                 centerline_graph[closest_node][deg_1_node]["indices"] = np.array([])

@@ -39,9 +39,6 @@ class CenterlineExtractor():
         self.mode = mode
         self.no_display = no_display
         self.fast_segmentation = fast_segmentation
-        if self.mode == "extracranial_vessels":
-            # Perform volume sanity check
-            volume_sanity_check(self.case_dir)
     
     def extract_centerline(self):
         """
@@ -65,6 +62,9 @@ class CenterlineExtractor():
         -------
 
         """
+        if self.mode == "extracranial_vessels":
+            # Perform volume sanity check
+            volume_sanity_check(self.case_dir)
         perform_preprocessing_and_centerline_extraction(self.case_dir, self.mode, self.no_display, self.fast_segmentation)
 
     def extract_branch_model(self):
