@@ -1,5 +1,6 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
+from arterial.segmentation.utils import volume_sanity_check
 from arterial.centerline_extraction.run_centerline_extraction_slicer import perform_preprocessing_and_centerline_extraction
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import perform_centerline_branching, perform_surface_model_clipping
 from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array
@@ -38,6 +39,9 @@ class CenterlineExtractor():
         self.mode = mode
         self.no_display = no_display
         self.fast_segmentation = fast_segmentation
+        if self.mode == "extracranial_vessels":
+            # Perform volume sanity check
+            volume_sanity_check(self.case_dir)
     
     def extract_centerline(self):
         """

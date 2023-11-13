@@ -22,8 +22,7 @@ import argparse
 from arterial.run.processor import ArterialProcessor
 # from pyvirtualdisplay import Display
 
-# nhc = "12259885"
-nhc = "17416967"
+nhc = "10538473"
 db = "/media/Disk_B/databases/arterial/database"
 
 # display = Display(visible=0, size=(1400, 900))
@@ -33,9 +32,9 @@ args.case_dir = os.path.join(db, nhc)
 args.mode = "extracranial_vessels"
 args.no_display = False
 args.skip_segmentation = True
-args.fast_segmentation = False
+args.fast_segmentation = True
 args.skip_centerline_extraction = True
-args.skip_branching = False
+args.skip_branching = True
 args.skip_clipping = True
 args.skip_vessel_labelling = True
 args.skip_feature_extraction = False
