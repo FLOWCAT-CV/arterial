@@ -289,7 +289,7 @@ def clean_centerlines(centerline_segments_array):
         remove_point_idx = []
         # We look at consecutive points. If two consecutive points are the same, we remove one of them
         for point_idx in range(1, len(centerline_segments_array[cell_id][0])):
-            if np.linalg.norm(centerline_segments_array[cell_id][0][point_idx - 1] - centerline_segments_array[cell_id][0][point_idx]) < 1e-2:
+            if np.linalg.norm(centerline_segments_array[cell_id][0][point_idx - 1] - centerline_segments_array[cell_id][0][point_idx]) < 1e-4:
                 remove_point_idx.append(point_idx)
         centerline_segments_array[cell_id][0] = np.delete(centerline_segments_array[cell_id][0], remove_point_idx, axis = 0)
         centerline_segments_array[cell_id][1] = np.delete(centerline_segments_array[cell_id][1], remove_point_idx, axis = 0)
@@ -297,7 +297,7 @@ def clean_centerlines(centerline_segments_array):
     # We delete segments that have the same first and last point
     remove_cell_id = []
     for cell_id in range(len(centerline_segments_array)):
-        if np.linalg.norm(centerline_segments_array[cell_id][0][0] - centerline_segments_array[cell_id][0][-1]) < 1e-2:
+        if np.linalg.norm(centerline_segments_array[cell_id][0][0] - centerline_segments_array[cell_id][0][-1]) < 1e-4:
             remove_cell_id.append(cell_id)
     centerline_segments_array = np.delete(centerline_segments_array, remove_cell_id, axis = 0)
 
@@ -341,7 +341,7 @@ def remove_intracranial_arteries(centerline_segments_array):
         scaled_average_s_coordinate = (average_s_coordinate - s_min) / s_range
 
         # If scaled average s coordinate is greater than 0.7 and mean radius is less than 2 mm, we remove the segment
-        if scaled_average_s_coordinate > 0.8 and average_radius < 2:
+        if scaled_average_s_coordinate > 0.95 and average_radius < 2:
             cell_ids_to_remove.append(cell_id)
 
     # Delete segments

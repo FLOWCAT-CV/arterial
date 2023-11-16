@@ -113,7 +113,7 @@ def centerline_extraction(case_dir, mode, segmentation_node, masked_volume_array
 
                 # For the largest segment, we check the existence of circular centerlines. Needs further testing
                 # if segment_id == 0:
-                #     centerline_poly_data = inspect_circular_centerlines(case_dir, centerline_poly_data, surface_model, segmentation_node, segment_id, affine)
+                #     centerline_poly_data = inspect_circular_centerlines(centerline_poly_data, surface_model, segmentation_node, segment_id, affine)
 
                 # Smooth centerline model
                 smoothing_filter = vtk.vtkSmoothPolyDataFilter()
