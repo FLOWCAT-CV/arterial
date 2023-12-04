@@ -52,6 +52,9 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
     # Overwrite simple graph
     save_pickle(simple_centerline_graph, os.path.join(case_dir, "extracranial_vessels_graph_simple_pred.pickle"))
 
+    if not os.path.exists(os.path.join(case_dir, "single_segments")):
+        os.makedirs(os.path.join(case_dir, "single_segments"))
+
     # Initialize segment features dict in centerline_graph.graph
     centerline_graph.graph["segment_features"] = {}
     # Extract vessel type segments
@@ -59,6 +62,7 @@ def perform_segment_feature_extraction(case_dir, centerline_graph):
     for vessel_type in segments_vessel_type.keys():
         if segments_vessel_type[vessel_type] is not None:
             centerline_graph.graph["segment_features"][vessel_type] = segments_vessel_type[vessel_type].graph["features"]
+            save_pickle(segments_vessel_type[vessel_type], os.path.join(case_dir, "single_segments", "{}.pickle".format(vessel_type)))
 
     # Overwrite centerline graph
     save_pickle(centerline_graph, os.path.join(case_dir, "dense_graph.pickle"))

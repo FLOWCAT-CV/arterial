@@ -515,22 +515,31 @@ def extract_segment_features(segment):
         Featurized graph of the individual segment.
     
     """
+    # Find endnodes nodes
+    proximal_node = find_proximal_node(segment)
+    distal_node = find_distal_node(segment)
+    proximal_node_no_blanking = find_proximal_node(segment, use_blanking=False)
+    distal_node_no_blanking = find_distal_node(segment, use_blanking=False)
+
     segment.graph["features"] = {}
+    segment.graph["features"]["length"] = length(segment, proximal_node_no_blanking)
     segment.graph["features"]["mean diameter"] = mean_diameter(segment)
     segment.graph["features"]["std diameter"] = std_diameter(segment)
     segment.graph["features"]["min diameter"] = min_diameter(segment)
     segment.graph["features"]["max diameter"] = max_diameter(segment)
-    segment.graph["features"]["proximal diameter"] = proximal_diameter(segment)
-    segment.graph["features"]["distal diameter"] = distal_diameter(segment)
+    segment.graph["features"]["proximal diameter"] = proximal_diameter(segment, proximal_node)
+    segment.graph["features"]["distal diameter"] = distal_diameter(segment, distal_node)
     segment.graph["features"]["min max diameter ratio"] = min_max_diameter_ratio(segment)
-    segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment)
-    segment.graph["features"]["bending length"] = bending_length(segment)
-    segment.graph["features"]["cumulative curvature"] = cumulative_curvature(segment)
-    segment.graph["features"]["tortuosity index 5 cm"] = tortuosity_index_first_5_cm(segment)
+    segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment, proximal_node, distal_node)
+    segment.graph["features"]["bending length"] = bending_length(segment, proximal_node, distal_node)
+    segment.graph["features"]["cumulative curvature"] = cumulative_curvature(segment, proximal_node_no_blanking)
+    segment.graph["features"]["tortuosity index 5 cm"] = tortuosity_index_first_5_cm(segment, proximal_node, distal_node)
+    segment.graph["features"]["min polar angle"] = min_polar_angle(segment)
+    segment.graph["features"]["accumulated_polar_angle_differential"] = accumulated_polar_angle_differential(segment, proximal_node)
 
     return segment
 
-def find_proximal_node(segment):
+def find_proximal_node(segment, use_blanking = True):
     """
     Finds proximal node of the segment. Detects node with smallest hierarhcy
     and blanking = 0. If no nodes have blanking = 0, then it just find node
@@ -551,10 +560,11 @@ def find_proximal_node(segment):
     hierarchy = 10000
     proximal_node = None
     # Iterate over all nodes to find node with smallest hierarchy and blanking = 0
-    for node in segment:
-        if segment.nodes[node]["hierarchy femoral"] < hierarchy and segment.nodes[node]["features femoral"]["blanking"] < 0.5:
-            proximal_node = node
-            hierarchy = segment.nodes[node]["hierarchy femoral"]
+    if use_blanking:
+        for node in segment:
+            if segment.nodes[node]["hierarchy femoral"] < hierarchy and segment.nodes[node]["features femoral"]["blanking"] < 0.5:
+                proximal_node = node
+                hierarchy = segment.nodes[node]["hierarchy femoral"]
     # If no nodes are found (no nodes with blanking = 0), select node with smallest hierarchy
     if proximal_node is None:
         for node in segment:
@@ -564,7 +574,7 @@ def find_proximal_node(segment):
 
     return proximal_node
 
-def find_distal_node(segment):
+def find_distal_node(segment, use_blanking = True):
     """
     Finds distal node of the segment. Detects node with largest hierarhcy
     and blanking = 0. If no nodes have blanking = 0, then it just find node
@@ -584,11 +594,12 @@ def find_distal_node(segment):
     # Initialize hierarhy and distal node
     hierarchy = 0
     distal_node = None
-    # Iterate over all nodes to find node with largest hierarchy and blanking = 0
-    for node in segment:
-        if segment.nodes[node]["hierarchy femoral"] >= hierarchy and segment.nodes[node]["features femoral"]["blanking"] < 0.5:
-            distal_node = node
-            hierarchy = segment.nodes[node]["hierarchy femoral"]
+    if use_blanking:
+        # Iterate over all nodes to find node with largest hierarchy and blanking = 0
+        for node in segment:
+            if segment.nodes[node]["hierarchy femoral"] >= hierarchy and segment.nodes[node]["features femoral"]["blanking"] < 0.5:
+                distal_node = node
+                hierarchy = segment.nodes[node]["hierarchy femoral"]
     # If no nodes are found (no nodes with blanking = 0), select node with largest hierarchy
     if distal_node is None:
         for node in segment:
@@ -597,6 +608,45 @@ def find_distal_node(segment):
                 hierarchy = segment.nodes[node]["hierarchy femoral"]
 
     return distal_node
+
+def length(segment, proximal_node):
+    """
+    Finds length of segment. Collects lengths from all edges of the
+    segment and computes sum. 
+
+    Parameters
+    ----------
+    segment : networkx.Graph
+        Graph of the individual segment.
+    proximal_node : integer
+        Proximal node of the segment.
+    distal_node : integer
+        Distal node of the segment.
+
+    Returns
+    -------
+    length : float
+        Length of segment.
+
+    """
+    # Initializes line integral to 0
+    actual_length = 0
+    # Iterate over all nodes between proximal and distal and adds distance between nodes as differentials of the
+    # line integral. Go from neighbor to neighbor until we reach the end and all neigbors have been visited
+    nodes_visited = [proximal_node]
+    node = proximal_node
+    done = False
+    while not done:
+        done = True
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                actual_length += np.linalg.norm(segment.nodes[node]["pos"] - segment.nodes[neighbor]["pos"])
+                nodes_visited.append(node)
+                node = neighbor
+                done = False
+                break
+
+    return actual_length
 
 def mean_diameter(segment):  
     """
@@ -720,7 +770,7 @@ def min_diameter(segment):
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
         return np.amin(diameters)
 
-def proximal_diameter(segment):
+def proximal_diameter(segment, proximal_node):
     """
     Finds proximal diameter of segment.
 
@@ -728,6 +778,8 @@ def proximal_diameter(segment):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
+    proximal_node : integer
+        Proximal node of the segment.
 
     Returns
     -------
@@ -735,12 +787,10 @@ def proximal_diameter(segment):
         Proximal diameter of segment.
 
     """
-    # Find proximal node
-    proximal_node = find_proximal_node(segment)
     # Reurns diameter
     return segment.nodes[proximal_node]["features femoral"]["radius"] * 2
 
-def distal_diameter(segment):
+def distal_diameter(segment, distal_node):
     """
     Finds distal diameter of segment.
 
@@ -748,6 +798,8 @@ def distal_diameter(segment):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
+    distal_node : integer
+        Distal node of the segment.
 
     Returns
     -------
@@ -755,8 +807,6 @@ def distal_diameter(segment):
         Distal diameter of segment.
 
     """
-    # Find distal node
-    distal_node = find_distal_node(segment)
     # Reurns diameter
     return segment.nodes[distal_node]["features femoral"]["radius"] * 2
     
@@ -792,7 +842,7 @@ def min_max_diameter_ratio(segment):
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
         return np.amin(diameters) / np.amax(diameters)
 
-def tortuosity_index(segment):
+def tortuosity_index(segment, proximal_node, distal_node):
     """
     Computes tortuosity index of a segment.
 
@@ -808,6 +858,10 @@ def tortuosity_index(segment):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
+    proximal_node : integer
+        Proximal node of the segment.
+    distal_node : integer
+        Distal node of the segment.
 
     Returns
     -------
@@ -815,28 +869,16 @@ def tortuosity_index(segment):
         Tortuosity index of a segment.
 
     """
-    # Find endnodes nodes
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
     # Computes euclidean distance as norm between both nodes
     euclidean_distance = np.linalg.norm(segment.nodes[proximal_node]["pos"] - segment.nodes[distal_node]["pos"])
-    # Initializes line integral to 0
-    actual_length = 0
-    # Iterate over all nodes between proximal and distal and adds distance between nodes as differentials of the
-    # line integral 
-    node = proximal_node
-    while segment.nodes[node]["hierarchy femoral"] < segment.nodes[distal_node]["hierarchy femoral"]:
-        for neighbor in segment.neighbors(node):
-            if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
-                actual_length += np.linalg.norm(segment.nodes[node]["pos"] - segment.nodes[neighbor]["pos"])
-                node = neighbor
-    # Check that we are not gonna divide     by nan (if we do, return nan)
-    if not math.isnan(actual_length):
+    actual_length = length(segment, proximal_node)
+    # Check that we are not gonna divide by nan or 0 (if we do, return nan)
+    if not math.isnan(actual_length) and actual_length > 0:
         return 1 - euclidean_distance / actual_length
     else:
         return math.nan
 
-def bending_length(segment):
+def bending_length(segment, proximal_node, distal_node):
     """
     Computes maximum bending length along a segment. It measures the normal
     distances between each node position of the segment to the axis connecting 
@@ -847,6 +889,10 @@ def bending_length(segment):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
+    proximal_node : integer
+        Proximal node of the segment.
+    distal_node : integer
+        Distal node of the segment.
 
     Returns
     -------
@@ -856,21 +902,26 @@ def bending_length(segment):
     """
     # Initialize list and endnodes
     bending_lengths = []
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
     # Assign node positions
     proximal_node_pos = segment.nodes[proximal_node]["pos"]
     distal_node_pos = segment.nodes[distal_node]["pos"]
 
-    # Compute distance from reference axis
+    nodes_visited = [proximal_node]
     node = proximal_node
-    while segment.nodes[node]["hierarchy femoral"] < segment.nodes[distal_node]["hierarchy femoral"]:
+    done = False
+    while not done:
+        done = True
         for neighbor in segment.neighbors(node):
-            if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
-                node_pos = segment.nodes[node]["pos"]
-                if node != proximal_node:
-                    bending_lengths.append(np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2))
+            if neighbor not in nodes_visited:
+                node_pos = segment.nodes[neighbor]["pos"]
+                # Compute distance from reference axis
+                if (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos)) > 1e-4:
+                    bending_lengths.append(np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(max(0, 1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2)))
+                # If a warning is raised, print the values that are causing it
+                nodes_visited.append(node)
                 node = neighbor
+                done = False
+                break
 
     # Return maxium bending length
     if len(bending_lengths) > 0:
@@ -878,7 +929,7 @@ def bending_length(segment):
     else:
         return 0
 
-def cumulative_curvature(segment):
+def cumulative_curvature(segment, proximal_node):
     """
     Computes cumulative curvature of a segment by adding up the curvatures
     of each node of the segment.
@@ -887,6 +938,10 @@ def cumulative_curvature(segment):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
+    proximal_node : integer
+        Proximal node of the segment.
+    distal_node : integer
+        Distal node of the segment.
 
     Returns
     -------
@@ -894,22 +949,25 @@ def cumulative_curvature(segment):
         Cumulative curvature along a segment
 
     """
-    # Find proximal and distal nodes of a segment and their positions
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
     # Initialize cumulative curvature 
     cumulative_curvature = 0
+    nodes_visited = [proximal_node]
     node = proximal_node
-    # Iterate over all nodes between proximal and distal endpoints and add curvature
-    while segment.nodes[node]["hierarchy femoral"] < segment.nodes[distal_node]["hierarchy femoral"]:
+    done = False
+    while not done:
+        done = True
         for neighbor in segment.neighbors(node):
-            if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
+            if neighbor not in nodes_visited:
+                # Compute distance from reference axis
                 cumulative_curvature += segment.nodes[neighbor]["features femoral"]["curvature"]
+                nodes_visited.append(node)
                 node = neighbor
+                done = False
+                break
 
     return cumulative_curvature
 
-def tortuosity_index_first_5_cm(segment):
+def tortuosity_index_first_5_cm(segment, proximal_node, distal_node):
     """
     Computes tortuosity index of first 5 centimeters of the segment.
     First it detects which nodes are within a 5 centimeter distance 
@@ -920,6 +978,10 @@ def tortuosity_index_first_5_cm(segment):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
+    proximal_node : integer
+        Proximal node of the segment.
+    distal_node : integer
+        Distal node of the segment.
 
     Returns
     -------
@@ -929,175 +991,144 @@ def tortuosity_index_first_5_cm(segment):
     """
     # Create a copy of the segment
     segment_copy = segment.copy()
-    # Finds proximal and distal nodes of a segment
-    proximal_node = find_proximal_node(segment_copy)
-    distal_node = find_distal_node(segment_copy)
     # Initialize list for nodes within 5 cm of the proximal node and cumulative distance
-    keep_nodes = [proximal_node]
     cumulative_distance = 0
     node = proximal_node
-    # Iterate over all nodes between proximal and distal endpoints and find nodes to keep
-    while segment_copy.nodes[node]["hierarchy femoral"] < segment_copy.nodes[distal_node]["hierarchy femoral"] and cumulative_distance < 50:
-        for neighbor in segment_copy.neighbors(node):
-            if segment_copy.nodes[neighbor]["hierarchy femoral"] > segment_copy.nodes[node]["hierarchy femoral"]:
+    nodes_visited = [proximal_node]
+    done = False
+    while not done and cumulative_distance < 50:
+        done = True
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                # Compute distance from reference axis
                 cumulative_distance += np.linalg.norm(segment_copy.nodes[neighbor]["pos"] - segment_copy.nodes[node]["pos"])
-                keep_nodes.append(neighbor)
+                nodes_visited.append(node)
                 node = neighbor
+                done = False
+                break
 
     # Eliminate all other nodes from the segment
     for node in segment_copy.copy():
-        if node not in keep_nodes:
+        if node not in nodes_visited:
             segment_copy.remove_node(node)
+
+    proximal_node_new_segment = find_proximal_node(segment_copy, use_blanking=False)
+    distal_node_new_segment = find_distal_node(segment_copy, use_blanking=False)
     # Compute tortuosity index from the remaining segment
-    return tortuosity_index(segment_copy)
+    return tortuosity_index(segment_copy, proximal_node_new_segment, distal_node_new_segment)
 
-# def min_angle_curve(segment):
-#     """
-#     Computes the smallest angle along a segment
+def min_polar_angle(segment):
+    """
+    Computes the smallest angle along a segment.
 
-#     Parameters
-#     ----------
-#     segment : networkx.Graph
-#         Graph of the individual segment.
+    Parameters
+    ----------
+    segment : networkx.Graph
+        Graph of the individual segment.
+    
+    Returns
+    -------
+    theta : float
+        Smallest angle along a segment.
+    """
+    theta = np.pi / 2
+    for node in segment:
+        if segment.nodes[node]["features femoral"]["direction polar"] < theta:
+            theta = segment.nodes[node]["features femoral"]["direction polar"]
 
-#     Returns
-#     -------
+    return theta
 
-#     """
-#     proximal_node = find_proximal_node(segment)
-#     distal_node = find_distal_node(segment)
-#     max_hierarchy = segment.nodes[distal_node]["hierarchy femoral"]
+def accumulated_polar_angle_differential(segment, proximal_node):
+    """
+    Computes the accumulated polar angle differential along a segment.
 
-#     proximal_node_pos = segment.nodes[proximal_node]["pos"]
-#     distal_node_pos = segment.nodes[distal_node]["pos"]
+    Parameters
+    ----------
+    segment : networkx.Graph
+        Graph of the individual segment.
+    
+    Returns
+    -------
+    theta : float
+        Accumulated polar angle along a segment.
+    """
+    nodes_visited = [proximal_node]
+    node = proximal_node
+    previous_polar_angle = segment.nodes[node]["features femoral"]["direction polar"]
+    accumulate_polar_angle_differential = 0
+    done = False
+    while not done:
+        done = True
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                # Compute distance from reference axis
+                accumulate_polar_angle_differential += np.abs(previous_polar_angle - segment.nodes[neighbor]["features femoral"]["direction polar"])
+                nodes_visited.append(node)
+                node = neighbor
+                previous_polar_angle = segment.nodes[node]["features femoral"]["direction polar"]
+                done = False
+                break
 
-#     angles = []
-#     curvature = []
+    return accumulate_polar_angle_differential
 
-#     for hierarchy in range(max_hierarchy + 1):
-#         for node in segment:
-#             if segment.nodes[node]["hierarchy femoral"] == hierarchy:
-#                 found_neighbor = False
-#                 for neighbor in segment.neighbors(node):
-#                     if segment.nodes[neighbor]["hierarchy femoral"] > segment.nodes[node]["hierarchy femoral"]:
-#                         found_neighbor = True
-#                         break
+## Measurements between two segments
+    
+def largest_azimuthal_difference(segment_1, segment_2, abs_polar_angle_threshold = 60 * np.pi / 180):
+    """
+    Computes the largest azimuthal difference between two segments, considering
+    only nodes with and absolute polar angle below a certain threshold.
 
-#                 if not found_neighbor:
-#                     theta = 0.0
-#                 else:
-#                     node_pos = segment.nodes[node]["pos"]
-#                     neighbor_node_pros = segment.nodes[neighbor]["pos"]
-#                     theta = np.arccos(np.dot(neighbor_node_pros - node_pos, distal_node_pos - proximal_node_pos) / (np.linalg.norm(neighbor_node_pros - node_pos) * np.linalg.norm(distal_node_pos - proximal_node_pos)))
+    Parameters
+    ----------
+    segment_1 : networkx.Graph
+        Graph of the individual segment.
+    segment_2 : networkx.Graph
+        Graph of the individual segment.
+    abs_polar_angle_threshold : float
+        Threshold for the absolute polar angle.
 
-#                 angles.append(theta)    
-#                 segment.nodes[node]["features femoral"]["tangential polar angle"] = theta
-#                 curvature.append(segment.nodes[node]["features femoral"]["curvature"])
+    Returns
+    -------
+    delta_phi : float
+        Largest azimuthal difference between two segments.
+    """
+    delta_phi = 0
 
-#     angle_grad_grad = np.gradient(np.gradient(angles))
-#     nodes = []
+    for node_1 in segment_1:
+        if np.abs(segment_1.nodes[node_1]["features femoral"]["direction polar"]) < abs_polar_angle_threshold:
+            for node_2 in segment_2:
+                if np.abs(segment_2.nodes[node_2]["features femoral"]["direction polar"]) < abs_polar_angle_threshold:
+                    delta_phi = np.maximum(delta_phi, np.abs(segment_1.nodes[node_1]["features femoral"]["direction azimuth"] - segment_2.nodes[node_2]["features femoral"]["direction azimuth"]))
 
-#     for hierarchy in range(max_hierarchy + 1):
-#         for node in segment:
-#             if segment.nodes[node]["hierarchy femoral"] == hierarchy:
-#                 nodes.append(node)
+    return delta_phi
 
-#     subsegment_node_idx_bounds = []
-#     current_sign = np.sign(angle_grad_grad[0])
-#     initial_node_idx = 0
+def largest_polar_difference(segment_1, segment_2):
+    """
+    Computes the largest polar difference between two segments.
 
-#     for idx, angle_grad_gradIdx in enumerate(angle_grad_grad):
-#         if np.sign(angle_grad_gradIdx) != current_sign:
-#             subsegment_node_idx_bounds.append([initial_node_idx, idx])
-#             initial_node_idx = idx
-#             current_sign = np.sign(angle_grad_gradIdx)
-#         if idx == len(angle_grad_grad) - 1:
-#             subsegment_node_idx_bounds.append([initial_node_idx, idx])
+    Parameters
+    ----------
+    segment_1 : networkx.Graph
+        Graph of the individual segment.
+    segment_2 : networkx.Graph
+        Graph of the individual segment.
+    abs_polar_angle_threshold : float
+        Threshold for the absolute polar angle.
 
-#     subsegment_nodes = []
+    Returns
+    -------
+    delta_phi : float
+        Largest polar difference between two segments.
+    """
+    delta_theta = 0
 
-#     for node_bounds_idx in subsegment_node_idx_bounds:
-#         subsegment_nodes.append(nodes[node_bounds_idx[0]:node_bounds_idx[1]])
+    for node_1 in segment_1:
+        for node_2 in segment_2:
+            delta_theta = np.maximum(delta_theta, np.abs(segment_1.nodes[node_1]["features femoral"]["direction polar"] - segment_2.nodes[node_2]["features femoral"]["direction polar"]))
 
-#     turns_nodes = []
-#     num_segments = 3
+    return delta_theta
 
-#     if len(subsegment_nodes) <= num_segments:
-#         for idx in range(len(subsegment_nodes)):
-#             turns_nodes += subsegment_nodes[idx]
-#         turns_nodes = [turns_nodes]
-#     else:
-#         for idx in range(len(subsegment_nodes) - (num_segments - 1)):
-#             turns_nodes.append([])
-#             for idx2 in range(num_segments):
-#                 turns_nodes[-1] += subsegment_nodes[idx + idx2]
-
-#     turns = []
-
-#     for idx, turn_nodes in enumerate(turns_nodes):
-#         turn = segment.copy()
-#         remove_nodes = []
-#         for node in turn:
-#             if node not in turn_nodes:
-#                 remove_nodes.append(node)
-#         for node in remove_nodes:
-#             turn.remove_node(node)
-
-#         turns.append(turn)
-
-#     angulations = []
-#     end_nodes = []
-
-#     for idx, turn in enumerate(turns):
-#         max_curvature = 0
-#         excentric_node = None
-#         end_nodes = []
-#         min_curvature_nodes = []
-#         min_hierarchy_turn = 10000
-#         max_hierarchy_turn = 0
-#         for node in turn:
-#             if not turn.degree(node) == 1 and turn.nodes[node]["features femoral"]["curvature"] > max_curvature and node not in min_curvature_nodes:
-#                 excentric_node = node
-#                 max_curvature = turn.nodes[node]["features femoral"]["curvature"]
-#                 excentric_hierarchy = turn.nodes[node]["hierarchy femoral"]
-#                 min_curvature_nodes.append(node)
-#             if turn.nodes[node]["hierarchy femoral"] < min_hierarchy_turn:
-#                 min_hierarchy_turn = turn.nodes[node]["hierarchy femoral"]
-#             if turn.nodes[node]["hierarchy femoral"] > max_hierarchy_turn:
-#                 max_hierarchy_turn = turn.nodes[node]["hierarchy femoral"]
-
-#         try:
-#             # Compute mean radius of curvature for the three most excentric nodes
-#             radius_of_curvature = [2 / turn.nodes[excentric_node]["features femoral"]["curvature"]]
-#             for neighbor in turn.neighbors(excentric_node):
-#                 radius_of_curvature.append(2 / turn.nodes[neighbor]["features femoral"]["curvature"])
-
-#             prior_nodes = []
-#             prior_distances = []
-#             posterior_nodes = []
-#             posterior_distances = []
-
-#             for node in turn:
-#                 if turn.nodes[node]["hierarchy femoral"] < excentric_hierarchy:
-#                     prior_nodes.append(node)
-#                     prior_distances.append(np.linalg.norm(turn.nodes[node]["pos"] - turn.nodes[excentric_node]["pos"]))
-#                 elif turn.nodes[node]["hierarchy femoral"] > excentric_hierarchy:
-#                     posterior_nodes.append(node)
-#                     posterior_distances.append(np.linalg.norm(turn.nodes[node]["pos"] - turn.nodes[excentric_node]["pos"]))
-
-#             end_nodes = [prior_nodes[np.argmin(np.abs(prior_distances - np.mean(radius_of_curvature)))], 
-#                          posterior_nodes[np.argmin(np.abs(posterior_distances - np.mean(radius_of_curvature)))]]
-
-#             assert len(end_nodes) == 2
-
-#             proximal_node_pos = turn.nodes[end_nodes[0]]["pos"] - turn.nodes[excentric_node]["pos"]
-#             distal_node_pos = turn.nodes[end_nodes[1]]["pos"] - turn.nodes[excentric_node]["pos"]
-
-#             angulations.append(np.arccos(np.dot(proximal_node_pos, distal_node_pos) / (np.linalg.norm(proximal_node_pos) * np.linalg.norm(distal_node_pos))) * 180 / math.pi)
-#         except:
-#             angulations.append(180.0)
-
-#     return np.amin(angulations)
+## Plot functions
 
 def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
     """
