@@ -95,8 +95,11 @@ def registration_mask(fixed_image_path, moving_mask_path, output_mask_path, tran
     moving_image = ants.image_read(moving_mask_path)
     
     # Load the transformation matrix
-    with open(transformation_file, 'r') as f:
-        transformations = [line.strip() for line in f]
+    if transformation_file.endswith("txt"):
+        with open(transformation_file, 'r') as f:
+            transformations = [line.strip() for line in f]
+    else:
+        transformations = [transformation_file]
       
     # Apply the transformation to the mask
     warped_mask = ants.apply_transforms(fixed = fixed_image, 
