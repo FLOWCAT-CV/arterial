@@ -61,6 +61,7 @@ def registration(fixed_image_path, moving_image_path, output_image_path, transfo
     if save_transform:
         # Save the transformation matrix
         np.savetxt(os.path.join(os.path.dirname(output_image_path), 'transfomation_matrix.txt'), transform['fwdtransforms'], fmt='%s')
+        return os.path.join(os.path.dirname(output_image_path), 'transfomation_matrix.txt')
         
 def registration_mask(fixed_image_path, moving_mask_path, output_mask_path, transformation_file = None, remove_transformation = True):
     """
