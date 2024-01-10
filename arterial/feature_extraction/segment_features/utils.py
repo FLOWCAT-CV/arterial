@@ -7,6 +7,8 @@ import networkx as nx
 
 import matplotlib.pyplot as plt
 
+from scipy.interpolate import interp1d
+
 def get_single_segments_vessel_type(centerline_graph):
     """"
     Gets an ordered, oriented single segment graph for each of the present vessel
@@ -519,7 +521,6 @@ def extract_segment_features(segment):
     proximal_node = find_proximal_node(segment)
     distal_node = find_distal_node(segment)
     proximal_node_no_blanking = find_proximal_node(segment, use_blanking=False)
-    distal_node_no_blanking = find_distal_node(segment, use_blanking=False)
 
     segment.graph["features"] = {}
     segment.graph["features"]["length"] = length(segment, proximal_node_no_blanking)
@@ -1072,11 +1073,12 @@ def accumulated_polar_angle_differential(segment, proximal_node):
     return accumulate_polar_angle_differential
 
 ## Measurements between two segments
-    
-def largest_azimuthal_difference(segment_1, segment_2, abs_polar_angle_threshold = 60 * np.pi / 180):
+
+def largest_angle_difference(segment_1, segment_2):
     """
-    Computes the largest azimuthal difference between two segments, considering
-    only nodes with and absolute polar angle below a certain threshold.
+    Computes the largest angle difference between two segments. This is computed as the 
+    angle between two 3D vectors build from the spherical angles at all points in the
+    two segments, which is computed from the scalar product between two vectors.
 
     Parameters
     ----------
@@ -1092,15 +1094,65 @@ def largest_azimuthal_difference(segment_1, segment_2, abs_polar_angle_threshold
     delta_phi : float
         Largest azimuthal difference between two segments.
     """
-    delta_phi = 0
 
-    for node_1 in segment_1:
+    max_alpha = 0
+
+    for node_1 in [node for node in segment_1 if segment_1.degree(node) == 2]:
+        for node_2 in [node for node in segment_2 if segment_2.degree(node) == 2]:
+            if node_1 not in segment_2:
+                direction_1 = np.array([np.cos(segment_1.nodes[node_1]["features femoral"]["direction polar"]) * np.cos(segment_1.nodes[node_1]["features femoral"]["direction azimuth"]), 
+                                        np.cos(segment_1.nodes[node_1]["features femoral"]["direction polar"]) * np.sin(segment_1.nodes[node_1]["features femoral"]["direction azimuth"]),
+                                        np.sin(segment_1.nodes[node_1]["features femoral"]["direction polar"])])
+                direction_2 = np.array([np.cos(segment_2.nodes[node_2]["features femoral"]["direction polar"]) * np.cos(segment_2.nodes[node_2]["features femoral"]["direction azimuth"]), 
+                                        np.cos(segment_2.nodes[node_2]["features femoral"]["direction polar"]) * np.sin(segment_2.nodes[node_2]["features femoral"]["direction azimuth"]),
+                                        np.sin(segment_2.nodes[node_2]["features femoral"]["direction polar"])])
+
+                alpha = np.arccos(np.dot(direction_1, direction_2))
+
+                if alpha > max_alpha:
+                    max_alpha = alpha
+
+    return max_alpha
+    
+def largest_azimuthal_difference(segment_1, segment_2, abs_polar_angle_threshold = 50 * np.pi / 180):
+    """
+    Computes the largest azimuthal difference between two segments, considering
+    only nodes with and absolute polar angle below a certain threshold.
+
+    Parameters
+    ----------
+    segment_1 : networkx.Graph
+        Graph of the individual segment.
+    segment_2 : networkx.Graph
+        Graph of the individual segment.
+    abs_polar_angle_threshold : float
+        Threshold for the absolute polar angle (set to 50 degrees).
+
+    Returns
+    -------
+    max_delta_phi : float
+        Largest azimuthal difference between two segments.
+    """
+
+    max_delta_phi = 0
+
+    for node_1 in [node for node in segment_1 if segment_1.degree(node) == 2]:
         if np.abs(segment_1.nodes[node_1]["features femoral"]["direction polar"]) < abs_polar_angle_threshold:
-            for node_2 in segment_2:
+            for node_2 in [node for node in segment_2 if segment_2.degree(node) == 2]:
                 if np.abs(segment_2.nodes[node_2]["features femoral"]["direction polar"]) < abs_polar_angle_threshold:
-                    delta_phi = np.maximum(delta_phi, np.abs(segment_1.nodes[node_1]["features femoral"]["direction azimuth"] - segment_2.nodes[node_2]["features femoral"]["direction azimuth"]))
+                    if node_1 not in segment_2:
+                        # Build unitary vectors corresponding to the azimuth of the nodes
+                        # Vectors share origin, and vector [1, 0] corresponds to degree 0
+                        # Azimuth is originally between -pi and pi
+                        direction_1 = np.array([np.cos(segment_1.nodes[node_1]["features femoral"]["direction azimuth"]), np.sin(segment_1.nodes[node_1]["features femoral"]["direction azimuth"])])
+                        direction_2 = np.array([np.cos(segment_2.nodes[node_2]["features femoral"]["direction azimuth"]), np.sin(segment_2.nodes[node_2]["features femoral"]["direction azimuth"])])
 
-    return delta_phi
+                        delta_phi = np.arccos(np.dot(direction_1, direction_2) / (np.linalg.norm(direction_1) * np.linalg.norm(direction_2)))
+
+                        if delta_phi > max_delta_phi:
+                            max_delta_phi = delta_phi
+                            
+    return max_delta_phi
 
 def largest_polar_difference(segment_1, segment_2):
     """
@@ -1120,13 +1172,153 @@ def largest_polar_difference(segment_1, segment_2):
     delta_phi : float
         Largest polar difference between two segments.
     """
-    delta_theta = 0
+    max_delta_theta = 0
 
     for node_1 in segment_1:
         for node_2 in segment_2:
-            delta_theta = np.maximum(delta_theta, np.abs(segment_1.nodes[node_1]["features femoral"]["direction polar"] - segment_2.nodes[node_2]["features femoral"]["direction polar"]))
+            delta_theta = np.abs(segment_1.nodes[node_1]["features femoral"]["direction polar"] - segment_2.nodes[node_2]["features femoral"]["direction polar"])
 
-    return delta_theta
+            if delta_theta > max_delta_theta:
+                max_delta_theta = delta_theta
+
+    return max_delta_theta
+
+## Auxiliar function
+
+def clean_azimuth(graph):
+    """
+    Processes segments and detects erroneous azimuth angles from the centerline.
+    Errors are detected according to the difference between the azimuth of a node 
+    and its neighbors. Detected errors are interpolated using the rest of the azimuth 
+    values in the neighborhood. Only nodes with an absolute polar angle below 50 degrees
+    are considered.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph of the individual segment.
+
+    Returns
+    -------
+    new_graph : networkx.Graph
+        Graph of the individual segment with corrected azimuth values.
+
+    """
+    def identify_errors(y):
+        """
+        Identify erroneous data points based on a threshold.
+        """
+        # Compute difference
+        y_difference = np.zeros_like(y)
+        y_difference[1:-1] = (np.abs(y[1:-1] - y[:-2]) + np.abs(y[1:-1] - y[2:])) / 2
+        y_difference[0] = np.abs(y[0] - y[1])
+        y_difference[-1] = np.abs(y[-1] - y[-2])
+        # Set threshold at 1.5 times the mean
+        threshold  = np.mean(y_difference) * 1.5
+
+        # Get indices for values above threshold
+        indices = np.where(y_difference > threshold)[0]
+
+        return indices
+    
+    new_graph = graph.copy()
+    
+    try:
+        segments = get_single_segments_vessel_type(new_graph)
+        vessel_types = [vessel_type for vessel_type in segments.keys()]
+        vessel_types.reverse()
+    except:
+        vessel_types = ["AA"]
+        segments = {"AA": graph}
+
+    modified_nodes = {}
+
+    for vessel_type in vessel_types:
+        if vessel_type not in ["AA", "BT", "RCA", "LCA"]:
+            continue
+        segment = segments[vessel_type]
+
+        # We will only be revisiting nodes with an absolute polar angle below 50 degrees
+        nodes_array = np.array([node for node in segment if segment.nodes[node]["features femoral"]["direction polar"] < 50 * np.pi / 180])
+        azimuth_values = np.array([graph.nodes[node]["features femoral"]["direction azimuth"] for node in segment if segment.nodes[node]["features femoral"]["direction polar"] < 50 * np.pi / 180])
+        hierarchy_values = np.array([graph.nodes[node]["hierarchy femoral"] for node in segment if segment.nodes[node]["features femoral"]["direction polar"] < 50 * np.pi / 180])
+        # Order nodes azimuth according to hierarchy
+        nodes_array = nodes_array[np.argsort(hierarchy_values)]
+        azimuth_values = azimuth_values[np.argsort(hierarchy_values)]
+        hierarchy_values = hierarchy_values[np.argsort(hierarchy_values)]
+
+        # Split into all connected segments (hierarcy should be consecutive)
+        split_indices = np.where(np.diff(hierarchy_values) > 1)[0]
+        split_indices = np.concatenate(([0], split_indices + 1, [len(hierarchy_values)]))
+
+        nodes_arrays = [nodes_array[split_indices[i]:split_indices[i + 1]] for i in range(len(split_indices) - 1)]
+        azimuth_values_arrays = [azimuth_values[split_indices[i]:split_indices[i + 1]] for i in range(len(split_indices) - 1)]
+        hierarchy_values_arrays = [hierarchy_values[split_indices[i]:split_indices[i + 1]] for i in range(len(split_indices) - 1)]
+
+        # Keep only those with length > 3
+        nodes_arrays = [nodes_arrays[idx] for idx in range(len(nodes_arrays)) if len(nodes_arrays[idx]) > 3]
+        azimuth_values_arrays = [azimuth_values_arrays[idx] for idx in range(len(azimuth_values_arrays)) if len(azimuth_values_arrays[idx]) > 3]
+        hierarchy_values_arrays = [hierarchy_values_arrays[idx] for idx in range(len(hierarchy_values_arrays)) if len(hierarchy_values_arrays[idx]) > 3]
+
+        for idx in range(len(nodes_arrays)):
+            nodes_idx = nodes_arrays[idx]
+            azimuth_values_idx = azimuth_values_arrays[idx]
+            hierarchy_values_idx = hierarchy_values_arrays[idx]
+
+            # Compute difference
+            azimuth_difference = np.zeros_like(azimuth_values_idx)
+            azimuth_difference[1:-1] = (np.abs(azimuth_values_idx[1:-1] - azimuth_values_idx[:-2]) + np.abs(azimuth_values_idx[1:-1] - azimuth_values_idx[2:])) / 2
+            azimuth_difference[0] = np.abs(azimuth_values_idx[0] - azimuth_values_idx[1])
+            azimuth_difference[-1] = np.abs(azimuth_values_idx[-1] - azimuth_values_idx[-2])
+
+            # Identify errors
+            identified_errors = identify_errors(azimuth_values_idx)
+
+            # Interpolating erroneous points
+            azimuth_values_clean = azimuth_values_idx.copy()
+            azimuth_values_clean[identified_errors] = np.nan  # Setting errors to NaN for interpolation
+
+            # Check for exteme values and see if they are nan. If they are, we will ignore them and interpolate them at the end
+            start_nans =[]
+            for idx, value in enumerate(azimuth_values_clean):
+                if np.isnan(value):
+                    start_nans.append(idx)
+                else:
+                    break
+            end_nans = []
+            for idx, value in enumerate(azimuth_values_clean[::-1]):
+                if np.isnan(value):
+                    end_nans.append(len(azimuth_values_clean) - 1 - idx)
+                else:
+                    break
+            end_nans.reverse()
+            hierarchy_values_clean = hierarchy_values_idx[0 if len(start_nans) == 0 else start_nans[-1] + 1: None if len(end_nans) == 0 else end_nans[0]]
+
+            # Initialize interpolator
+            interpolator = interp1d(hierarchy_values_idx[~np.isnan(azimuth_values_clean)], azimuth_values_clean[~np.isnan(azimuth_values_clean)], kind='quadratic')
+            azimuth_values_interpolated = interpolator(hierarchy_values_clean)
+
+            # Put back extreme values
+            if len(start_nans) > 0:
+                azimuth_values_interpolated = np.concatenate((azimuth_values_idx[start_nans], azimuth_values_interpolated))
+            if len(end_nans) > 0:
+                azimuth_values_interpolated = np.concatenate((azimuth_values_interpolated, azimuth_values_idx[end_nans]))
+
+            # Plotting the cleaned data
+            # plt.figure(figsize=(10, 6))
+            # plt.plot(hierarchy_values_idx, azimuth_values_idx, label='Original Data', alpha=0.5)
+            # plt.scatter(hierarchy_values_idx[identified_errors], azimuth_values_interpolated[identified_errors], color='red', label='Identified Errors')
+            # plt.plot(hierarchy_values_idx, azimuth_values_interpolated, label='Cleaned Data', color='green')
+            # plt.title(f"{vessel_type} {idx}")
+
+            # Save modified nodes
+            for error_idx in identified_errors:
+                modified_nodes[nodes_idx[error_idx]] = azimuth_values_interpolated[error_idx]
+
+    for node in modified_nodes:
+        new_graph.nodes[node]["features femoral"]["direction azimuth"] = modified_nodes[node]
+
+    return new_graph
 
 ## Plot functions
 

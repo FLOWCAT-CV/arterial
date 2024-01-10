@@ -614,7 +614,7 @@ def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
 
     return sanity_check, skip_cell_ids
 
-def make_graph_plot(case_dir, graph, filename, label = None):
+def make_graph_plot(case_dir, graph, filename = None, label = None):
     """
     Makes matplotlib.pyplot figure of the coronal plane of a networkx graph.
 
@@ -650,5 +650,42 @@ def make_graph_plot(case_dir, graph, filename, label = None):
     else:
         nx.draw(graph, node_pos_dict_p, node_size=20, ax=ax)
 
-    plt.savefig(os.path.join(case_dir, filename))
-    plt.close()
+    if filename is not None:
+        plt.savefig(os.path.join(case_dir, filename))
+        plt.close()
+
+from mycolorpy import colorlist as mcp
+
+def make_dense_graph_plot(graph, feature = None, access = "femoral", cmap = "bwr"):
+    _ = plt.figure(figsize = [6, 10])
+    ax = plt.gca()
+    if feature is not None:
+        # Color map
+        feature_values = [graph.nodes[node]["features " + access][feature] for node in graph]
+        color_palette = mcp.gen_color(cmap = cmap, n = len(np.unique(feature_values)))
+        # Choose color for each node. Each node feature will have to be rounded to the nearest integer to be used as an index for the color_palette
+        # color_palette indices do not have physical meaning. The whole range of the fetaure_values is divided into the n nodes of the supersegment. 
+        # Each feature value should be mapped to the corresponding index of the color_palette. To do that, we have to divide the feature value of each node by the range of the feature values and multiply by the number of nodes in the supersegment.
+        if max(feature_values) != min(feature_values):
+            color_map = [color_palette[int(np.round((len(np.unique(feature_values)) - 1) * (graph.nodes[node]["features " + access][feature] - min(feature_values)) / (max(feature_values) - min(feature_values))))] for node in graph]
+        else:
+            print("All values are the same. Setting to blue")
+            color_map = "blue"
+    else:
+        color_map = "blue"
+
+    # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
+    node_pos_dict_P = {}
+    for n in graph.nodes():
+        node_pos_dict_P[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
+
+    nx.draw(graph, node_pos_dict_P, node_size=10, node_color=color_map)
+    ax.set_xlim([-200, 10])
+    ax.set_ylim([-10, 300])
+    # Set title as feature
+    if feature is not None:
+        # Add a colorbar
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=min(feature_values), vmax=max(feature_values)))
+        sm._A = []
+        plt.colorbar(sm, fraction=0.046, pad=0.04)
+        plt.title(feature.capitalize().replace("_", " "))  
