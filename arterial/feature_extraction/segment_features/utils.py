@@ -60,6 +60,7 @@ def get_single_segments_vessel_type(centerline_graph):
         segments_vessel_type[vessel_type] = get_single_segment(centerline_graph, vessel_type, identifier_type = "vessel_type")        
         if segments_vessel_type[vessel_type] is not None:
             # Perform feature extraction
+            print(vessel_type)
             segments_vessel_type[vessel_type] = extract_segment_features(segments_vessel_type[vessel_type])
         else:
             # If segment is none, pop from dict to eliminate future errors
@@ -523,7 +524,7 @@ def extract_segment_features(segment):
     proximal_node_no_blanking = find_proximal_node(segment, use_blanking=False)
 
     segment.graph["features"] = {}
-    segment.graph["features"]["length"] = length(segment, proximal_node_no_blanking)
+    segment.graph["features"]["length"] = length(segment)
     segment.graph["features"]["mean diameter"] = mean_diameter(segment)
     segment.graph["features"]["std diameter"] = std_diameter(segment)
     segment.graph["features"]["min diameter"] = min_diameter(segment)
@@ -610,7 +611,7 @@ def find_distal_node(segment, use_blanking = True):
 
     return distal_node
 
-def length(segment, proximal_node):
+def length(segment):
     """
     Finds length of segment. Collects lengths from all edges of the
     segment and computes sum. 
@@ -619,10 +620,6 @@ def length(segment, proximal_node):
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
-    proximal_node : integer
-        Proximal node of the segment.
-    distal_node : integer
-        Distal node of the segment.
 
     Returns
     -------
@@ -630,22 +627,10 @@ def length(segment, proximal_node):
         Length of segment.
 
     """
-    # Initializes line integral to 0
+    # Computes length by adding all edge lengths
     actual_length = 0
-    # Iterate over all nodes between proximal and distal and adds distance between nodes as differentials of the
-    # line integral. Go from neighbor to neighbor until we reach the end and all neigbors have been visited
-    nodes_visited = [proximal_node]
-    node = proximal_node
-    done = False
-    while not done:
-        done = True
-        for neighbor in segment.neighbors(node):
-            if neighbor not in nodes_visited:
-                actual_length += np.linalg.norm(segment.nodes[node]["pos"] - segment.nodes[neighbor]["pos"])
-                nodes_visited.append(node)
-                node = neighbor
-                done = False
-                break
+    for src, dst in segment.edges:
+        actual_length += np.linalg.norm(segment.nodes[src]["pos"] - segment.nodes[dst]["pos"])
 
     return actual_length
 
@@ -871,10 +856,26 @@ def tortuosity_index(segment, proximal_node, distal_node):
 
     """
     # Computes euclidean distance as norm between both nodes
-    euclidean_distance = np.linalg.norm(segment.nodes[proximal_node]["pos"] - segment.nodes[distal_node]["pos"])
-    actual_length = length(segment, proximal_node)
+    # euclidean_distance = np.linalg.norm(segment.nodes[proximal_node]["pos"] - segment.nodes[distal_node]["pos"])
+    deg_1_nodes = [node for node in segment if segment.degree(node) == 1]
+    if len(deg_1_nodes) == 2:
+        euclidean_distance = np.linalg.norm(segment.nodes[deg_1_nodes[0]]["pos"] - segment.nodes[deg_1_nodes[1]]["pos"])
+    else:
+        # Compute all distances and choose highest
+        euclidean_distance = 0
+        for node_1 in deg_1_nodes:
+            for node_2 in deg_1_nodes:
+                if node_1 != node_2:
+                    euclidean_distance = max(euclidean_distance, np.linalg.norm(segment.nodes[node_1]["pos"] - segment.nodes[node_2]["pos"]))
+    # Computes actual distance as sum of distances between consecutive nodes
+    actual_length = length(segment)
+
+    print(euclidean_distance, actual_length, segment.nodes[proximal_node]["pos"],  segment.nodes[distal_node]["pos"])
+
     # Check that we are not gonna divide by nan or 0 (if we do, return nan)
     if not math.isnan(actual_length) and actual_length > 0:
+        print(1 - euclidean_distance / actual_length)
+        print()
         return 1 - euclidean_distance / actual_length
     else:
         return math.nan
@@ -1234,8 +1235,6 @@ def clean_azimuth(graph):
     modified_nodes = {}
 
     for vessel_type in vessel_types:
-        if vessel_type not in ["AA", "BT", "RCA", "LCA"]:
-            continue
         segment = segments[vessel_type]
 
         # We will only be revisiting nodes with an absolute polar angle below 50 degrees
