@@ -60,7 +60,6 @@ def get_single_segments_vessel_type(centerline_graph):
         segments_vessel_type[vessel_type] = get_single_segment(centerline_graph, vessel_type, identifier_type = "vessel_type")        
         if segments_vessel_type[vessel_type] is not None:
             # Perform feature extraction
-            print(vessel_type)
             segments_vessel_type[vessel_type] = extract_segment_features(segments_vessel_type[vessel_type])
         else:
             # If segment is none, pop from dict to eliminate future errors
@@ -532,7 +531,7 @@ def extract_segment_features(segment):
     segment.graph["features"]["proximal diameter"] = proximal_diameter(segment, proximal_node)
     segment.graph["features"]["distal diameter"] = distal_diameter(segment, distal_node)
     segment.graph["features"]["min max diameter ratio"] = min_max_diameter_ratio(segment)
-    segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment, proximal_node, distal_node)
+    segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment)
     segment.graph["features"]["bending length"] = bending_length(segment, proximal_node, distal_node)
     segment.graph["features"]["cumulative curvature"] = cumulative_curvature(segment, proximal_node_no_blanking)
     segment.graph["features"]["tortuosity index 5 cm"] = tortuosity_index_first_5_cm(segment, proximal_node, distal_node)
@@ -828,7 +827,7 @@ def min_max_diameter_ratio(segment):
             diameters.append(2 * segment.nodes[node]["features femoral"]["radius"])
         return np.amin(diameters) / np.amax(diameters)
 
-def tortuosity_index(segment, proximal_node, distal_node):
+def tortuosity_index(segment):
     """
     Computes tortuosity index of a segment.
 
@@ -870,12 +869,8 @@ def tortuosity_index(segment, proximal_node, distal_node):
     # Computes actual distance as sum of distances between consecutive nodes
     actual_length = length(segment)
 
-    print(euclidean_distance, actual_length, segment.nodes[proximal_node]["pos"],  segment.nodes[distal_node]["pos"])
-
     # Check that we are not gonna divide by nan or 0 (if we do, return nan)
     if not math.isnan(actual_length) and actual_length > 0:
-        print(1 - euclidean_distance / actual_length)
-        print()
         return 1 - euclidean_distance / actual_length
     else:
         return math.nan
@@ -1017,7 +1012,7 @@ def tortuosity_index_first_5_cm(segment, proximal_node, distal_node):
     proximal_node_new_segment = find_proximal_node(segment_copy, use_blanking=False)
     distal_node_new_segment = find_distal_node(segment_copy, use_blanking=False)
     # Compute tortuosity index from the remaining segment
-    return tortuosity_index(segment_copy, proximal_node_new_segment, distal_node_new_segment)
+    return tortuosity_index(segment_copy)
 
 def min_polar_angle(segment):
     """
