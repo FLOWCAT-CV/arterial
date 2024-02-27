@@ -534,7 +534,7 @@ def extract_segment_features(segment):
     segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment)
     segment.graph["features"]["bending_length"] = bending_length(segment, proximal_node, distal_node)
     segment.graph["features"]["cumulative_curvature"] = cumulative_curvature(segment, proximal_node_no_blanking)
-    segment.graph["features"]["tortuosity_index_5_cm"] = tortuosity_index_first_5_cm(segment, proximal_node, distal_node)
+    segment.graph["features"]["tortuosity_index_5_cm"] = tortuosity_index_first_5_cm(segment, proximal_node)
     segment.graph["features"]["min_polar_angle"] = min_polar_angle(segment)
     segment.graph["features"]["accumulated_polar_angle_differential"] = accumulated_polar_angle_differential(segment, proximal_node)
     polar, azimuthal = direction_angles(segment, proximal_node, distal_node)
