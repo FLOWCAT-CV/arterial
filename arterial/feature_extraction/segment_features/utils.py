@@ -501,7 +501,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
     else:
         return None
 
-def extract_segment_features(segment):
+def extract_segment_features(segment, use_blanking=True):
     """
     Performs segment-level feature extraction over a vascular centerline segment.
     Calls all available feature extrtaction functions and keeps all data in a  
@@ -518,8 +518,8 @@ def extract_segment_features(segment):
     
     """
     # Find endnodes nodes
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
+    proximal_node = find_proximal_node(segment, use_blanking=use_blanking)
+    distal_node = find_distal_node(segment, use_blanking=use_blanking)
     proximal_node_no_blanking = find_proximal_node(segment, use_blanking=False)
 
     segment.graph["features"] = {}
@@ -542,6 +542,40 @@ def extract_segment_features(segment):
     segment.graph["features"]["azimuthal_angle"] = azimuthal
 
     return segment
+
+def extract_dual_segment_features(segment_1, segment_2):
+    """
+    Extracts dual segment featues, i.e., features involving two segments.
+    At the moment, this consists on maximal angle differences formed by two segments.
+
+    Parameters
+    ----------
+    segment_1 : networkx.Graph
+        Graph of the first individual segment.
+    segment_2 : networkx.Graph
+        Graph of the second individual segment.
+
+    Returns
+    -------
+    dual_segment_features : dict
+        Dictionary with all dual segment features.
+    
+    """
+    try:
+        segment_1 = clean_azimuth(segment_1)
+    except:
+        print("Error cleaning azimuth for segment 1")
+    try:
+        segment_2 = clean_azimuth(segment_2)
+    except:
+        print("Error cleaning azimuth for segment 2")
+
+    dual_segment_features = {}
+    dual_segment_features["max angle difference"] = largest_angle_difference(segment_1, segment_2)
+    dual_segment_features["max azimuthal difference"] = largest_azimuthal_difference(segment_1, segment_2)
+    dual_segment_features["max polar difference"] = largest_polar_difference(segment_1, segment_2)
+
+    return dual_segment_features
 
 def find_proximal_node(segment, use_blanking = True):
     """
@@ -1070,14 +1104,11 @@ def accumulated_polar_angle_differential(segment, proximal_node):
     return accumulate_polar_angle_differential
 
 def direction_angles(segment, proximal_node, distal_node):
-    proximal_pos = segment.nodes[proximal_node]["pos"]
-    distal_pos = segment.nodes[distal_node]["pos"]
-
-    direction = distal_pos - proximal_pos
+    direction = segment.nodes[distal_node]["pos"] - segment.nodes[proximal_node]["pos"]
     if np.linalg.norm(direction) > 0:
         direction = direction / np.linalg.norm(direction)
 
-        polar = np.arccos(direction[2])
+        polar = np.pi/2 - np.arccos(direction[2])
         azimuth = np.sign(direction[1]) * np.arccos(direction[0] / np.sqrt(direction[0] ** 2 + direction[1] ** 2))
 
         return polar, azimuth
