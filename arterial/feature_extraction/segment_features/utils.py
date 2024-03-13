@@ -501,7 +501,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
     else:
         return None
 
-def extract_segment_features(segment):
+def extract_segment_features(segment, use_blanking=True):
     """
     Performs segment-level feature extraction over a vascular centerline segment.
     Calls all available feature extrtaction functions and keeps all data in a  
@@ -518,27 +518,64 @@ def extract_segment_features(segment):
     
     """
     # Find endnodes nodes
-    proximal_node = find_proximal_node(segment)
-    distal_node = find_distal_node(segment)
+    proximal_node = find_proximal_node(segment, use_blanking=use_blanking)
+    distal_node = find_distal_node(segment, use_blanking=use_blanking)
     proximal_node_no_blanking = find_proximal_node(segment, use_blanking=False)
 
     segment.graph["features"] = {}
     segment.graph["features"]["length"] = length(segment)
-    segment.graph["features"]["mean diameter"] = mean_diameter(segment)
-    segment.graph["features"]["std diameter"] = std_diameter(segment)
-    segment.graph["features"]["min diameter"] = min_diameter(segment)
-    segment.graph["features"]["max diameter"] = max_diameter(segment)
-    segment.graph["features"]["proximal diameter"] = proximal_diameter(segment, proximal_node)
-    segment.graph["features"]["distal diameter"] = distal_diameter(segment, distal_node)
-    segment.graph["features"]["min max diameter ratio"] = min_max_diameter_ratio(segment)
+    segment.graph["features"]["mean_diameter"] = mean_diameter(segment)
+    segment.graph["features"]["std_diameter"] = std_diameter(segment)
+    segment.graph["features"]["min_diameter"] = min_diameter(segment)
+    segment.graph["features"]["max_diameter"] = max_diameter(segment)
+    segment.graph["features"]["proximal_diameter"] = proximal_diameter(segment, proximal_node)
+    segment.graph["features"]["distal_diameter"] = distal_diameter(segment, distal_node)
+    segment.graph["features"]["min_max_diameter_ratio"] = min_max_diameter_ratio(segment)
     segment.graph["features"]["tortuosity_index"] = tortuosity_index(segment)
-    segment.graph["features"]["bending length"] = bending_length(segment, proximal_node, distal_node)
-    segment.graph["features"]["cumulative curvature"] = cumulative_curvature(segment, proximal_node_no_blanking)
-    segment.graph["features"]["tortuosity index 5 cm"] = tortuosity_index_first_5_cm(segment, proximal_node, distal_node)
-    segment.graph["features"]["min polar angle"] = min_polar_angle(segment)
+    segment.graph["features"]["bending_length"] = bending_length(segment, proximal_node, distal_node)
+    segment.graph["features"]["cumulative_curvature"] = cumulative_curvature(segment, proximal_node_no_blanking)
+    segment.graph["features"]["tortuosity_index_5_cm"] = tortuosity_index_first_5_cm(segment, proximal_node)
+    segment.graph["features"]["min_polar_angle"] = min_polar_angle(segment)
     segment.graph["features"]["accumulated_polar_angle_differential"] = accumulated_polar_angle_differential(segment, proximal_node)
+    polar, azimuthal = direction_angles(segment, proximal_node, distal_node)
+    segment.graph["features"]["polar_angle"] = polar
+    segment.graph["features"]["azimuthal_angle"] = azimuthal
 
     return segment
+
+def extract_dual_segment_features(segment_1, segment_2):
+    """
+    Extracts dual segment featues, i.e., features involving two segments.
+    At the moment, this consists on maximal angle differences formed by two segments.
+
+    Parameters
+    ----------
+    segment_1 : networkx.Graph
+        Graph of the first individual segment.
+    segment_2 : networkx.Graph
+        Graph of the second individual segment.
+
+    Returns
+    -------
+    dual_segment_features : dict
+        Dictionary with all dual segment features.
+    
+    """
+    try:
+        segment_1 = clean_azimuth(segment_1)
+    except:
+        print("Error cleaning azimuth for segment 1")
+    try:
+        segment_2 = clean_azimuth(segment_2)
+    except:
+        print("Error cleaning azimuth for segment 2")
+
+    dual_segment_features = {}
+    dual_segment_features["max angle difference"] = largest_angle_difference(segment_1, segment_2)
+    dual_segment_features["max azimuthal difference"] = largest_azimuthal_difference(segment_1, segment_2)
+    dual_segment_features["max polar difference"] = largest_polar_difference(segment_1, segment_2)
+
+    return dual_segment_features
 
 def find_proximal_node(segment, use_blanking = True):
     """
@@ -964,7 +1001,7 @@ def cumulative_curvature(segment, proximal_node):
 
     return cumulative_curvature
 
-def tortuosity_index_first_5_cm(segment, proximal_node, distal_node):
+def tortuosity_index_first_5_cm(segment, proximal_node):
     """
     Computes tortuosity index of first 5 centimeters of the segment.
     First it detects which nodes are within a 5 centimeter distance 
@@ -1009,8 +1046,6 @@ def tortuosity_index_first_5_cm(segment, proximal_node, distal_node):
         if node not in nodes_visited:
             segment_copy.remove_node(node)
 
-    proximal_node_new_segment = find_proximal_node(segment_copy, use_blanking=False)
-    distal_node_new_segment = find_distal_node(segment_copy, use_blanking=False)
     # Compute tortuosity index from the remaining segment
     return tortuosity_index(segment_copy)
 
@@ -1067,6 +1102,18 @@ def accumulated_polar_angle_differential(segment, proximal_node):
                 break
 
     return accumulate_polar_angle_differential
+
+def direction_angles(segment, proximal_node, distal_node):
+    direction = segment.nodes[distal_node]["pos"] - segment.nodes[proximal_node]["pos"]
+    if np.linalg.norm(direction) > 0:
+        direction = direction / np.linalg.norm(direction)
+
+        polar = np.pi/2 - np.arccos(direction[2])
+        azimuth = np.sign(direction[1]) * np.arccos(direction[0] / np.sqrt(direction[0] ** 2 + direction[1] ** 2))
+
+        return polar, azimuth
+    else:
+        return 0, 0
 
 ## Measurements between two segments
 
