@@ -34,7 +34,7 @@ class VesselSegmenter():
 
         At the end of the segmentation prediction, a nifti file with the format:
         
-        >>> {case_id}_vessel_segmentation.nii.gz
+        >>> {case_id}_extracranial_vessels_segmentation.nii.gz
         
         should be generated in the self.case_dir. This class acts as a wrapper
         for the arterial.segmentation.inference.perform_inference() function. 
@@ -59,7 +59,7 @@ class VesselSegmenter():
 
         At the end of the segmentation prediction, a nifti file with the format:
         
-        >>> {case_id}_vessel_segmentation.nii.gz
+        >>> {case_id}_extracranial_vessels_segmentation.nii.gz
         
         should be generated in the self.case_dir. This class acts as a wrapper
         for the arterial.segmentation.inference.perform_inference_full() function. 

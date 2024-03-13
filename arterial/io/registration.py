@@ -176,7 +176,8 @@ def convert_to_orientation(nifti, reference_ornt = ("R", "A", "S")):
 
 def mat_to_affine(mat_path):
     """
-    Reads the affine transformation from a .mat file and returns it as a numpy array.
+    Reads the affine transformation from a .mat file and returns it as a numpy array,
+    properly accounting for the center of rotation.
 
     Parameters
     ----------
@@ -186,14 +187,28 @@ def mat_to_affine(mat_path):
     Returns
     -------
     affine : numpy.ndarray
-        Affine matrix.
+        Affine matrix including proper rotation around the center.
     """
     mat = sio.loadmat(mat_path)
-    rotation_scaling = np.array(mat["AffineTransform_float_3_3"]).reshape(3, 4)
-    translation = np.array(mat["fixed"]).reshape(3, 1)
-    affine = np.eye(4)
-    affine[:3, :4] = rotation_scaling
-    affine[:3, 3] = translation.ravel()
+    rotation_scaling = np.array(mat["AffineTransform_float_3_3"])[:9].reshape(3, 3)
+    translation = np.array(mat["AffineTransform_float_3_3"])[9:].reshape(3, 1)
+    center_of_rotation = mat['fixed'].ravel()
+
+    # Create an affine matrix for translation to the center of rotation
+    translate_to_center = np.eye(4)
+    translate_to_center[:3, 3] = -center_of_rotation
+
+    # Create an affine matrix for translation back from the center of rotation
+    translate_back = np.eye(4)
+    translate_back[:3, 3] = center_of_rotation
+
+    # Create the rotation and scaling matrix
+    rotation_scaling_matrix = np.eye(4)
+    rotation_scaling_matrix[:3, :3] = rotation_scaling
+    rotation_scaling_matrix[:3, 3] = translation.ravel()
+
+    # Combine the translations and rotation/scaling
+    affine = translate_back @ rotation_scaling_matrix @ translate_to_center
     return affine
 
 def resample_nifti(nifti, target_spacing):
