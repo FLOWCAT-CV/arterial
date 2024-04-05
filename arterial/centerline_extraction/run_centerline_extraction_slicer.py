@@ -92,9 +92,9 @@ if __name__ == "__main__":
     fast_segmentation = args.fast_segmentation
     
     # Load volume
-    slicer.util.loadLabelVolume(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), mode)))
+    slicer.util.loadLabelVolume(os.path.join(case_dir, f"{mode}_segmentation.nii.gz"))
     # Associate to volume node
-    master_volume_node = getNode("{}_{}_segmentation".format(os.path.basename(case_dir), mode))
+    master_volume_node = getNode(f"{mode}_segmentation")
 
     if mode == "extracranial_vessels":
         # Perform segmentation from binary mask

@@ -66,7 +66,7 @@ def centerline_extraction(case_dir, mode, segmentation_node, masked_volume_array
     if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
 
     # Get the affine matrix
-    affine = nib.load(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), mode))).affine
+    affine = nib.load(os.path.join(case_dir, f"{mode}_segmentation.nii.gz")).affine
 
     print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
     # Now, we iterate over all segments to perform centerline extraction separately
@@ -310,7 +310,7 @@ def thrombus_centerline_extraction(case_dir, segmentation_node):
     if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
 
     # Get the affine matrix
-    affine = nib.load(os.path.join(case_dir, "{}_thrombus_segmentation.nii.gz".format(os.path.basename(case_dir)))).affine
+    affine = nib.load(os.path.join(case_dir, "thrombus_segmentation.nii.gz")).affine
 
     print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
 

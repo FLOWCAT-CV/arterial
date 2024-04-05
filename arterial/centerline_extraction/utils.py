@@ -1,5 +1,6 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
  
+import os
 import slicer
 import vtk
 
@@ -11,6 +12,68 @@ from scipy import ndimage
 
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from scipy.signal import savgol_filter
+
+def get_bounding_box_limits_3d(img):
+    """
+    Computes bounding box (only z axis) of a numpy array (expects an array 
+    with zeros as background).
+
+    Parameters
+    ----------
+    img : numpy.array or array-like object
+        3D numpy binary (0, 1) array.
+
+    Returns
+    -------
+    min_lr : integer
+        Lower bound on axis x, LR (in voxel coordinates).
+    max_lr : integer
+        Upper bound on axis x, LR (in voxel coordinates).
+    min_pa : integer
+        Lower bound on axis y, PA (in voxel coordinates).
+    max_pa : integer
+        Upper bound on axis y, PA (in voxel coordinates).
+    min_is : integer
+        Lower bound on axis z, IS (in voxel coordinates).
+    max_is : integer
+        Upper bound on axis z, IS (in voxel coordinates).
+
+    """
+    axis_left_right = np.any(img, axis=(0, 1))
+    axis_posterior_anterior = np.any(img, axis=(0, 2))
+    axis_inferior_superior = np.any(img, axis=(1, 2))
+
+    min_lr, max_lr = np.where(axis_left_right)[0][[0, -1]]
+    min_pa, max_pa = np.where(axis_posterior_anterior)[0][[0, -1]]
+    min_is, max_is = np.where(axis_inferior_superior)[0][[0, -1]]
+
+    return min_lr, max_lr, min_pa, max_pa, min_is, max_is
+
+def volume_sanity_check(segmentation_nifti):
+    """
+    Check that the volume of the segmentation is within the expected range.
+    Otherwise, image will be read as an artifact and an error will be raised.
+
+    Parameters
+    ----------
+    case_dir : string or path-like object   
+        Path to case directory.
+
+    """
+    data = segmentation_nifti.get_fdata()
+    # Compute volume of the bouding box taking into account voxel size
+    min_lr, max_lr, min_pa, max_pa, min_is, max_is = get_bounding_box_limits_3d(data)
+    # Compute segmentation volume taking into account voxel size
+    segmentation_volume = np.sum(data > 0) * np.prod(segmentation_nifti.header.get_zooms())
+    bouding_box_volume = (max_lr - min_lr) * (max_pa - min_pa) * (max_is - min_is) * np.prod(segmentation_nifti.header.get_zooms())
+    if segmentation_volume < 4.5e4: # Empirically tested
+        raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
+    if bouding_box_volume < 3.5e6: # Empirically tested
+        raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
+    if bouding_box_volume > 3.5e7: # Empirically tested
+        raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
+    if segmentation_volume < 5e4 and bouding_box_volume < 6e6: # Empirically tested
+        raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
 def aortic_arch_endpoint_check(endpoints_node, masked_volume_array, aff):
     """
