@@ -3,7 +3,7 @@
 *.model
 *.pth
 *.pkl
-*tests/
+*test_data/
 batch_processing*
 debugging.py
 *__pycache__/
