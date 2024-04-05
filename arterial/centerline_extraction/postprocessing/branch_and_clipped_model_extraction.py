@@ -1,62 +1,70 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import os, shutil
 import vtk
 
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
+from vmtk import vtkvmtk
+
 import numpy as np
 
-def perform_centerline_branching(case_dir):
+def extract_branch_model(centerlines_model, BlankingArrayName="Blanking", RadiusArrayName="Radius", GroupIdsArrayName="GroupIds", CenterlineIdsArrayName="CenterlineIds", TractIdsArrayName="TractIds"):
     """
     Performs centerline branching over centerline models. This allows division
     of the centerline tree in segments corresponding to the individual arteries.
     
-    This function calls vmtk command vmtkbranchextractor. For additional info refer
-    to <http://www.vmtk.org/vmtkscripts/vmtkbranchextractor.html>.
-
-    Saves branched centerline models as:
-
-    >>> case_dir/branch_models/branch_model{idx}.vtk
+    This function summons the vtkvmtk.vtkvmtkCenterlineBranchExtractor() class. 
+    For additional info refer to <https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchextractor.py>.
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
+    centerlines_model : string or path-like object
+        Path to centerlines model. 
+    BlankingArrayName : string, optional
+        Name of the blanking array. The default is "Blanking".
+    RadiusArrayName : string, optional
+        Name of the radius array. The default is "Radius".
+    GroupIdsArrayName : string, optional
+        Name of the group ids array. The default is "GroupIds".
+    CenterlineIdsArrayName : string, optional
+        Name of the centerline ids array. The default is "CenterlineIds".
+    TractIdsArrayName : string, optional
+        Name of the tract ids array. The default is "TractIds".
 
     Returns
     -------
+    branch_model : vtkPolyData
+        Branched centerline model.
     
     """
-    # List all centerline model to be branched
-    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith("extracranial_vessels_centerlines")])
-    # Create dir to store all branch_models
-    if not os.path.isdir(os.path.join(case_dir, "branch_models")): os.mkdir(os.path.join(case_dir, "branch_models"))
+    # Initialize the vtkvmtkCenterlineBranchExtractor object
+    branchExtractor = vtkvmtk.vtkvmtkCenterlineBranchExtractor()
+    branchExtractor.SetInputData(centerlines_model)
+    branchExtractor.SetBlankingArrayName(BlankingArrayName)
+    branchExtractor.SetRadiusArrayName(RadiusArrayName)
+    branchExtractor.SetGroupIdsArrayName(GroupIdsArrayName)
+    branchExtractor.SetCenterlineIdsArrayName(CenterlineIdsArrayName)
+    branchExtractor.SetTractIdsArrayName(TractIdsArrayName)
+    branchExtractor.Update()
 
-    for idx, centerline_file in enumerate(centerline_list):
-        print("Starting branch extraction from centerline model {}...".format(idx))
-        # Assing the necessary variables to pass as arguments to vmtkbranchextractor
-        centerline_model = os.path.join(case_dir, "centerlines", centerline_file)
-        branch_model = os.path.join(case_dir, "branch_models", "branch_model_{}.vtk".format(idx))
-        radius_array_name = "Radius"
-        # Call vmtkbranchextractor command in the command line
-        os.system("vmtkbranchextractor -ifile {} -ofile {} -radiusarray {}".format(centerline_model, branch_model, radius_array_name))
-        # Assert that branch_model has been created., otherwise raise error
-        assert os.path.exists(branch_model), "Branch model {} not found. Branch extraction failed.".format(idx)
+    # Execute the branch extraction
+    branch_model = branchExtractor.GetOutput()
+    # Execute the branch extraction
+    try:
+        branch_model = branchExtractor.GetOutput()
+    except:
+        print("Centerline branching failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \
+              "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
+              "(Usually the first one is the largest and most relevant).")
+        branch_model = None
 
-    # Unify all clipped models
-    perform_branch_model_unification(case_dir)
+    return branch_model
 
-def perform_branch_model_unification(case_dir):
+def unify_branch_models(branch_model_list):
     """
-    Reads all branch_models in the case_dir/branch_models, derived from the case_dir/centerlines files 
-    and creates unified branch model. 
-    
-    Saves unified branch model as:
+    Unifies all branch models in a single vtkPolyData object.
 
-    >>> case_dir/branch_model.vtk
-
-    Final branch mdoel should have the following cell data arrays updated:
+    Final branch model should have the following cell data arrays updated:
     * centerlinesId -> connections between origin and endpoints
     * tractId -> following a centerline Id, tract number (closest to origin is 0, next is 1 and so on)
     * blanking -> transition to a new branch
@@ -64,39 +72,31 @@ def perform_branch_model_unification(case_dir):
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
+    branch_model_list : list
+        List of branch models.  
 
     Returns
     -------
+    unified_branch_model : vtkPolyData
+        Unified branch model.
 
     """
-    print("Unifying all branch models...")
-    branch_model_list = sorted([branch_model_file for branch_model_file in os.listdir(os.path.join(case_dir, "branch_models")) if branch_model_file.endswith(".vtk")])
-    # Initialize the vtkPoints and the vtkCellArray objects for the branch_model
-    cell_array_branch_model = vtk.vtkCellArray()
-    points_branch_model = vtk.vtkPoints()
-    # Initialize the 
-    final_cell_data_array_branch_model = np.ndarray([4, 0])
-    final_radius_array = np.ndarray([1, 0])
-
-    acc_centerline_id = 0
-    acc_group_id_branch_model = 0
-    points_from_previous_branch_models = 0
-
     if len(branch_model_list) == 1:
-        shutil.copyfile(os.path.join(case_dir, "branch_models", "branch_model_0.vtk"), os.path.join(case_dir, "branch_model.vtk"))
+        return branch_model_list[0]
     else:
-        for branch_model_model_id, _ in enumerate(branch_model_list):
-            # Load branch model
-            branch_model_path = os.path.join(case_dir, "branch_models", "branch_model_{}.vtk".format(branch_model_model_id))
-            vtk_poly_data_reader = vtk.vtkPolyDataReader()
-            vtk_poly_data_reader.SetFileName(branch_model_path)
-            vtk_poly_data_reader.Update()
-            branch_model = vtk_poly_data_reader.GetOutput()
+        # Initialize the vtkPoints and the vtkCellArray objects for the branch_model
+        cell_array_branch_model = vtk.vtkCellArray()
+        points_branch_model = vtk.vtkPoints()
+        # Initialize the cell data arrays for the branch_model
+        final_cell_data_array_branch_model = np.ndarray([4, 0])
+        final_radius_array = np.ndarray([1, 0])
 
+        acc_centerline_id = 0
+        acc_group_id_branch_model = 0
+        points_from_previous_branch_models = 0
+        for branch_model_idx, branch_model in enumerate(branch_model_list):
             if branch_model.GetNumberOfCells() == 0:
-                print("Error in branch model {}. Skipping".format(branch_model_model_id))
+                print("Error in branch model {}. Skipping".format(branch_model_idx))
             else:
                 # Get cell data
                 cell_data_array = np.ndarray([4, branch_model.GetNumberOfCells()], dtype=np.int64)
@@ -168,110 +168,105 @@ def perform_branch_model_unification(case_dir):
                 points_from_previous_branch_models += branch_model.GetNumberOfPoints()
                 
         # Store all branch model data in new vtkPolyData
-        final_branch_model = vtk.vtkPolyData()
-        final_branch_model.SetPoints(points_branch_model)
-        final_branch_model.SetLines(cell_array_branch_model)
+        unified_branch_model = vtk.vtkPolyData()
+        unified_branch_model.SetPoints(points_branch_model)
+        unified_branch_model.SetLines(cell_array_branch_model)
 
         for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
-            final_branch_model.GetCellData().AddArray(numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
-            final_branch_model.GetCellData().GetArray(idx).SetName(branch_model.GetCellData().GetArrayName(idx))
+            unified_branch_model.GetCellData().AddArray(numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
+            unified_branch_model.GetCellData().GetArray(idx).SetName(branch_model.GetCellData().GetArrayName(idx))
 
-        final_branch_model.GetPointData().AddArray(numpy_to_vtk(final_radius_array))
-        final_branch_model.GetPointData().GetArray(0).SetName("Radius")
+        unified_branch_model.GetPointData().AddArray(numpy_to_vtk(final_radius_array))
+        unified_branch_model.GetPointData().GetArray(0).SetName("Radius")
 
-        # Define writer for the vtkPolyData
-        writer = vtk.vtkPolyDataWriter()
-        writer.SetFileVersion(42)
-        writer.SetInputData(final_branch_model)
-        writer.SetFileName(os.path.join(case_dir, "branch_model.vtk"))
-        writer.Write()
-
-def perform_surface_model_clipping(case_dir):
+        return unified_branch_model
+    
+def extract_clipped_model(surface_model, branch_model, BlankingArrayName="Blanking", RadiusArrayName="Radius", GroupIdsArrayName="GroupIds"):
     """
     Performs clipping over surface models. This allows division
     of the volume model in segments corresponding to the individual arteries.
     
-    This function calls vmtk command vmtkbranchclipper. For additional info refer
-    to <http://www.vmtk.org/vmtkscripts/vmtkbranchclipper.html>.
+    This function summons the vtkvmtk.vtkvmtkPolyDataCenterlineGroupsClipper() class. 
+    For additional info refer to <https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchclipper.py>.
 
-    Saves clipped surface models as:
-
-    >>> case_dir/clipped_models/clipped_model{idx}.vtk
-
-    Where idx = 0, 1, ....
+    For now, the branch clipper model does not work reliably, so we will not be using this 
+    function as part of the vanilla pipeline.
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
+    surface_model : string or path-like object
+        Path to surface model. 
+    branch_model : string or path-like object
+        Path to branch model. 
+    BlankingArrayName : string, optional
+        Name of the blanking array. The default is "Blanking".
+    RadiusArrayName : string, optional
+        Name of the radius array. The default is "Radius".
+    GroupIdsArrayName : string, optional
+        Name of the group ids array. The default is "GroupIds".
 
     Returns
     -------
+    clipped_model : vtkPolyData
+        Clipped surface model.
     
     """
-    # List all surface models to be clipped
-    surface_model_list = sorted([surface_model_file for surface_model_file in os.listdir(os.path.join(case_dir, "segmentations")) if surface_model_file.endswith(".vtk") and surface_model_file.startswith("extracranial_vessels_segmentations")])
-    # Create dir to store all clipped_models
-    if not os.path.isdir(os.path.join(case_dir, "clipped_models")): os.mkdir(os.path.join(case_dir, "clipped_models"))
-    for idx, surface_model_file in enumerate(surface_model_list):
-        print("Clipping surface model {}...".format(idx))
-        # Assing the necessary variables to pass as arguments to vmtkbranchclipper
-        surface_model = os.path.join(case_dir, "segmentations", surface_model_file)
-        branch_model = os.path.join(case_dir, "branch_models", "branch_model_{}.vtk".format(idx))
-        clipped_model = os.path.join(case_dir, "clipped_models", "clipped_model_{}.vtk".format(idx))
-        radius_array_name = "Radius"
-        # Call vmtkbranchclipper command in the command line
-        os.system("vmtkbranchclipper -ifile {} -centerlinesfile {} -ofile {} -radiusarray {}".format(surface_model, branch_model, clipped_model, radius_array_name))
-        # Assert that clipped_model has been created., otherwise raise error
-        assert os.path.exists(clipped_model), "Clipped model {} not found. Clipping failed.".format(idx)
+    # Initialize the vtkvmtkBranchClipper object
+    branchClipper = vtkvmtk.vtkvmtkPolyDataCenterlineGroupsClipper()
+    branchClipper.SetInputData(surface_model)
+    branchClipper.SetCenterlines(branch_model)
+    branchClipper.SetBlankingArrayName(BlankingArrayName)
+    branchClipper.SetCenterlineRadiusArrayName(RadiusArrayName)
+    branchClipper.SetCenterlineGroupIdsArrayName(GroupIdsArrayName)
+    branchClipper.SetGroupIdsArrayName(GroupIdsArrayName)
+    branchClipper.SetCutoffRadiusFactor(0.)
+    branchClipper.SetClipValue(1.)
+    branchClipper.SetUseRadiusInformation(True)
+    branchClipper.ClipAllCenterlineGroupIdsOn() # Interesting that you can set a list of group Ids and only apply clipping to those groups. See https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchclipper.py for the recipe
+    branchClipper.Update()
 
-    # Unify all clipped models
-    perform_clipped_model_unification(case_dir)
+    # Execute the branch clipping
+    try:
+        clipped_model = branchClipper.GetOutput()
+    except:
+        print("Clipping failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \
+              "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
+              "(Usually the first one is the largest and most relevant).")
+        clipped_model = None
 
-def perform_clipped_model_unification(case_dir):
+    return clipped_model
+
+def unify_clipped_models(clipped_model_list):
     """
-    Reads all  clipped models in case_dir/clipped_models derived from the case_dir/segmentations 
-    files and creates unified clipped model. 
-    
-    Saves unified clipped model as:
-
-    >>> case_dir/clipped_model.vtk
+    Unifies all clipped models in a single vtkPolyData object.
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
+    clipped_model_list : list
+        List of clipped models.
 
     Returns
     -------
+    final_clipped_model : vtkPolyData
+        Unified clipped model.
 
     """
-    print("Unifying all clipped models...")
-    clipped_model_list = sorted([clipped_model_file for clipped_model_file in os.listdir(os.path.join(case_dir, "clipped_models")) if clipped_model_file.endswith(".vtk")])
-    # Initialize the vtkPoints and the vtkCellArray objects for the clipped_model
-    cell_array_clipped_model = vtk.vtkCellArray()
-    points_clipped_model = vtk.vtkPoints()
-    final_group_id_point_array_clipped_model = vtk.vtkIntArray()
-    final_group_id_point_array_clipped_model.SetName("GroupIds")
-
-    acc_group_id_clipped_model = 0
-    points_from_previous_clipped_models = 0
-
     if len(clipped_model_list) == 1:
-        shutil.copyfile(os.path.join(case_dir, "clipped_models", "clipped_model_0.vtk"), os.path.join(case_dir, "clipped_model.vtk"))
+        return clipped_model_list[0]
     else:
-        for clipped_model_id, _ in enumerate(clipped_model_list):
-            # Load clipped model         
-            clipped_model_path = os.path.join(case_dir, "clipped_models", "clipped_model_{}.vtk".format(clipped_model_id))
-            vtk_poly_data_reader = vtk.vtkPolyDataReader()
-            vtk_poly_data_reader.SetFileName(clipped_model_path)
-            vtk_poly_data_reader.Update()
-            clipped_model = vtk_poly_data_reader.GetOutput()
+        # Initialize the vtkPoints and the vtkCellArray objects for the clipped_model
+        cell_array_clipped_model = vtk.vtkCellArray()
+        points_clipped_model = vtk.vtkPoints()
+        final_group_id_point_array_clipped_model = vtk.vtkIntArray()
+        final_group_id_point_array_clipped_model.SetName("GroupIds")
 
+        acc_group_id_clipped_model = 0
+        points_from_previous_clipped_models = 0
+        for clipped_model_idx, clipped_model in enumerate(clipped_model_list):
             if clipped_model.GetNumberOfCells() == 0:
-                print("Error in clipped model {}. Skipping".format(clipped_model_id))
+                print("Error in clipped model {}. Skipping".format(clipped_model_idx))
             else:
-                print("Processing clipped model {}...".format(clipped_model_id))
+                print("Processing clipped model {}...".format(clipped_model_idx))
                 # Get point data (we only get groupId)
                 group_id_point_array_clipped_model = vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
                 # Update groupIds of current clipped_model
@@ -362,8 +357,4 @@ def perform_clipped_model_unification(case_dir):
         clean_poly_data.Update()
         final_clipped_model = clean_poly_data.GetOutput()
 
-        writer = vtk.vtkPolyDataWriter()
-        writer.SetFileVersion(42)
-        writer.SetInputData(final_clipped_model)
-        writer.SetFileName(os.path.join(case_dir, "clipped_model.vtk"))
-        writer.Write()
+        return final_clipped_model

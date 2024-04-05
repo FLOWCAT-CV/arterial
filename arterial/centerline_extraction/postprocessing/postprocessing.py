@@ -6,9 +6,7 @@ import vtk
 import numpy as np
 import nibabel as nib
 
-# from arterial.centerline_extraction.postprocessing.run_paraview_segmentation_imaging import get_rotation_png_files
-
-def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
+def compute_centerline_segments_array(centerline_model_list, affine, image_shape, mode = "extracranial_vessels"):
     ''' 
     Loads a vtkPolyData object containing the centerline model and generates
     centerline_segments_array, spliting the centerline cells into individual 
@@ -34,16 +32,10 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
     -------
         
     '''
-    centerline_list = sorted([centerline_file for centerline_file in os.listdir(os.path.join(case_dir, "centerlines")) if centerline_file.endswith(".vtk") and centerline_file.startswith(mode)])
     final_centerline_segments_array = np.ndarray([0, 2])
 
-    # Load nifti to define image_shape and aff
-    nifti = nib.load(os.path.join(case_dir, "{}_{}_segmentation.nii.gz".format(os.path.basename(case_dir), mode)))
-    image_shape = nifti.get_fdata().shape
-    aff = nifti.affine
-
     # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
-    orientation = nib.aff2axcodes(aff)
+    orientation = nib.aff2axcodes(affine)
     if orientation == ('R', 'A', 'S'):
         lpi_corner_voxel_coordinates = np.array([0, 0, 0])
     elif orientation == ('L', 'A', 'S'):
@@ -52,15 +44,9 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
         lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
-    lpi_corner_coordinates = np.dot(aff, np.append(lpi_corner_voxel_coordinates, 1))[:3]
+    lpi_corner_coordinates = np.dot(affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
           
-    for centerline_idx, _ in enumerate(centerline_list):
-        # Load centerlines.vtk as a vtkPolyData object
-        centerline_poly_data_reader = vtk.vtkPolyDataReader()
-        centerline_poly_data_reader.SetFileName(os.path.join(case_dir, "centerlines", "{}_centerlines_{}.vtk".format(mode, centerline_idx)))
-        centerline_poly_data_reader.Update()
-        centerline_model = centerline_poly_data_reader.GetOutput()
-    
+    for centerline_model in centerline_model_list:
         # Define number of cells and points in the vtkPolyData
         number_of_cells = centerline_model.GetNumberOfCells()
 
@@ -266,7 +252,8 @@ def compute_centerline_segments_array(case_dir, mode = "extracranial_vessels"):
     # For extracranial analysis, we will remove cerebral vessels detected with high confidence
     if mode == "extracranial_vessels":
         final_centerline_segments_array = remove_intracranial_arteries(final_centerline_segments_array)
-    np.save(os.path.join(case_dir, "{}_centerline_segments_array.npy".format(mode)), final_centerline_segments_array)
+
+    return final_centerline_segments_array
 
 def clean_centerlines(centerline_segments_array):
     """

@@ -97,7 +97,7 @@ def preprocessing_extracranial_vessels(case_dir, master_volume_node, fast_segmen
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
     # Get voxel size from image
-    voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
+    voxel_size = np.prod(nib.load(os.path.join(case_dir, "extracranial_vessels_segmentation.nii.gz")).header["pixdim"][1:4])
     # Compute approximate number of voxels
     number_of_voxels_threshold = round(8000 * (reference_voxel_size / voxel_size))
     # Remove small islands
@@ -217,7 +217,7 @@ def preprocessing_intracranial_vessels(case_dir, master_volume_node):
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
     # Get voxel size from image
-    voxel_size = np.prod(nib.load(os.path.join(case_dir, "{}_intracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir)))).header["pixdim"][1:4])
+    voxel_size = np.prod(nib.load(os.path.join(case_dir, "intracranial_vessels_segmentation.nii.gz")).header["pixdim"][1:4])
     # Compute approximate number of voxels
     number_of_voxels_threshold = round(3000 * (reference_voxel_size / voxel_size))
     # Remove small islands
