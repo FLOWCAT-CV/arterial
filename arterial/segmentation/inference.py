@@ -71,7 +71,7 @@ def perform_inference_fast(case_dir):
     output_dir = output_dir.replace("\\", "")
 
     # Copy segmentation nifti to case_dir
-    shutil.copyfile(os.path.join(output_dir, "{}.nii.gz".format(os.path.basename(case_dir))), os.path.join(case_dir, "{}_vessel_segmentation.nii.gz".format(os.path.basename(case_dir))))
+    shutil.copyfile(os.path.join(output_dir, "{}.nii.gz".format(os.path.basename(case_dir))), os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
 
     # Remove input and output directories
     shutil.rmtree(input_dir)
