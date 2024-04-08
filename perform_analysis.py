@@ -8,6 +8,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-case_dir", "--case_dir", type=str, required=True,
         help="Path to directory containing the nifti image (assumes that the nifti file has the basename of the dir). Required.")
+    parser.add_argument("-cta_nifti_path", "--cta_nifti_path", type=str, required=False, default=None,
+        help="Path to the nifti image. Not required (assumes is case_dir/cta.nii.gz).")
     parser.add_argument("-no_display", "--no_display", type=bool, required=False, default=False, 
         help="If using a remote Linux, this should be used following correct Slicer installation, and should be coulpled "
         "with the use of `xvfb-run --auto-servernum --server-num=1` upon use before calling this script (prior to the python command). "
