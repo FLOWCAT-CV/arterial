@@ -65,7 +65,7 @@ class ArterialProcessor():
         # Initialize module classes
         self.vessel_segmenter = VesselSegmenter(self.case_dir)
         self.thrombus_segmenter = ThrombusSegmenter(self.case_dir)
-        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, self.no_display, self.fast_segmentation)
+        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, None, self.no_display, self.fast_segmentation)
         self.vessel_labeller = VesselLabeller(self.case_dir, self.mode)
         self.feature_extractor = FeatureExtractor(self.case_dir)
 
@@ -145,13 +145,13 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
         
-        >>> case_dir/centerlines/centerlines{idx}.vtk
-        >>> case_dir/segmentations/segmentation{idx}.vtk
-        >>> case_dir/branch_models/branch_model{idx}.vtk
+        >>> case_dir/centerlines/{self.mode}_centerlines_{idx}.vtk
+        >>> case_dir/segmentations/{self.mode}_segmentation_{idx}.vtk
+        >>> case_dir/branch_models/branch_model_{idx}.vtk
         >>> case_dir/branch_model.vtk
-        >>> case_dir/clipped_models/clipped_model{idx}.vtk
+        >>> case_dir/clipped_models/clipped_model_{idx}.vtk
         >>> case_dir/clipped_model.vtk
-        >>> case_dir/centerline_segments_array.npy
+        >>> case_dir/{self.mode}_centerline_segments_array.npy
 
         Parmeters
         ---------
@@ -163,24 +163,24 @@ class ArterialProcessor():
         if not self.skip_centerline_extraction:
             print("Performing centerline extraction...")
             # Applies centerline preprocessing and extraction using Slicer and VMTK
-            self.centerline_extractor.extract_centerline()
+            self.centerline_extractor.perform_centerline_extraction()
             if self.mode == "extracranial_vessels":
                 if not self.skip_branching:
                     print("Performing centerline branching...")
                     # Performs centerline model branching with VMTK
-                    self.centerline_extractor.extract_branch_model()
+                    self.centerline_extractor.perform_branch_model_extraction()
                     print("done")
                 else:
                     print("Skipping centerline branching")
                 if not self.skip_clipping:
                     print("Performing surface model clipping...")
                     # Performs surface model clipping with VMTK
-                    self.centerline_extractor.extract_clipped_model()
+                    self.centerline_extractor.perform_clipped_model_extraction()
                     print("done")
                 else:
                     print("Skipping surface model clipping")
             # Creates array for easier centerline analysis
-            self.centerline_extractor.postprocess_centerline()
+            self.centerline_extractor.perform_centerline_postprocessing()
             print("done \n")
         else: 
             print("Skipping centerline extraction \n")
