@@ -6,16 +6,14 @@ class TestCenterlineExtractor(unittest.TestCase):
     def setUp(self):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
-        self.segmentation_nifti_path = os.path.join(self.case_dir, f"{self.mode}_segmentation.nii.gz")
-        self.no_display = True
+        self.segmentation_nifti_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}_segmentation.nii.gz")
         self.fast_segmentation = False
-        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, self.segmentation_nifti_path, self.no_display, self.fast_segmentation)
+        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, self.segmentation_nifti_path, self.fast_segmentation)
 
     def test_init(self):
         self.assertEqual(self.centerline_extractor.case_dir, self.case_dir)
         self.assertEqual(self.centerline_extractor.mode, self.mode)
         self.assertEqual(self.centerline_extractor.segmentation_nifti_path, self.segmentation_nifti_path)
-        self.assertEqual(self.centerline_extractor.no_display, self.no_display)
         self.assertEqual(self.centerline_extractor.fast_segmentation, self.fast_segmentation)
         self.assertEqual(self.centerline_extractor.segmentation_nifti, None)
         self.assertEqual(self.centerline_extractor.affine, None)
@@ -109,11 +107,11 @@ class TestCenterlineExtractor(unittest.TestCase):
         # Remove all the files generated during the tests
         cls.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         for filename in os.listdir(cls.case_dir):
-            if os.path.isfile(os.path.join(cls.case_dir, filename)):
-                if not filename in ["cta.nii.gz", "extracranial_vessels_segmentation.nii.gz", "intracranial_vessels_segmentation.nii.gz"]:
+            if filename != "input_test_data":
+                if os.path.isfile(os.path.join(cls.case_dir, filename)):
                     os.remove(os.path.join(cls.case_dir, filename))
-            elif os.path.isdir(os.path.join(cls.case_dir, filename)):
-                shutil.rmtree(os.path.join(cls.case_dir, filename))
+                elif os.path.isdir(os.path.join(cls.case_dir, filename)):
+                    shutil.rmtree(os.path.join(cls.case_dir, filename))
 
 if __name__ == '__main__':
     unittest.main()

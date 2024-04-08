@@ -18,8 +18,7 @@ class CenterlineExtractor():
                  case_dir, 
                  mode = "extracranial_vessels", 
                  segmentation_nifti_path = None,
-                 no_display = False, 
-                 fast_segmentation = False,
+                 fast_segmentation = False
                  ):
         """
         Initializes object of the CenterlineExtractor class.
@@ -34,10 +33,6 @@ class CenterlineExtractor():
         segmentation_nifti_path : string or path-like object, default = None
             Path to segmentation nifti file. If None, it is assumed that the segmentation nifti file is located
             in the case directory, with the name {mode}_segmentation.nii.gz.
-        no_display : bool, default = False
-            Boolean variable to be used when running analysis on a headless server.
-            In addition, add ```$xvfb-run --auto-servernum --server-num=1``` at the beggining
-            of the command line call when executing the script from the command line.
         fast_segmentation : bool, default = False
             Boolean variable to be used when running analysis derived from fast segmentation (lowres).
             In this case, segmentation of the cerebral arteries is less reliable, so a higher fraction
@@ -47,10 +42,12 @@ class CenterlineExtractor():
         -------
         
         """
+        assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
+        assert mode in ["extracranial_vessels", "intracranial_vessels"], "mode should be either 'extracranial_vessels' or 'intracranial_vessels'."
+        
         self.case_dir = case_dir
         if not os.path.isdir(self.case_dir): os.makedirs(self.case_dir, exist_ok=True)
         self.mode = mode
-        self.no_display = no_display
         self.fast_segmentation = fast_segmentation 
 
         if segmentation_nifti_path is None:
@@ -120,7 +117,7 @@ class CenterlineExtractor():
         # Thus, this function is a wrapper for a CLI call to a Python script that runs Slicer to obtain 3D models
         # resulting from the segementer.
         print("Performing preprocessing and centerline extraction in Slicer...")
-        perform_preprocessing_and_centerline_extraction(self.case_dir, self.mode, self.no_display, self.fast_segmentation)
+        perform_preprocessing_and_centerline_extraction(self.case_dir, self.segmentation_nifti_path, self.mode, self.fast_segmentation)
 
         self.centerline_model_list = load_vtk_list(self.centerlines_dir_path)
         self.segmentation_model_list = load_vtk_list(self.segmentations_dir_path)

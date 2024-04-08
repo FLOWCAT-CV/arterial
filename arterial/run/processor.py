@@ -2,9 +2,9 @@
 
 import os
 
-from arterial.segmentation.segmenter import VesselSegmenter, ThrombusSegmenter
+from arterial.segmentation.segmenter import VesselSegmenter
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
-from arterial.vessel_labelling.vessel_labeller import VesselLabeller
+# from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
 from time import time
@@ -27,11 +27,6 @@ class ArterialProcessor():
             These are:
             - case_dir : string or path-like object
                 Path to case directory. 
-            - no_display : bool, default = False
-                Boolean variable to be used when running analysis on a headless server.
-                In addition, add ```$xvfb-run --auto-servernum --server-num=1``` at the beggining
-                of the command line call when executing the script from the command line.
-                E.g.: ```$xvfb-run --auto-servernum --server-num=1 python perform_analysis.py -case_dir {case_dir} -no_display {True}```
             - skip_segmentation : bool, default = False
                 If True, it will skip the segmentation process. Useful if segmentation is already done,
                 as segmentation is time-consuming. False by default.
@@ -52,8 +47,8 @@ class ArterialProcessor():
         """
         # Parameters from args
         self.case_dir = args.case_dir
+        self.cta_nifti_path = args.cta_nifti_path
         self.mode = args.mode
-        self.no_display = args.no_display
         self.skip_segmentation = args.skip_segmentation
         self.fast_segmentation = args.fast_segmentation
         self.skip_centerline_extraction = args.skip_centerline_extraction
@@ -63,10 +58,18 @@ class ArterialProcessor():
         self.skip_feature_extraction = args.skip_feature_extraction
 
         # Initialize module classes
-        self.vessel_segmenter = VesselSegmenter(self.case_dir)
-        self.thrombus_segmenter = ThrombusSegmenter(self.case_dir)
-        self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, None, self.no_display, self.fast_segmentation)
-        self.vessel_labeller = VesselLabeller(self.case_dir, self.mode)
+        self.vessel_segmenter = VesselSegmenter(self.case_dir,
+                                                self.mode,
+                                                self.cta_nifti_path,
+                                                self.fast_segmentation)
+        self.centerline_extractor = CenterlineExtractor(self.case_dir, 
+                                                        self.mode, 
+                                                        None, 
+                                                        self.no_display, 
+                                                        self.fast_segmentation)
+        # self.vessel_labeller = VesselLabeller(self.case_dir, # Compatibility issue with pytorch
+        #                                       self.mode)
+        self.vessel_labeller = None
         self.feature_extractor = FeatureExtractor(self.case_dir)
 
     def perform_analysis(self):
@@ -118,23 +121,7 @@ class ArterialProcessor():
         """
         # Predicts segmentation by nnunet inference
         if not self.skip_segmentation:
-            if self.mode == "extracranial_vessels":
-                if self.fast_segmentation:
-                    print("Predicting segmentation (fast)...")
-                    self.vessel_segmenter.predict_fast()
-                    print("done \n")
-                else:
-                    print("Predicting segmentation (full)...")
-                    self.vessel_segmenter.predict_full()
-                    print("done \n")
-            elif self.mode == "intracranial_vessels":
-                print("Predicting intracranial segmentation...")
-                self.vessel_segmenter.predict_intracranial()
-                print("done \n")
-            elif self.mode == "thrombus":
-                print("Predicting thrombus segmentation...")
-                self.thrombus_segmenter.predict_patch_recentering()
-                print("done \n")
+            self.vessel_segmenter.segment_vessels_from_cta()
         else:
             print("Skipping segmentation \n")
 
