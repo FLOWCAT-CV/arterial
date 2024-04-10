@@ -116,7 +116,7 @@ class VesselSegmenter():
                 print("Slicing CTA into head and neck...")
                 self.slice_cta()
                 print("Performing segmentation (head)...")
-                _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres")
+                _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres")
                 print("Performing segmentation (neck)...")
                 _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres")
                 print("Joining segmentations...")
@@ -146,75 +146,3 @@ class VesselSegmenter():
         
         """
         self.cta_head_array, self.cta_neck_array, self.cta_head_affine = slice_cta_head_and_neck(self.cta_array, self.cta_affine)
-
-# class ThrombusSegmenter():
-#     """ 
-#     Segmenter class to perform vessel segmentation prediction over CTA. 
-
-#     """
-#     def __init__(self, case_dir):
-#         """
-#         Initializes object of the Segmenter class.
-
-#         Parameters
-#         ----------
-#         case_dir : string or path-like object
-#             Path to case directory. 
-
-#         Returns
-#         -------
-        
-#         """
-#         self.case_dir = case_dir
-
-#     def predict(self):
-#         """
-#         This method calls perform_inference_thrombus to perform inference using a trained nnunet
-#         model over a localized bimodal patch (NCCT + CTA) containing a suspected vessel occlusion.
-#         The CTA should be in nifti format, within the self.case_dir directory and with case_id being 
-#         the basename of the self.case_dir, the name convention used should be:
-
-#         >>> {case_id}_cta_thrombus_patch.nii.gz
-#         >>> {case_id}_ncct_thrombus_patch.nii.gz
-
-#         At the end of the segmentation prediction, a nifti file with the format:
-        
-#         >>> {case_id}_thrombus_segmentation.nii.gz
-        
-#         should be generated in the self.case_dir. This class acts as a wrapper
-#         for the arterial.segmentation.inference.perform_thrombus_inference() function. 
-
-#         Parmeters
-#         ---------
-
-#         Returns
-#         -------
-
-#         """
-#         perform_inference_thrombus(self.case_dir)
-    
-#     def predict_patch_recentering(self):
-#         """
-#         This method calls perform_dynamic_iterative_thrombus_inference to perform inference using a trained nnunet
-#         model over a localized bimodal patch (NCCT + CTA) containing a suspected vessel occlusion.
-#         The CTA should be in nifti format, within the self.case_dir directory and with case_id being 
-#         the basename of the self.case_dir, the name convention used should be:
-
-#         >>> {case_id}_cta_thrombus_patch.nii.gz
-#         >>> {case_id}_ncct_thrombus_patch.nii.gz
-
-#         At the end of the segmentation prediction, a nifti file with the format:
-        
-#         >>> {case_id}_thrombus_segmentation.nii.gz
-        
-#         should be generated in the self.case_dir. This class acts as a wrapper
-#         for the arterial.segmentation.inference.perform_dynamic_iterative_thrombus_inference() function. 
-
-#         Parmeters
-#         ---------
-
-#         Returns
-#         -------
-
-#         """
-#         perform_dynamic_iterative_thrombus_inference(self.case_dir)
