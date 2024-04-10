@@ -44,7 +44,7 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
 
     # Instantiate the nnUNetPredictor
     predictor = nnUNetPredictor(
-        tile_step_size=0.8,
+        tile_step_size=0.75,
         use_gaussian=True,
         use_mirroring=True,
         perform_everything_on_device=True,

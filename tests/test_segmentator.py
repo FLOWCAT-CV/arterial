@@ -7,7 +7,7 @@ import nibabel as nib
 
 from arterial.segmentation.segmenter import VesselSegmenter
 
-class TestSegmenter(unittest.TestCase):
+class TestVesselSegmenter(unittest.TestCase):
     def setUp(self):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
@@ -34,8 +34,8 @@ class TestSegmenter(unittest.TestCase):
     def test_extracranial_vessels_fast_segmentation(self):
         self.segmenter.mode = "extracranial_vessels"
         self.segmenter.fast_segmentation = True
-        if os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz")):
-            os.remove(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz"))
+        if os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz")):
+            os.remove(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz"))
         self.segmenter.segmentation_nifti = None
         self.segmenter.segmentation_array = None
 
@@ -43,61 +43,59 @@ class TestSegmenter(unittest.TestCase):
 
         self.assertIsNotNone(self.segmenter.segmentation_nifti)
         self.assertIsNotNone(self.segmenter.segmentation_array)
-        self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz")))
+        self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz")))
 
-    # def test_extracranial_vessels_segmentation(self):
-    #     self.segmenter.mode = "extracranial_vessels"
-    #     self.segmenter.fast_segmentation = False
-    #     if os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz")):
-    #         os.remove(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz"))
-    #     self.segmenter.segmentation_nifti = None
-    #     self.segmenter.segmentation_array = None
-    #     self.segmenter.cta_head_array = None
-    #     self.segmenter.cta_neck_array = None
-    #     self.segmenter.cta_head_affine = None
-    #     self.segmenter.segmentation_head_array = None
-    #     self.segmenter.segmentation_neck_array = None
+    def test_extracranial_vessels_segmentation(self):
+        self.segmenter.mode = "extracranial_vessels"
+        self.segmenter.fast_segmentation = False
+        if os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz")):
+            os.remove(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz"))
+        self.segmenter.segmentation_nifti = None
+        self.segmenter.segmentation_array = None
+        self.segmenter.cta_head_array = None
+        self.segmenter.cta_neck_array = None
+        self.segmenter.cta_head_affine = None
+        self.segmenter.segmentation_head_array = None
+        self.segmenter.segmentation_neck_array = None
 
-    #     self.segmenter.segment_vessels_from_cta()
+        self.segmenter.segment_vessels_from_cta()
 
-    #     self.assertIsNotNone(self.segmenter.segmentation_nifti)
-    #     self.assertIsNotNone(self.segmenter.segmentation_array)
-    #     self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz")))
-    #     self.assertIsNotNone(self.segmenter.cta_head_array)
-    #     self.assertIsNotNone(self.segmenter.cta_neck_array)
-    #     self.assertIsNotNone(self.segmenter.cta_head_affine)
-    #     self.assertIsNotNone(self.segmenter.segmentation_head_array)
-    #     self.assertIsNotNone(self.segmenter.segmentation_neck_array)
+        self.assertIsNotNone(self.segmenter.segmentation_nifti)
+        self.assertIsNotNone(self.segmenter.segmentation_array)
+        self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz")))
+        self.assertIsNotNone(self.segmenter.cta_head_array)
+        self.assertIsNotNone(self.segmenter.cta_neck_array)
+        self.assertIsNotNone(self.segmenter.cta_head_affine)
+        self.assertIsNotNone(self.segmenter.segmentation_head_array)
+        self.assertIsNotNone(self.segmenter.segmentation_neck_array)
 
-    # def test_intracranial_vessels_segmentation(self):
-    #     self.segmenter.mode = "intracranial_vessels"
-    #     if os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz")):
-    #         os.remove(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz"))
-    #     self.segmenter.segmentation_nifti = None
-    #     self.segmenter.segmentation_array = None
-    #     self.segmenter.cta_head_array = None
-    #     self.segmenter.cta_neck_array = None
-    #     self.segmenter.cta_head_affine = None
-    #     self.segmenter.segmentation_head_array = None
-    #     self.segmenter.segmentation_neck_array = None
+    def test_intracranial_vessels_segmentation(self):
+        self.segmenter.mode = "intracranial_vessels"
+        if os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz")):
+            os.remove(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz"))
+        self.segmenter.segmentation_nifti = None
+        self.segmenter.segmentation_array = None
+        self.segmenter.cta_head_array = None
+        self.segmenter.cta_neck_array = None
+        self.segmenter.cta_head_affine = None
+        self.segmenter.segmentation_head_array = None
+        self.segmenter.segmentation_neck_array = None
 
-    #     self.segmenter.segment_vessels_from_cta()
+        self.segmenter.segment_vessels_from_cta()
 
-    #     self.assertIsNotNone(self.segmenter.segmentation_nifti)
-    #     self.assertIsNotNone(self.segmenter.segmentation_array)
-    #     self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.mode}_segmentation.nii.gz")))
-    #     self.assertIsNotNone(self.segmenter.cta_head_array)
-    #     self.assertIsNotNone(self.segmenter.cta_neck_array)
-    #     self.assertIsNotNone(self.segmenter.cta_head_affine)
-    #     self.assertIsNotNone(self.segmenter.segmentation_head_array)
-    #     self.assertIsNotNone(self.segmenter.segmentation_neck_array)
+        self.assertIsNotNone(self.segmenter.segmentation_nifti)
+        self.assertIsNotNone(self.segmenter.segmentation_array)
+        self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, f"{self.segmenter.mode}_segmentation.nii.gz")))
+        self.assertIsNotNone(self.segmenter.cta_head_array)
+        self.assertIsNotNone(self.segmenter.cta_neck_array)
+        self.assertIsNotNone(self.segmenter.cta_head_affine)
 
     @classmethod
     def tearDownClass(cls):
         # Remove all the files generated during the tests
         cls.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         for filename in os.listdir(cls.case_dir):
-            if filename != "input_test_data":
+            if filename not in ["input_test_data", "output"]:
                 if os.path.isfile(os.path.join(cls.case_dir, filename)):
                     os.remove(os.path.join(cls.case_dir, filename))
                 elif os.path.isdir(os.path.join(cls.case_dir, filename)):

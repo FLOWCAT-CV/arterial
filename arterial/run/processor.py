@@ -27,6 +27,8 @@ class ArterialProcessor():
             These are:
             - case_dir : string or path-like object
                 Path to case directory. 
+            - cta_nifti_path : string or path-like object
+                Path to the CTA nifti to be processed.
             - skip_segmentation : bool, default = False
                 If True, it will skip the segmentation process. Useful if segmentation is already done,
                 as segmentation is time-consuming. False by default.
@@ -65,7 +67,6 @@ class ArterialProcessor():
         self.centerline_extractor = CenterlineExtractor(self.case_dir, 
                                                         self.mode, 
                                                         None, 
-                                                        self.no_display, 
                                                         self.fast_segmentation)
         # self.vessel_labeller = VesselLabeller(self.case_dir, # Compatibility issue with pytorch
         #                                       self.mode)

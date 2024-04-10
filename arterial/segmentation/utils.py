@@ -6,7 +6,7 @@ import numpy as np
 import nibabel as nib
 
 from scipy.ndimage import gaussian_laplace
-from skimage.measure import label, regionprops
+from skimage.measure import label
 
 def get_largest_connected_component(segmentation):
     """
@@ -99,10 +99,6 @@ def slice_cta_head_and_neck(cta_array, cta_affine):
     cta_head_affine[0, 3] += lower_slicing_i_coordinate * r_voxel_size
     cta_head_affine[1, 3] += lower_slicing_j_coordinate * a_voxel_size
     cta_head_affine[2, 3] += lower_slicing_k_coordinate * s_voxel_size
-    
-    # Generate new nifti files
-    # cta_head_array = nib.Nifti1Image(cta_head_array, cta_head_affine)
-    # cta_neck_array = nib.Nifti1Image(cta_neck_array, cta_affine, cta_nifti.header)
 
     return cta_head_array, cta_neck_array, cta_head_affine
 
@@ -177,150 +173,3 @@ def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_ar
     segmentation_nifti = nib.Nifti1Image(segmentation_array, cta_affine)
 
     return segmentation_nifti, segmentation_array
-
-# def crop_intracranial_cta(case_dir):
-#     """
-#     This funciton enables slicing of head and neck parts of the CTA ({case_id}.nii.gz)
-#     by using a Laplacian of Gaussian filter (scipy) to perform a segmentation
-#     of the cranium. That information is used to slice the original CTA
-#     into two parts: the head CTA and neck CTA.
-
-#     This function generates two additional nifti files:
-
-#     >>> case_dir/{case_id}_cta_intracranial.nii.gz
-
-#     Parameters
-#     ----------
-#     case_dir : string or path-like object
-#         Path to case directory. 
-
-#     Returns
-#     -------
-
-#     """    
-#     # Load nifti of full CTA
-#     cta_nifti = nib.load(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir))))
-#     cta_array = cta_nifti.get_fdata()
-
-#     # Get height. If it is shorter than 200 mm, we consider that it is a head CTA and we do not crop
-#     height = cta_array.shape[2] * cta_nifti.header.get_zooms()[2]
-
-#     if abs(height) > 200:
-#         # Apply laplacian-gaussian filter to upper half of the CTA image
-#         half_s_coordinate = cta_array.shape[2] // 2
-#         upper_half_cta_array = cta_array[:, :, half_s_coordinate:]    
-#         filtered_upper_half_cta_array = gaussian_laplace(upper_half_cta_array, sigma = 0.0001, mode = "nearest")
-
-#         # Get cranium binary mask
-#         tolerance = 0.43 * np.ptp(filtered_upper_half_cta_array)
-#         threshold = np.min(filtered_upper_half_cta_array) + tolerance
-#         cranium_mask = np.where(filtered_upper_half_cta_array <= threshold, np.max(cta_array), 0)
-#         # Get largest connected component
-#         cranium_mask = get_largest_connected_component(cranium_mask)
-#         # Get lowest coordinate with a non-zero voxel from cranium mask 
-#         nonzero_coordinates = np.nonzero(cranium_mask)
-
-#         # We will define a flag here so that, in case that we detect a bad cropping, we just select hardcoded coordinates for the CTA cropping
-#         bad_cropping = False
-#         # In these events, the cranium segmentation was not successful, we will just cut the upper half of the CTA
-#         if len(nonzero_coordinates[0]) == 1 or len(nonzero_coordinates[1]) == 1 or len(nonzero_coordinates[2]) == 1:
-#             bad_cropping = True
-#         if abs(max(nonzero_coordinates[0]) - min(nonzero_coordinates[0])) < 100 or abs(max(nonzero_coordinates[1]) - min(nonzero_coordinates[1])) < 100 or abs(max(nonzero_coordinates[2]) - min(nonzero_coordinates[2])) < 100:
-#             bad_cropping = True
-        
-#         if bad_cropping:
-#             lower_slicing_i_coordinate = 50
-#             upper_slicing_i_coordinate = cta_array.shape[0] - 50
-#             lower_slicing_j_coordinate = 50
-#             upper_slicing_j_coordinate = cta_array.shape[1] - 50
-#             lower_slicing_k_coordinate = half_s_coordinate
-#             upper_slicing_k_coordinate = cta_array.shape[2]
-#         else:
-#             # Get s coordinate for slicing into head and neck
-#             lower_slicing_i_coordinate = min(nonzero_coordinates[0])
-#             upper_slicing_i_coordinate = max(nonzero_coordinates[0])
-#             lower_slicing_j_coordinate = min(nonzero_coordinates[1])
-#             upper_slicing_j_coordinate = max(nonzero_coordinates[1])
-#             lower_slicing_k_coordinate = half_s_coordinate + min(nonzero_coordinates[2])
-#             upper_slicing_k_coordinate = half_s_coordinate + max(nonzero_coordinates[2])
-
-#         # Slice cta into two (head and neck)
-#         intracranial_cta_array = cta_array[lower_slicing_i_coordinate:upper_slicing_i_coordinate, 
-#                                            lower_slicing_j_coordinate:upper_slicing_j_coordinate, 
-#                                            lower_slicing_k_coordinate:upper_slicing_k_coordinate]
-        
-#         # Update affine and header for intracranial CTA
-#         intracranial_affine = cta_nifti.affine.copy()
-#         # Get s voxel size
-#         r_voxel_size = intracranial_affine[0, 0]
-#         a_voxel_size = intracranial_affine[1, 1]
-#         s_voxel_size = intracranial_affine[2, 2]
-#         # Update s translation from affine
-#         intracranial_affine[0, 3] += lower_slicing_i_coordinate * r_voxel_size
-#         intracranial_affine[1, 3] += lower_slicing_j_coordinate * a_voxel_size
-#         intracranial_affine[2, 3] += lower_slicing_k_coordinate * s_voxel_size
-    
-#         # Generate new nifti files
-#         intracranial_cta_nifti = nib.Nifti1Image(intracranial_cta_array, intracranial_affine)
-#         # Save new nifti files
-#         nib.save(intracranial_cta_nifti, os.path.join(case_dir, "{}_cta_intracranial.nii.gz".format(os.path.basename(case_dir))))
-#     else:
-#         nib.save(cta_nifti, os.path.join(case_dir, "{}_cta_intracranial.nii.gz".format(os.path.basename(case_dir))))
-
-
-# def recenter_thrombus_patch(case_dir):
-#     """
-#     This function re-centers the thrombus patch in the CTA and NCCT nifties. It loads the predicted thrombus,
-#     gets the centroid of the thrombus, and then creates new patches for CTA and NCCT based on the thrombus centroid.
-#     If no thrombus is found, it prints a message indicating so.
-
-#     This function ovverwrites two additional nifti files:
-
-#     >>> case_dir/{case_id}_cta_thrombus_patch.nii.gz
-#     >>> case_dir/{case_id}_ncct_thrombus_patch.nii.gz
-
-#     Parameters
-#     ----------
-#     case_dir : string or path-like object
-#         Path to case directory. 
-
-#     Returns
-#     -------
-
-#     """
-#     # Load CTA patch for patch shape (assumed to be divisible by 2)
-#     cta_patch = nib.load(os.path.join(case_dir, "{}_cta_thrombus_patch.nii.gz".format(os.path.basename(case_dir))))
-#     affine_patch = cta_patch.affine
-    
-#     # Load CTA and NCCT nifties
-#     cta_nifti = nib.load(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir))))
-#     cta_nifti_data = cta_nifti.get_fdata()
-#     ncct_nifti = nib.load(os.path.join(case_dir, "{}_ncct.nii.gz".format(os.path.basename(case_dir))))
-#     ncct_nifti_data = ncct_nifti.get_fdata()
-
-#     # Load predicted thrombus
-#     thrombus_segmentation_nifti = nib.load(os.path.join(case_dir, '{}_thrombus_segmentation.nii.gz'.format(os.path.basename(case_dir))))
-#     thrombus_segmentation = thrombus_segmentation_nifti.get_fdata()
-
-#     # Get thrombus centroid (largest component)
-#     if not thrombus_segmentation.sum() == 0:
-#         label_mask = label(thrombus_segmentation.astype(np.int))
-#         properties = regionprops(label_mask)
-#         thrombus_centroid = properties[0].centroid
-        
-#         # Get new patches for cta and ncct
-#         cta_patch_data = cta_nifti_data[int(thrombus_centroid[0] - cta_patch.shape[0] / 2):int(thrombus_centroid[0] + cta_patch.shape[0] / 2),
-#                                         int(thrombus_centroid[1] - cta_patch.shape[1] / 2):int(thrombus_centroid[1] + cta_patch.shape[1] / 2),
-#                                         int(thrombus_centroid[2] - cta_patch.shape[2] / 2):int(thrombus_centroid[2] + cta_patch.shape[2] / 2)]
-#         ncct_patch_data = ncct_nifti_data[int(thrombus_centroid[0] - cta_patch.shape[0] / 2):int(thrombus_centroid[0] + cta_patch.shape[0] / 2),
-#                                           int(thrombus_centroid[1] - cta_patch.shape[1] / 2):int(thrombus_centroid[1] + cta_patch.shape[1] / 2),
-#                                           int(thrombus_centroid[2] - cta_patch.shape[2] / 2):int(thrombus_centroid[2] + cta_patch.shape[2] / 2)]
-        
-#         # Save new patches
-#         cta_patch = nib.Nifti1Image(cta_patch_data, affine_patch)
-#         ncct_patch = nib.Nifti1Image(ncct_patch_data, affine_patch)
-#         nib.save(cta_patch, os.path.join(case_dir, "{}_cta_thrombus_patch.nii.gz".format(os.path.basename(case_dir))))
-#         nib.save(ncct_patch, os.path.join(case_dir, "{}_ncct_thrombus_patch.nii.gz".format(os.path.basename(case_dir))))
-
-#     else:
-#         print("No thrombus was found in the segmentation.")
