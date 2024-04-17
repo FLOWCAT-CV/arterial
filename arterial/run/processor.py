@@ -4,7 +4,7 @@ import os
 
 from arterial.segmentation.segmenter import VesselSegmenter
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
-# from arterial.vessel_labelling.vessel_labeller import VesselLabeller
+from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
 from time import time
@@ -50,6 +50,8 @@ class ArterialProcessor():
         # Parameters from args
         self.case_dir = args.case_dir
         self.cta_nifti_path = args.cta_nifti_path
+        if self.cta_nifti_path is None:
+            self.cta_nifti_path = os.path.join(self.case_dir, "cta.nii.gz")
         self.mode = args.mode
         self.skip_segmentation = args.skip_segmentation
         self.fast_segmentation = args.fast_segmentation
@@ -68,9 +70,8 @@ class ArterialProcessor():
                                                         self.mode, 
                                                         None, 
                                                         self.fast_segmentation)
-        # self.vessel_labeller = VesselLabeller(self.case_dir, # Compatibility issue with pytorch
-        #                                       self.mode)
-        self.vessel_labeller = None
+        self.vessel_labeller = VesselLabeller(self.case_dir,
+                                              self.mode)
         self.feature_extractor = FeatureExtractor(self.case_dir)
 
     def perform_analysis(self):
@@ -80,7 +81,7 @@ class ArterialProcessor():
         Binary arguments from args are used to specify 
 
         """
-        print("Performing analysis over case {}. \n".format(os.path.basename(self.case_dir)))
+        print("Performing analysis over {}. \n".format(self.cta_nifti_path))
         start = time()
         self.perform_segmentation()
         step0 = time()
@@ -135,10 +136,10 @@ class ArterialProcessor():
         
         >>> case_dir/centerlines/{self.mode}_centerlines_{idx}.vtk
         >>> case_dir/segmentations/{self.mode}_segmentation_{idx}.vtk
-        >>> case_dir/branch_models/branch_model_{idx}.vtk
-        >>> case_dir/branch_model.vtk
-        >>> case_dir/clipped_models/clipped_model_{idx}.vtk
-        >>> case_dir/clipped_model.vtk
+        >>> case_dir/branch_models/{self.mode}_branch_model_{idx}.vtk
+        >>> case_dir/{self.mode}_branch_model.vtk
+        >>> case_dir/clipped_models/{self.mode}_clipped_model_{idx}.vtk
+        >>> case_dir/{self.mode}_clipped_model.vtk
         >>> case_dir/{self.mode}_centerline_segments_array.npy
 
         Parmeters
@@ -180,10 +181,10 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
 
-        >>> case_dir/graph_simple.pickle
-        >>> case_dir/graph_simple.png
-        >>> case_dir/graph_pred.pickle
-        >>> case_dir/graph_pred.png
+        >>> case_dir/{self.mode}_segments_graph.pickle
+        >>> case_dir/{self.mode}_segments_graph.png
+        >>> case_dir/{self.mode}_segments_graph_pred.pickle
+        >>> case_dir/{self.mode}_segments_graph_pred.png
 
         Parmeters
         ---------
@@ -195,9 +196,9 @@ class ArterialProcessor():
         if not self.skip_vessel_labelling:
             print("Performing vessel labelling...")
             # Makes and featurizes simple graph
-            self.vessel_labeller.preprocessing()
+            self.vessel_labeller.build_segments_graph()
             # Performs inference over simple graph for vessel labelling
-            self.vessel_labeller.predict()
+            self.vessel_labeller.predict_vessel_types()
             print("done \n")
         else:
             print("Skipping vessel labelling \n")

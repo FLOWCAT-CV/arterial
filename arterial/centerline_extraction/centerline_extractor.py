@@ -28,8 +28,7 @@ class CenterlineExtractor():
         case_dir : string or path-like object
             Path to case directory.
         mode: string, default = "extracranial_vessels"
-            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
-            or `thrombus`. 
+            Determines whether the centerline is extracted from `extracranial_vessels` or `intracranial_vessels`. 
         segmentation_nifti_path : string or path-like object, default = None
             Path to segmentation nifti file. If None, it is assumed that the segmentation nifti file is located
             in the case directory, with the name {mode}_segmentation.nii.gz.
@@ -69,8 +68,8 @@ class CenterlineExtractor():
         self.clipped_model_list = []
 
         self.segmentation_path = os.path.join(self.case_dir, f"{self.mode}_segmentation.vtk")
-        self.branch_model_path = os.path.join(self.case_dir, "branch_model.vtk")
-        self.clipped_model_path = os.path.join(self.case_dir, "clipped_model.vtk")
+        self.branch_model_path = os.path.join(self.case_dir, f"{self.mode}_branch_model.vtk")
+        self.clipped_model_path = os.path.join(self.case_dir, f"{self.mode}_clipped_model.vtk")
 
         self.segmentation = None
         self.branch_model = None
@@ -119,8 +118,8 @@ class CenterlineExtractor():
         print("Performing preprocessing and centerline extraction in Slicer...")
         perform_preprocessing_and_centerline_extraction(self.case_dir, self.segmentation_nifti_path, self.mode, self.fast_segmentation)
 
-        self.centerline_model_list = load_vtk_list(self.centerlines_dir_path)
-        self.segmentation_model_list = load_vtk_list(self.segmentations_dir_path)
+        self.centerline_model_list = load_vtk_list(self.centerlines_dir_path, self.mode)
+        self.segmentation_model_list = load_vtk_list(self.segmentations_dir_path, self.mode)
 
         self.segmentation = load_vtkpolydata(self.segmentation_path)
         
@@ -155,7 +154,7 @@ class CenterlineExtractor():
             if branch_model_ is not None:
                 self.branch_model_list.append(branch_model_)
                 if save:
-                    save_vtkpolydata(branch_model_, os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk"))
+                    save_vtkpolydata(branch_model_, os.path.join(self.branch_models_dir_path, f"{self.mode}_branch_model_{idx}.vtk"))
         
         print("Unifying branch models...")
         self.branch_model = unify_branch_models(self.branch_model_list)
@@ -192,7 +191,7 @@ class CenterlineExtractor():
             if clipped_model_ is not None:
                 self.clipped_model_list.append(clipped_model_)
                 if save:
-                    save_vtkpolydata(clipped_model_, os.path.join(self.clipped_models_dir_path, f"clipped_model_{idx}.vtk"))
+                    save_vtkpolydata(clipped_model_, os.path.join(self.clipped_models_dir_path, f"{self.mode}_clipped_model_{idx}.vtk"))
 
         print("Unifying clipped models...")
         self.clipped_model = unify_clipped_models(self.clipped_model_list)

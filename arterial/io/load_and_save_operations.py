@@ -122,7 +122,7 @@ def save_vtkpolydata(vtk_poly_data, path):
     writer.SetFileName(path)
     writer.Write()
 
-def load_vtk_list(dir_path):
+def load_vtk_list(dir_path, mode="extracranial_vessels"):
     """
     Load a list of vtkPolyData objects from a directory.
 
@@ -130,6 +130,8 @@ def load_vtk_list(dir_path):
     ----------
     dir_path : str
         Path to the directory containing the vtkPolyData files.
+    mode : str, optional
+        Mode of the arterial feature extraction pipeline. The default is "extracranial_vessels".
 
     Returns
     -------
@@ -137,7 +139,7 @@ def load_vtk_list(dir_path):
         List of vtkPolyData objects.
 
     """
-    vtk_list = [load_vtkpolydata(os.path.join(dir_path, filename)) for filename in sorted(os.listdir(dir_path)) if filename.endswith(".vtk")]
+    vtk_list = [load_vtkpolydata(os.path.join(dir_path, filename)) for filename in sorted(os.listdir(dir_path)) if filename.endswith(".vtk") and filename.startswith(mode)]
     
     return vtk_list
 
@@ -170,7 +172,7 @@ def load_numpy(path):
         Numpy array loaded from file.
 
     """
-    return np.load(path)
+    return np.load(path, allow_pickle=True)
 
 def save_nifti(nifti, path):
     """

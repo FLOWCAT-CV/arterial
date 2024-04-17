@@ -22,7 +22,7 @@ setup(
         "tests": ["test_data/*"]
         },
     install_requires=[
-        'nnunet',
+        'nnunetv2',
         'nibabel',
         'networkx',
         'torch_geometric',

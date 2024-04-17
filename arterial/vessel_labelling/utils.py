@@ -4,8 +4,6 @@ import os
 
 import numpy as np
 import networkx as nx
-import nibabel as nib
-import pandas as pd
 
 import matplotlib.pyplot as plt
 
@@ -13,7 +11,7 @@ import torch
 
 from torch_geometric.data import Data, InMemoryDataset
 
-from arterial.io.load_and_save_operations import save_pickle, load_json
+from arterial.io.load_and_save_operations import load_json
 
 class EVCDatasetInference(InMemoryDataset):
     """
@@ -202,7 +200,7 @@ def node_transform(graph):
 
     return transformed_graph
 
-def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = None, show = False):
+def make_graph_plot(graph, label=None, subplot=None, show=False, output_path=None):
     """
     Makes matplotlib.pyplot figure of the coronal plane of a networkx graph.
 
@@ -220,7 +218,7 @@ def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = No
 
     """
     if subplot is None:
-        fig, ax = plt.subplots(figsize=[5, 10])
+        _, ax = plt.subplots(figsize=[5, 10])
     else:
         ax = subplot
 
@@ -264,104 +262,109 @@ def make_graph_plot(case_dir, graph, filename = None, label = None, subplot = No
     plt.text(0.5, 0.01, 'I', horizontalalignment='center', verticalalignment='bottom', transform=ax.transAxes)
 
     if subplot is None:
-        if filename is not None:
-            plt.savefig(os.path.join(case_dir, filename))
+        if output_path is not None:
+            plt.savefig(output_path)
         if show:
             plt.show()
         else:
             plt.close()
 
-def graph_data_to_df(case_dir, graph):
-    """
+
+
+""" The functions below belonged to an old implementation for intracranial vessel labelling. It is kept here for reference, 
+but the final approach will be different. """
+
+# def graph_data_to_df(case_dir, graph):
+#     """
    
-    """
-    edges_features_dict = {}  # Initialize the final dictionary
-    intracranial_features = ['proximal bifurcation position i', 
-                             'proximal bifurcation position j', 
-                             'proximal bifurcation position k', 
-                             'distal bifurcation position i' ,
-                             'distal bifurcation position j', 
-                             'distal bifurcation position k', 
-                             'pos i',
-                             'pos j', 
-                             'pos k']
+#     """
+#     edges_features_dict = {}  # Initialize the final dictionary
+#     intracranial_features = ['proximal bifurcation position i', 
+#                              'proximal bifurcation position j', 
+#                              'proximal bifurcation position k', 
+#                              'distal bifurcation position i' ,
+#                              'distal bifurcation position j', 
+#                              'distal bifurcation position k', 
+#                              'pos i',
+#                              'pos j', 
+#                              'pos k']
 
-    # Load the .nii.gz file and get its dimensions
-    i, j, k = nib.load(os.path.join(case_dir, '{}_cta.nii.gz'.format(os.path.basename(case_dir)))).get_fdata().shape
+#     # Load the .nii.gz file and get its dimensions
+#     i, j, k = nib.load(os.path.join(case_dir, '{}_cta.nii.gz'.format(os.path.basename(case_dir)))).get_fdata().shape
 
-    for src, dst in graph.edges:  # Iterate over the edges of the graph
-        edge_features_dict = {}  # Initialize the sub-dictionary
+#     for src, dst in graph.edges:  # Iterate over the edges of the graph
+#         edge_features_dict = {}  # Initialize the sub-dictionary
         
-        for key in graph[src][dst]['features']:  # Iterate over the features of the current edge
-            # Check if the current feature is in the list of special columns
-            if key in intracranial_features:
-                # Normalize the feature value based on the dimension it represents
-                if key.endswith('i'):
-                    edge_features_dict[key] = graph[src][dst]['features'][key] / i
-                elif key.endswith('j'):
-                    edge_features_dict[key] = graph[src][dst]['features'][key] / j
-                elif key.endswith('k'):
-                    edge_features_dict[key] = graph[src][dst]['features'][key] / k
-            else:
-                # If the current feature is not a special column, just add it to the sub-dictionary
-                edge_features_dict[key] = graph[src][dst]['features'][key]
+#         for key in graph[src][dst]['features']:  # Iterate over the features of the current edge
+#             # Check if the current feature is in the list of special columns
+#             if key in intracranial_features:
+#                 # Normalize the feature value based on the dimension it represents
+#                 if key.endswith('i'):
+#                     edge_features_dict[key] = graph[src][dst]['features'][key] / i
+#                 elif key.endswith('j'):
+#                     edge_features_dict[key] = graph[src][dst]['features'][key] / j
+#                 elif key.endswith('k'):
+#                     edge_features_dict[key] = graph[src][dst]['features'][key] / k
+#             else:
+#                 # If the current feature is not a special column, just add it to the sub-dictionary
+#                 edge_features_dict[key] = graph[src][dst]['features'][key]
                 
-        edge_features_dict['cell_id'] = graph[src][dst]['cell_id']  # Add the cell ID to the sub-dictionary
+#         edge_features_dict['cell_id'] = graph[src][dst]['cell_id']  # Add the cell ID to the sub-dictionary
         
-        # Add the sub-dictionary to the final dictionary, using the edge's nodes as the key
-        edges_features_dict[str(src)+ '_' + str(dst)] = edge_features_dict
+#         # Add the sub-dictionary to the final dictionary, using the edge's nodes as the key
+#         edges_features_dict[str(src)+ '_' + str(dst)] = edge_features_dict
 
-    return pd.DataFrame(edges_features_dict).T  # Return the final dictionary as a DataFrame
+#     return pd.DataFrame(edges_features_dict).T  # Return the final dictionary as a DataFrame
 
-def save_predicted_graph(case_dir, graph, predicted_vessels, mode = "vessels"):
-    """ 
-    Integrates the predicted vessel types from the inference of the 
-    graph U-Net over the node form graph on the original graph. 
+# def save_predicted_graph(case_dir, graph, predicted_vessels, mode = "vessels"):
+#     """ 
+#     Integrates the predicted vessel types from the inference of the 
+#     graph U-Net over the node form graph on the original graph. 
 
-    Saves graph and image with predicted vessel types as:
+#     Saves graph and image with predicted vessel types as:
 
-    >>> case_dir/graph_pred.pickle
-    >>> case_dir/graph_pred.png
+#     >>> case_dir/graph_pred.pickle
+#     >>> case_dir/graph_pred.png
 
-    Parameters
-    ----------
-    case_dir : string or path-like object
-        Path to case directory. 
-    graph : networkx.Graph
-        Graph in original form, where edges encode vessels.
-    predicted_vessels : dict
-        Dictionary with cell_ids as keys and predicted vessel types as values.
+#     Parameters
+#     ----------
+#     case_dir : string or path-like object
+#         Path to case directory. 
+#     graph : networkx.Graph
+#         Graph in original form, where edges encode vessels.
+#     predicted_vessels : dict
+#         Dictionary with cell_ids as keys and predicted vessel types as values.
     
-    Returns
-    -------
+#     Returns
+#     -------
     
-    """
-    if mode == "vessels":
-        edge_types = dict(zip([idx for idx in range(14)], 
-                            ["other", "AA", "BT", "RCCA", "LCCA", "RSA", "LSA", "RVA", "LVA", "RICA", "LICA", "RECA", "LECA", "BA"]))
-    elif mode == "intracranial_vessels":
-        edge_types = dict(zip([idx for idx in range(8)], 
-                        ["other", "LICA", "RICA", "BA", "LM1", "RM1", "LM2", "RM2", "LA1"]))
-    # Define edge_types dict
-    # Define new graph with same nodes and edges and information from the input graph
-    predicted_graph = nx.Graph()
-    # For nodes, we only keep the position of the original edge form graph nodes. We use these for visualization in the png file
-    node_pos_dict_p = {}
-    for node in graph.nodes:
-        predicted_graph.add_node(node)
-        predicted_graph.nodes(data=True)[node]["pos"] = graph.nodes(data=True)[node]["pos"]
-        # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates 
-        # (the view will be from the coronal plane, P axis)
-        node_pos_dict_p[node] = [graph.nodes(data=True)[node]["pos"][0], graph.nodes(data=True)[node]["pos"][2]]
+#     """
+#     if mode == "vessels":
+#         edge_types = dict(zip([idx for idx in range(14)], 
+#                             ["other", "AA", "BT", "RCCA", "LCCA", "RSA", "LSA", "RVA", "LVA", "RICA", "LICA", "RECA", "LECA", "BA"]))
+#     elif mode == "intracranial_vessels":
+#         edge_types = dict(zip([idx for idx in range(8)], 
+#                         ["other", "LICA", "RICA", "BA", "LM1", "RM1", "LM2", "RM2", "LA1"]))
+#     # Define edge_types dict
+#     # Define new graph with same nodes and edges and information from the input graph
+#     predicted_graph = nx.Graph()
+#     # For nodes, we only keep the position of the original edge form graph nodes. We use these for visualization in the png file
+#     node_pos_dict_p = {}
+#     for node in graph.nodes:
+#         predicted_graph.add_node(node)
+#         predicted_graph.nodes(data=True)[node]["pos"] = graph.nodes(data=True)[node]["pos"]
+#         # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates 
+#         # (the view will be from the coronal plane, P axis)
+#         node_pos_dict_p[node] = [graph.nodes(data=True)[node]["pos"][0], graph.nodes(data=True)[node]["pos"][2]]
 
-    # For edges, we keep all information from the original graph, and in addition we set the vessel type from the predicted_vessels dict
-    for src, dst in graph.edges:
-        predicted_graph.add_edge(src, dst)
-        predicted_graph[src][dst]["cell_id"] = graph[src][dst]["cell_id"]
-        predicted_graph[src][dst]["vessel_type"] = predicted_vessels[graph[src][dst]["cell_id"]]
-        predicted_graph[src][dst]["vessel_type_name"] = edge_types[predicted_vessels[graph[src][dst]["cell_id"]]]
-        predicted_graph[src][dst]["features"] = graph[src][dst]["features"]
+#     # For edges, we keep all information from the original graph, and in addition we set the vessel type from the predicted_vessels dict
+#     for src, dst in graph.edges:
+#         predicted_graph.add_edge(src, dst)
+#         predicted_graph[src][dst]["cell_id"] = graph[src][dst]["cell_id"]
+#         predicted_graph[src][dst]["vessel_type"] = predicted_vessels[graph[src][dst]["cell_id"]]
+#         predicted_graph[src][dst]["vessel_type_name"] = edge_types[predicted_vessels[graph[src][dst]["cell_id"]]]
+#         predicted_graph[src][dst]["features"] = graph[src][dst]["features"]
 
-    # Save the graph and image for quick visualization
-    save_pickle(predicted_graph, os.path.join(case_dir, "{}_graph_pred.pickle".format(mode)))
-    make_graph_plot(case_dir, predicted_graph, "{}_graph_pred.png".format(mode), label = "vessel_type_name")
+#     # Save the graph and image for quick visualization
+#     save_pickle(predicted_graph, os.path.join(case_dir, "{}_graph_pred.pickle".format(mode)))
+#     make_graph_plot(case_dir, predicted_graph, "{}_graph_pred.png".format(mode), label = "vessel_type_name")
