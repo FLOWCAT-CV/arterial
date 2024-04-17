@@ -5,7 +5,6 @@ import slicer
 import vtk
 
 import numpy as np
-import nibabel as nib
 
 from preprocessing.utils import get_bounding_box_limits_3d, patchwise_smoothing, get_compatible_patch_shape
 

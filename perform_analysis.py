@@ -22,7 +22,7 @@ def main():
     parser.add_argument("-ss", "--skip_segmentation", action="store_true",
         help="Boolean argument to determine if segmentation is predicted or not. Use (True) if segmentation is already "
         "predicted, to skip nnUNet inference and save time. If True, there should exist a nifti file with the binary map "
-        "with the following naming convention: {os.path.basename}_segmentation.nii.gz. Not required, default = False.")
+        "with the following naming convention: {mode}_segmentation.nii.gz. Not required, default = False.")
     parser.add_argument("-sce", "--skip_centerline_extraction", action="store_true",
         help="Boolean argument to determine if centerline extraction should be skipped or not. Not required, default = False.")
     parser.add_argument("-sb", "--skip_branching", action="store_true",
