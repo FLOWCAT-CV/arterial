@@ -16,7 +16,6 @@ setup(
         "tests": ["test_data/*"]
         },
     install_requires=[
-        'torch',
         'nnunetv2',
         'nibabel',
         'networkx',
@@ -27,6 +26,7 @@ setup(
         'numpy',
         'scipy',
         'scikit-image',
-        'mycolorpy'
+        'mycolorpy',
+        'vtk'
         ]
 )
