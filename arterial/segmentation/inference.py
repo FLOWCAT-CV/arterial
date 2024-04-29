@@ -56,7 +56,8 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     # Initializes the network architecture, loads the checkpoint
     predictor.initialize_from_trained_model_folder(
         os.path.join(os.environ["arterial_dir"], f'segmentation/models/{mode}/nnUNetTrainer__nnUNetPlans__{nnunet_mode}'),
-        use_folds=("all",),
+        use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer
+        # use_folds=("all",), # Models trained with vanilla nnUNetTrainer
         checkpoint_name='checkpoint_final.pth',
     )
 

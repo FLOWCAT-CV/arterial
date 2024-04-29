@@ -6,7 +6,7 @@ class TestCenterlineExtractor(unittest.TestCase):
     def setUp(self):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
-        self.centerline_segments_array_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}_centerline_segments_array.npy")
+        self.centerline_segments_array_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/centerline_segments_array.npy")
         self.vesssel_labeller = VesselLabeller(self.case_dir, self.mode, self.centerline_segments_array_path)
 
     def test_init(self):
@@ -16,10 +16,10 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertIsNone(self.vesssel_labeller.centerline_segments_array)
         self.assertIsNone(self.vesssel_labeller.segments_graph)
         self.assertIsNone(self.vesssel_labeller.segments_graph_pred)
-        self.assertEqual(self.vesssel_labeller.segments_graph_path, os.path.join(self.case_dir, f"{self.mode}_segments_graph.pickle"))
-        self.assertEqual(self.vesssel_labeller.segments_graph_pred_path, os.path.join(self.case_dir, f"{self.mode}_segments_graph_pred.pickle"))
-        self.assertEqual(self.vesssel_labeller.segments_graph_plot_path, os.path.join(self.case_dir, f"{self.mode}_segments_graph.png"))
-        self.assertEqual(self.vesssel_labeller.segments_graph_pred_plot_path, os.path.join(self.case_dir, f"{self.mode}_segments_graph_pred.png"))
+        self.assertEqual(self.vesssel_labeller.segments_graph_path, os.path.join(self.case_dir, self.mode, "segments_graph.pickle"))
+        self.assertEqual(self.vesssel_labeller.segments_graph_pred_path, os.path.join(self.case_dir, self.mode, "segments_graph_pred.pickle"))
+        self.assertEqual(self.vesssel_labeller.segments_graph_plot_path, os.path.join(self.case_dir, self.mode, "segments_graph.png"))
+        self.assertEqual(self.vesssel_labeller.segments_graph_pred_plot_path, os.path.join(self.case_dir, self.mode, "segments_graph_pred.png"))
 
     def test_full_pipeline(self):
         self.vesssel_labeller.build_segments_graph(save=False)
@@ -59,9 +59,6 @@ class TestCenterlineExtractor(unittest.TestCase):
 
         self.vesssel_labeller.centerline_segments_array = None
         self.vesssel_labeller.segments_graph = None
-        dummy_centerline_segments_array_path = "dummy_centerline_segments_array.npy"
-        dummy_segments_graph_path = "dummy_segments_graph.pickle"
-        dummy_segments_graph_pred_path = "dummy_segments_graph_pred.pickle"
 
         self.vesssel_labeller.load_centerline_segments_array()
         self.assertIsNotNone(self.vesssel_labeller.centerline_segments_array)
@@ -69,21 +66,12 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.vesssel_labeller.load_segments_graph()
         self.assertIsNotNone(self.vesssel_labeller.segments_graph)
 
-        self.vesssel_labeller.set_centerline_segments_array_path(dummy_centerline_segments_array_path)
-        self.assertEqual(self.vesssel_labeller.centerline_segments_array_path, dummy_centerline_segments_array_path)
-
-        self.vesssel_labeller.set_segments_graph_path(dummy_segments_graph_path)
-        self.assertEqual(self.vesssel_labeller.segments_graph_path, dummy_segments_graph_path)
-
-        self.vesssel_labeller.set_segments_graph_pred_path(dummy_segments_graph_pred_path)
-        self.assertEqual(self.vesssel_labeller.segments_graph_pred_path, dummy_segments_graph_pred_path)
-
     @classmethod
     def tearDownClass(cls):
         # Remove all the files generated during the tests
         cls.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         for filename in os.listdir(cls.case_dir):
-            if filename != "input_test_data":
+            if filename not in ["input_test_data", "output"]:
                 if os.path.isfile(os.path.join(cls.case_dir, filename)):
                     os.remove(os.path.join(cls.case_dir, filename))
                 elif os.path.isdir(os.path.join(cls.case_dir, filename)):

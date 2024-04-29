@@ -1,17 +1,13 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import os
-import vtk
-
 import numpy as np
 import nibabel as nib
 
 from vtk.util.numpy_support import vtk_to_numpy
 
 from arterial.feature_extraction.local_features.utils import featurize_node, sanity_check, add_cumulative_features
-from arterial.io.load_and_save_operations import save_pickle
 
-def perform_local_feature_extraction(case_dir, centerline_graph):
+def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_model):
     """
     Function for local graph featurization. Inputs a networkx.Graph from a case and 
     returns the same graph with node attributes for both femoral and radial accesses.
@@ -26,48 +22,35 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
     * Other features (CTA intensity, blanking)
     * Vessel type
 
-    This function overwrites the existing dense centerline graph:
-
-    >>> case_dir/graph.pickle
-
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Dense centerline graph returned by graph builder.
+    cta_array : np.ndarray
+        3D array of the CTA image.
+    cta_affine : np.ndarray
+        Affine matrix of the CTA image.
+    branch_model : vtk.vtkPolyData
+        Branch model of the centerline graph.
 
     Returns
     -------
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Featurized centerline graph with node attributes for both femoral and radial 
         accesses.
 
     """
-    # Load nifti to define data, image_shape and aff
-    if os.path.isfile(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir)))):
-        nifti = nib.load(os.path.join(case_dir, "{}_cta.nii.gz".format(os.path.basename(case_dir))))
-    else:
-        nifti = nib.load(os.path.join(case_dir, "{}_extracranial_vessels_segmentation.nii.gz".format(os.path.basename(case_dir))))
-    cta_array_data = nifti.get_fdata()
-    image_shape = cta_array_data.shape
-    aff = nifti.affine
     # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
-    orientation = nib.aff2axcodes(aff)
+    orientation = nib.aff2axcodes(cta_affine)
     if orientation == ('R', 'A', 'S'):
         lpi_corner_voxel_coordinates = np.array([0, 0, 0])
     elif orientation == ('L', 'A', 'S'):
-        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, 0, 0])
+        lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, 0, 0])
     elif orientation == ('L', 'P', 'S'):
-        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
+        lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, 0])
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
-    lpi_corner_coordinates = np.dot(aff, np.append(lpi_corner_voxel_coordinates, 1))[:3]
-    # Load branch_model
-    vtk_poly_data_reader = vtk.vtkPolyDataReader()
-    vtk_poly_data_reader.SetFileName(os.path.join(case_dir, "branch_model.vtk"))
-    vtk_poly_data_reader.Update()
-    branch_model = vtk_poly_data_reader.GetOutput()
+    lpi_corner_coordinates = np.dot(cta_affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
     # Pool branch_model point points. Get blanking for each point
     branch_model_coordinates = np.ndarray([branch_model.GetNumberOfPoints(), 3])
     blanking = np.ndarray([branch_model.GetNumberOfPoints()])
@@ -82,34 +65,31 @@ def perform_local_feature_extraction(case_dir, centerline_graph):
     # Compute local features from both accesses
     for access in ["femoral", "radial"]:
         # If edges were artificially added for hierarchical ordering, remove them before feature extraction
-        for src, dst in centerline_graph.graph["subgraphs_union_edges"]:
-            centerline_graph.remove_edge(src, dst)
+        for src, dst in local_graph.graph["subgraphs_union_edges"]:
+            local_graph.remove_edge(src, dst)
         # Also, add an extra attribute to identify which ones are artificial
-        for src, dst in centerline_graph.edges:
-            centerline_graph[src][dst]["is_artificial"] = False
+        for src, dst in local_graph.edges:
+            local_graph[src][dst]["is_artificial"] = False
         # We need to iterate over all graph nodes and generalize the feature extraction process depending on the degree of the node
-        for node in centerline_graph:
-            featurize_node(node, centerline_graph, access, radius_branch_model, branch_model_coordinates, blanking, cta_array_data, aff, lpi_corner_coordinates)
+        for node in local_graph:
+            featurize_node(local_graph, node, access, radius_branch_model, branch_model_coordinates, blanking, cta_array, cta_affine, lpi_corner_coordinates)
 
         # If we had removed edges in the beggining, we add them again to compute accumulated features
-        for src, dst in centerline_graph.graph["subgraphs_union_edges"]:
-            centerline_graph.add_edge(src, dst, cell_id = centerline_graph.nodes[dst]["cell_id"])
-            centerline_graph[src][dst]["vessel_type"] = centerline_graph.nodes[dst]["vessel_type"]
-            centerline_graph[src][dst]["vessel_type_name"] = centerline_graph.nodes[dst]["vessel_type_name"]
-            centerline_graph[src][dst]["is_artificial"] = True
+        for src, dst in local_graph.graph["subgraphs_union_edges"]:
+            local_graph.add_edge(src, dst, cell_id = local_graph.nodes[dst]["cell_id"])
+            local_graph[src][dst]["vessel_type"] = local_graph.nodes[dst]["vessel_type"]
+            local_graph[src][dst]["vessel_type_name"] = local_graph.nodes[dst]["vessel_type_name"]
+            local_graph[src][dst]["is_artificial"] = True
             # Empty indices to identify artificial edges
-            centerline_graph[src][dst]["indices"] = np.array([])
+            local_graph[src][dst]["indices"] = np.array([])
 
         # Checks for nan features, imputing those by the closes node with a valid feature
-        sanity_check(centerline_graph, access)
+        sanity_check(local_graph, access)
         # Compute cumulative features
-        add_cumulative_features(centerline_graph, access)
+        add_cumulative_features(local_graph, access)
 
         # We also add the vessel label as node feature
-        for node in centerline_graph:
-            centerline_graph.nodes[node][f"features {access}"]["vessel_type"] = centerline_graph.nodes[node]["vessel_type"]
+        for node in local_graph:
+            local_graph.nodes[node][f"features {access}"]["vessel_type"] = local_graph.nodes[node]["vessel_type"]
 
-    # Overwrite centerline_graph
-    save_pickle(centerline_graph, os.path.join(case_dir, "dense_graph.pickle"))
-
-    return centerline_graph
+    return local_graph

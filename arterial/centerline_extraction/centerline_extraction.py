@@ -62,8 +62,9 @@ def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node,
     
     """
     # Create directories to store centerline and segmentation volume models
-    if not os.path.isdir(os.path.join(case_dir, "centerlines")): os.mkdir(os.path.join(case_dir, "centerlines"))
-    if not os.path.isdir(os.path.join(case_dir, "segmentations")): os.mkdir(os.path.join(case_dir, "segmentations"))
+    os.makedirs(os.path.join(case_dir, mode), exist_ok=True)
+    os.makedirs(os.path.join(case_dir, mode, "centerlines"), exist_ok=True)
+    os.makedirs(os.path.join(case_dir, mode, "segmentations"), exist_ok=True)
 
     # Get the affine matrix
     affine = segmentation_nifti.affine
@@ -98,7 +99,7 @@ def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node,
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(surface_model)
-                writer.SetFileName(os.path.join(case_dir, "segmentations", f"{mode}_segmentation_{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, mode, "segmentations", f"segmentation_{segment_id}.vtk"))
                 writer.Write()
 
                 # Extract the centerline of the segment_id segment
@@ -108,7 +109,7 @@ def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node,
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"{mode}_centerlines_{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
                 writer.Write()
 
                 # For the largest segment, we check the existence of circular centerlines. Needs further testing
@@ -141,7 +142,7 @@ def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node,
                 writer = vtk.vtkPolyDataWriter()
                 writer.SetFileVersion(42)
                 writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, "centerlines", f"{mode}_centerlines_{segment_id}.vtk"))
+                writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
                 writer.Write()
         except TimeoutException as e:
             print("Timed out for {}.".format(segment_id))

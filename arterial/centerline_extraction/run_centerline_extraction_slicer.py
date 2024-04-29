@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     import argparse
 
-    from preprocessing.preprocessing import preprocessing_extracranial_vessels, preprocessing_intracranial_vessels
+    from preprocessing.preprocessing import preprocessing_vessel_segmentation
     from centerline_extraction import centerline_extraction
 
     import nibabel as nib
@@ -98,13 +98,7 @@ if __name__ == "__main__":
     slicer.util.loadLabelVolume(segmentation_nifti_path)
     # Associate to volume node
     master_volume_node = getNode(os.path.basename(segmentation_nifti_path)[:-7])
-
-    if mode == "extracranial_vessels":
-        # Perform segmentation from binary mask
-        segmentation_node, masked_volume_array = preprocessing_extracranial_vessels(case_dir, segmentation_nifti, master_volume_node, fast_segmentation)
-        # Perform centerline extraction
-    elif mode == "intracranial_vessels":
-        # Perform segmentation from binary mask
-        segmentation_node, masked_volume_array = preprocessing_intracranial_vessels(case_dir, segmentation_nifti, master_volume_node)
-        # Perform centerline extraction
+    # Apply preprocessing
+    segmentation_node, masked_volume_array = preprocessing_vessel_segmentation(case_dir, segmentation_nifti, master_volume_node, mode, fast_segmentation)
+    # Perform centerline extraction
     centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node, masked_volume_array)
