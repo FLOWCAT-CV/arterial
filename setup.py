@@ -11,14 +11,8 @@ setup(
     packages=find_packages(),
     package_data={
         "arterial": [
-            "segmentation/models/nnUNet/3d_lowres/Task001_Arterial/nnUNetTrainerV2__nnUNetPlansv2.1/*.pkl",
-            "segmentation/models/nnUNet/3d_lowres/Task001_Arterial/nnUNetTrainerV2__nnUNetPlansv2.1/all/*.model",
-            "segmentation/models/nnUNet/3d_lowres/Task001_Arterial/nnUNetTrainerV2__nnUNetPlansv2.1/all/*.pkl",
-            "segmentation/models/nnUNet/3d_lowres/Task001_Arterial/nnUNetTrainerV2__nnUNetPlansv2.1/all/*.json",
-            "segmentation/models/nnUNet/3d_fullres/Task002_Cerebral/nnUNetTrainerV2__nnUNetPlansv2.1/*.pkl",
-            "segmentation/models/nnUNet/3d_fullres/Task002_Cerebral/nnUNetTrainerV2__nnUNetPlansv2.1/all/*.model",
-            "segmentation/models/nnUNet/3d_fullres/Task002_Cerebral/nnUNetTrainerV2__nnUNetPlansv2.1/all/*.pkl",
-            "segmentation/models/nnUNet/3d_fullres/Task002_Cerebral/nnUNetTrainerV2__nnUNetPlansv2.1/all/*.json"],
+            "segmentation/models/*",
+            "vessel_labelling/models/*"],
         "tests": ["test_data/*"]
         },
     install_requires=[
