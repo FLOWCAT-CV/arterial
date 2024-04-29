@@ -5,10 +5,12 @@
 *.pkl
 *test_data/
 batch_processing*
+perform_centerline_extraction.py
 debugging.py
 *__pycache__/
 *.pyc
 .*
+*nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
 
 
 # Byte-compiled / optimized / DLL files
