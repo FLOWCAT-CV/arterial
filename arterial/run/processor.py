@@ -49,10 +49,11 @@ class ArterialProcessor():
         """
         # Parameters from args
         self.case_dir = args.case_dir
+        self.mode = args.mode
         self.cta_nifti_path = args.cta_nifti_path
         if self.cta_nifti_path is None:
             self.cta_nifti_path = os.path.join(self.case_dir, "cta.nii.gz")
-        self.mode = args.mode
+        self.sampling_distance_mm = args.sampling_distance_mm
         self.skip_segmentation = args.skip_segmentation
         self.fast_segmentation = args.fast_segmentation
         self.skip_centerline_extraction = args.skip_centerline_extraction
@@ -72,7 +73,10 @@ class ArterialProcessor():
                                                         self.fast_segmentation)
         self.vessel_labeller = VesselLabeller(self.case_dir,
                                               self.mode)
-        self.feature_extractor = FeatureExtractor(self.case_dir)
+        self.feature_extractor = FeatureExtractor(self.case_dir,
+                                                  self.mode,
+                                                  self.sampling_distance_mm,
+                                                  self.cta_nifti_path)
 
     def perform_analysis(self):
         """
@@ -153,21 +157,21 @@ class ArterialProcessor():
             print("Performing centerline extraction...")
             # Applies centerline preprocessing and extraction using Slicer and VMTK
             self.centerline_extractor.perform_centerline_extraction()
-            if self.mode == "extracranial_vessels":
-                if not self.skip_branching:
-                    print("Performing centerline branching...")
-                    # Performs centerline model branching with VMTK
-                    self.centerline_extractor.perform_branch_model_extraction()
-                    print("done")
-                else:
-                    print("Skipping centerline branching")
-                if not self.skip_clipping:
-                    print("Performing surface model clipping...")
-                    # Performs surface model clipping with VMTK
-                    self.centerline_extractor.perform_clipped_model_extraction()
-                    print("done")
-                else:
-                    print("Skipping surface model clipping")
+            # if self.mode == "extracranial_vessels":
+            if not self.skip_branching:
+                print("Performing centerline branching...")
+                # Performs centerline model branching with VMTK
+                self.centerline_extractor.perform_branch_model_extraction()
+                print("done")
+            else:
+                print("Skipping centerline branching")
+            if not self.skip_clipping:
+                print("Performing surface model clipping...")
+                # Performs surface model clipping with VMTK
+                # self.centerline_extractor.perform_clipped_model_extraction()
+                print("done")
+            else:
+                print("Skipping surface model clipping")
             # Creates array for easier centerline analysis
             self.centerline_extractor.perform_centerline_postprocessing()
             print("done \n")
@@ -233,7 +237,7 @@ class ArterialProcessor():
         if not self.skip_feature_extraction:
             print("Performing feature extraction...")
             # Build centerline graph
-            self.feature_extractor.build_graph()
+            self.feature_extractor.build_local_graph()
             # Perform local feature extraction
             self.feature_extractor.extract_local_features()
             # Perform segment feature extraction
@@ -241,7 +245,7 @@ class ArterialProcessor():
             # Perform global feature extraction
             self.feature_extractor.extract_global_features()
             # Extract catheter pathways
-            self.feature_extractor.map_catheter_pathways()
+            self.feature_extractor.extract_supersegments()
             print("done \n")
         else:
             print("Skipping feature extraction \n")

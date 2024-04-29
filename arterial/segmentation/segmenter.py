@@ -1,6 +1,7 @@
 #    Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
 import os
+import nibabel as nib
 from arterial.segmentation.inference import perform_single_inference_nnunet
 from arterial.segmentation.utils import slice_cta_head_and_neck, join_head_and_neck_segmentations
 from arterial.io.load_and_save_operations import *
@@ -38,31 +39,20 @@ class VesselSegmenter():
         case_dir : string or path-like object
             Path to case directory.
         mode: string, default = "extracranial_vessels"
-            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
-            or `thrombus`. 
+            Determines whether the centerline is extracted from `extracranial_vessels` or `intracranial_vessels`. 
         cta_nifti_path : string or path-like object, default = None
             Path to the original CTA nifti file. If not provided, the CTA should be in nifti format, the
-            name convention used should be:
-
-            >>> cta.nii.gz
-
-            and it should be located in the self.case_dir directory.
+            name convention used should be `cta.nii.gz` and it should be located in the self.case_dir directory.
         fast_segmentation : bool, default = False
             Boolean variable to be used when running analysis derived from fast segmentation (lowres).
             In this case, segmentation of the cerebral arteries is less reliable, so a higher fraction
             of intracranial slices is ignored, facilitating centerline extraction.
-
-        Returns
-        -------
         
         """
-        if case_dir is None:
-            raise ValueError("case_dir should be provided as the directory where all results will be saved.")
-        if mode not in ["extracranial_vessels", "intracranial_vessels"]:
-            raise ValueError("mode should be either 'extracranial_vessels' or 'intracranial_vessels'.")
+        assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
+        assert mode in ["extracranial_vessels", "intracranial_vessels"], "mode should be either 'extracranial_vessels' or 'intracranial_vessels'."
 
         self.case_dir = case_dir
-        os.makedirs(self.case_dir, exist_ok=True)
         self.mode = mode
         if cta_nifti_path is None:
             self.cta_nifti_path = os.path.join(self.case_dir, "cta.nii.gz")
@@ -70,14 +60,12 @@ class VesselSegmenter():
             self.cta_nifti_path = cta_nifti_path
         self.fast_segmentation = fast_segmentation
 
-        if not os.path.exists(self.cta_nifti_path):
-            raise FileNotFoundError(f"CTA nifti file not found at {self.cta_nifti_path}. Please provide a valid path.")
-
-        self.cta_nifti = load_nifti(self.cta_nifti_path)
-        self.cta_array = self.cta_nifti.get_fdata()
-        self.cta_affine = self.cta_nifti.affine
+        self.cta_nifti = None
+        self.cta_array = None
+        self.cta_affine = None
 
         self.segmentation_nifti = None
+        self.segmentation_nifti_path = os.path.join(self.case_dir, self.mode, "segmentation.nii.gz")
         self.segmentation_array = None
 
         self.cta_head_array = None
@@ -86,7 +74,7 @@ class VesselSegmenter():
         self.segmentation_head_array = None
         self.segmentation_neck_array = None
 
-    def segment_vessels_from_cta(self):
+    def segment_vessels_from_cta(self, save=True):
         """
         This method calls perform_inference to perform inference using a trained nnunetv2
         model over the original CTA. At the end of the segmentation prediction, a nifti file 
@@ -108,6 +96,9 @@ class VesselSegmenter():
         -------
 
         """
+        if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
+        if self.cta_array is None or self.cta_affine is None: self.load_cta_nifti()
+
         if self.mode == "extracranial_vessels":
             if self.fast_segmentation:
                 print("Performing fast segmentation...")
@@ -125,11 +116,13 @@ class VesselSegmenter():
         elif self.mode == "intracranial_vessels":   
             print("Slicing CTA for intracranial vessel segmentation...")
             self.slice_cta()
+            self.save_head_cta_nifti()
             print("Performing segmentation...")
             self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres")
         
-        print("Saving segmentation...")
-        save_nifti(self.segmentation_nifti, os.path.join(self.case_dir, f"{self.mode}_segmentation.nii.gz"))
+        if save:
+            print("Saving segmentation...")
+            save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)
 
     def slice_cta(self):
         """
@@ -145,4 +138,57 @@ class VesselSegmenter():
         -------
         
         """
+        if self.cta_array is None or self.cta_affine is None:
+            self.load_cta_nifti()
+
         self.cta_head_array, self.cta_neck_array, self.cta_head_affine = slice_cta_head_and_neck(self.cta_array, self.cta_affine)
+
+    def load_cta_nifti(self):
+        if not os.path.isfile(self.cta_nifti_path):
+            raise FileNotFoundError(f"CTA nifti file not found in {self.cta_nifti_path}")
+        
+        self.cta_nifti = load_nifti(self.cta_nifti_path)
+        self.cta_array = self.cta_nifti.get_fdata()
+        self.cta_affine = self.cta_nifti.affine
+
+    def set_case_dir(self, case_dir):
+        if not isinstance(case_dir, str):
+            raise ValueError("case_dir should be a string.")
+        self.case_dir = case_dir
+
+    def set_cta_nifti_path(self, path):
+        if not isinstance(path, str):
+            raise ValueError("path should be a string.")
+        self.cta_nifti_path = path
+
+    def set_mode(self, mode):
+        if mode not in ["extracranial_vessels", "intracranial_vessels"]:
+            raise ValueError("mode should be either 'extracranial_vessels' or 'intracranial_vessels'.")
+        self.mode = mode
+
+    def set_fast_segmentation(self, fast_segmentation):
+        if not isinstance(fast_segmentation, bool):
+            raise ValueError("fast_segmentation should be a boolean variable.")
+        self.fast_segmentation = fast_segmentation
+
+    def set_segmentation_nifti_path(self, path):
+        if not isinstance(path, str):
+            raise ValueError("path should be a string.")
+        self.segmentation_nifti_path = path
+
+    def save_segmentation_nifti(self, path=None):
+        if self.segmentation_nifti is None:
+            raise ValueError("Segmentation nifti is not available. Please run segment_vessels_from_cta method first.")
+        if path is None:
+            path = self.segmentation_nifti_path
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        save_nifti(self.segmentation_nifti, self.segmentation_nifti_path)
+
+    def save_head_cta_nifti(self, path=None):
+        if self.cta_head_array is None or self.cta_head_affine is None:
+            raise ValueError("Head CTA array is not available. Please run slice_cta method first.")
+        if path is None:
+            path = os.path.join(self.case_dir, "head_cta.nii.gz")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        save_nifti(nib.Nifti1Image(self.cta_head_array, self.cta_head_affine), path)
+    

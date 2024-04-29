@@ -6,7 +6,7 @@ class TestCenterlineExtractor(unittest.TestCase):
     def setUp(self):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
-        self.segmentation_nifti_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}_segmentation.nii.gz")
+        self.segmentation_nifti_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/segmentation.nii.gz")
         self.fast_segmentation = False
         self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, self.segmentation_nifti_path, self.fast_segmentation)
 
@@ -18,21 +18,21 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertIsNone(self.centerline_extractor.segmentation_nifti)
         self.assertIsNone(self.centerline_extractor.affine)
         self.assertIsNone(self.centerline_extractor.image_shape)
-        self.assertEqual(self.centerline_extractor.centerlines_dir_path, os.path.join(self.case_dir, "centerlines"))
-        self.assertEqual(self.centerline_extractor.segmentations_dir_path, os.path.join(self.case_dir, "segmentations"))
-        self.assertEqual(self.centerline_extractor.branch_models_dir_path, os.path.join(self.case_dir, "branch_models"))
-        self.assertEqual(self.centerline_extractor.clipped_models_dir_path, os.path.join(self.case_dir, "clipped_models"))
+        self.assertEqual(self.centerline_extractor.centerlines_dir_path, os.path.join(self.case_dir, self.mode, "centerlines"))
+        self.assertEqual(self.centerline_extractor.segmentations_dir_path, os.path.join(self.case_dir, self.mode, "segmentations"))
+        self.assertEqual(self.centerline_extractor.branch_models_dir_path, os.path.join(self.case_dir, self.mode, "branch_models"))
+        self.assertEqual(self.centerline_extractor.clipped_models_dir_path, os.path.join(self.case_dir, self.mode, "clipped_models"))
         self.assertEqual(self.centerline_extractor.centerline_model_list, [])
         self.assertEqual(self.centerline_extractor.segmentation_model_list, [])
         self.assertEqual(self.centerline_extractor.branch_model_list, [])
         self.assertEqual(self.centerline_extractor.clipped_model_list, [])
-        self.assertEqual(self.centerline_extractor.segmentation_path, os.path.join(self.case_dir, f"{self.mode}_segmentation.vtk"))
-        self.assertEqual(self.centerline_extractor.branch_model_path, os.path.join(self.case_dir, f"{self.mode}_branch_model.vtk"))
-        self.assertEqual(self.centerline_extractor.clipped_model_path, os.path.join(self.case_dir, f"{self.mode}_clipped_model.vtk"))
+        self.assertEqual(self.centerline_extractor.segmentation_path, os.path.join(self.case_dir, self.mode, "segmentation.vtk"))
+        self.assertEqual(self.centerline_extractor.branch_model_path, os.path.join(self.case_dir, self.mode, "branch_model.vtk"))
+        self.assertEqual(self.centerline_extractor.clipped_model_path, os.path.join(self.case_dir, self.mode, "clipped_model.vtk"))
         self.assertIsNone(self.centerline_extractor.segmentation)
         self.assertIsNone(self.centerline_extractor.branch_model)
         self.assertIsNone(self.centerline_extractor.clipped_model)
-        self.assertEqual(self.centerline_extractor.centerline_segments_array_path, os.path.join(self.case_dir, f"{self.mode}_centerline_segments_array.npy"))
+        self.assertEqual(self.centerline_extractor.centerline_segments_array_path, os.path.join(self.case_dir, self.mode, "centerline_segments_array.npy"))
         self.assertIsNone(self.centerline_extractor.centerline_segments_array)
 
     def test_full_pipeline(self):
@@ -41,8 +41,8 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertNotEqual(self.centerline_extractor.segmentation_model_list, [])
         self.assertIsNotNone(self.centerline_extractor.segmentation)
         for idx in range(len(self.centerline_extractor.centerline_model_list)):
-            self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.centerlines_dir_path, f"{self.mode}_centerlines_{idx}.vtk")))
-            self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.segmentations_dir_path, f"{self.mode}_segmentation_{idx}.vtk")))
+            self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.centerlines_dir_path, f"centerlines_{idx}.vtk")))
+            self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.segmentations_dir_path, f"segmentation_{idx}.vtk")))
         self.assertTrue(os.path.exists(self.centerline_extractor.segmentation_path))
 
         self.centerline_extractor.perform_branch_model_extraction()
@@ -50,7 +50,7 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertIsNotNone(self.centerline_extractor.branch_model)
         for idx, branch_model in enumerate(self.centerline_extractor.branch_model_list):
             if branch_model is not None:
-                self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.branch_models_dir_path, f"{self.mode}_branch_model_{idx}.vtk")))
+                self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.branch_models_dir_path, f"branch_model_{idx}.vtk")))
         self.assertTrue(os.path.exists(self.centerline_extractor.branch_model_path))
     
         # self.centerline_extractor.perform_clipped_model_extraction()
@@ -107,7 +107,7 @@ class TestCenterlineExtractor(unittest.TestCase):
         # Remove all the files generated during the tests
         cls.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         for filename in os.listdir(cls.case_dir):
-            if filename != "input_test_data":
+            if filename not in ["input_test_data", "output"]:
                 if os.path.isfile(os.path.join(cls.case_dir, filename)):
                     os.remove(os.path.join(cls.case_dir, filename))
                 elif os.path.isdir(os.path.join(cls.case_dir, filename)):

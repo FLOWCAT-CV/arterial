@@ -122,7 +122,7 @@ def save_vtkpolydata(vtk_poly_data, path):
     writer.SetFileName(path)
     writer.Write()
 
-def load_vtk_list(dir_path, mode="extracranial_vessels"):
+def load_vtk_list_from_dir(dir_path):
     """
     Load a list of vtkPolyData objects from a directory.
 
@@ -139,7 +139,7 @@ def load_vtk_list(dir_path, mode="extracranial_vessels"):
         List of vtkPolyData objects.
 
     """
-    vtk_list = [load_vtkpolydata(os.path.join(dir_path, filename)) for filename in sorted(os.listdir(dir_path)) if filename.endswith(".vtk") and filename.startswith(mode)]
+    vtk_list = [load_vtkpolydata(os.path.join(dir_path, filename)) for filename in sorted(os.listdir(dir_path)) if filename.endswith(".vtk")]
     
     return vtk_list
 

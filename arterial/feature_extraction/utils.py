@@ -1,22 +1,19 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import os
-
 import numpy as np
 import networkx as nx
 
 import matplotlib.pyplot as plt
+from mycolorpy import colorlist as mcp
 
-from arterial.io.load_and_save_operations import load_pickle
-
-def predicted_vessels_dict(case_dir):
+def get_predicted_vessels_dict(segments_graph_pred):
     """
     Builds cell_id to vessel type and vessel type name dictionaries.
     
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory.
+    segments_graph_pred : networkx.Graph
+        Networkx graph with predicted vessel types and vessel type names as edge attributes.
 
     Returns
     -------
@@ -28,35 +25,33 @@ def predicted_vessels_dict(case_dir):
         as values.
 
     """
-    # Load predicted graph
-    graph_pred = load_pickle(os.path.join(case_dir, "extracranial_vessels_graph_simple_pred.pickle"))
     # Declare empty dicts
     predicted_vessel_types, predicted_vessel_type_names = {}, {}
     # Build dicts from graph edges and their cell_ids, vessel types and vessel type names
-    for src, dst in graph_pred.edges:
-        predicted_vessel_types[graph_pred[src][dst]["cell_id"]] = graph_pred[src][dst]["vessel_type"]
-        predicted_vessel_type_names[graph_pred[src][dst]["cell_id"]] = graph_pred[src][dst]["vessel_type_name"]
+    for src, dst in segments_graph_pred.edges:
+        predicted_vessel_types[segments_graph_pred[src][dst]["cell_id"]] = segments_graph_pred[src][dst]["vessel_type"]
+        predicted_vessel_type_names[segments_graph_pred[src][dst]["cell_id"]] = segments_graph_pred[src][dst]["vessel_type_name"]
 
     return predicted_vessel_types, predicted_vessel_type_names
 
-def get_hierarchical_order(graph, access = "femoral", start_node = 0):
+def get_hierarchical_order(local_graph, access="femoral", start_node=0):
     """
-    Computes hierarchization of graph. Associates each node to an index that
+    Computes hierarchization of local_graph. Associates each node to an index that
     indicates the number of nodes to the closest startpoint.
 
     Parameters
     ----------
-    graph : networkx.Graph
+    local_graph : networkx.Graph
         Centerline graph the nodes of which we want to order.
     access : string
         Access point for catheterization. Can either be "femoral" or "radial". 
         "femoral" by default.
     start_node : integer
-        Node from `graph` that we want to start from (hierarhcy = 0).
+        Node from `local_graph` that we want to start from (hierarhcy = 0).
 
     Returns
     -------
-    graph : networkx.Graph
+    local_graph : networkx.Graph
         Centerline graph with ordered nodes. Adds `hierarchy {access}` to node 
         attributes.
     
@@ -68,7 +63,7 @@ def get_hierarchical_order(graph, access = "femoral", start_node = 0):
     # We use this list to avoid repetition of any already analyzed nodes
     used_nodes = []
     # Hierarchy of start_node is 0
-    graph.nodes[start_node]["hierarchy {}".format(access)] = 0
+    local_graph.nodes[start_node]["hierarchy {}".format(access)] = 0
     # Initialize hierarchy value
     hierarchy = 1 
 
@@ -81,10 +76,10 @@ def get_hierarchical_order(graph, access = "femoral", start_node = 0):
             # Append them to used_nodes
             used_nodes.append(src)
             # Check neighbors that have not been used yet
-            for dst in graph.neighbors(src):
+            for dst in local_graph.neighbors(src):
                 if dst not in used_nodes:
                     # Attribute them the corresponding hierarchy index
-                    graph.nodes[dst]["hierarchy {}".format(access)] = hierarchy
+                    local_graph.nodes[dst]["hierarchy {}".format(access)] = hierarchy
                     # Store them for next iteration
                     target_nodes.append(dst)
         # Update hierarchy index
@@ -93,31 +88,31 @@ def get_hierarchical_order(graph, access = "femoral", start_node = 0):
         source_nodes = target_nodes.copy()
 
         # Check if analysis is finished. If no more target nodes are present and the number of used nodes is 
-        # equal to the number of nodes in the graph, the analysis is done
-        if len(target_nodes) == 0 and len(np.unique(used_nodes)) == len(graph.nodes()):
+        # equal to the number of nodes in the local_graph, the analysis is done
+        if len(target_nodes) == 0 and len(np.unique(used_nodes)) == len(local_graph.nodes()):
             hierarchy_done = True
         # If no more target nodes are present but there are still unused nodes, get the first unused node and 
         # attribute it with the following hierarchy value
-        elif len(target_nodes) == 0 and len(np.unique(used_nodes)) < len(graph.nodes()):
-            for node in graph.nodes():
+        elif len(target_nodes) == 0 and len(np.unique(used_nodes)) < len(local_graph.nodes()):
+            for node in local_graph.nodes():
                 if node not in used_nodes:
                     # Add node to source nodes
                     source_nodes = [node]
                     # Add hierarchy value to graph node
-                    graph.nodes[node]["hierarchy {}".format(access)] = hierarchy
+                    local_graph.nodes[node]["hierarchy {}".format(access)] = hierarchy
                     # Update hierarchy index
                     hierarchy += 1
                     break
 
-    for src, dst in graph.edges:
-        if graph.nodes[src]["hierarchy {}".format(access)] < graph.nodes[dst]["hierarchy {}".format(access)]:
-            graph[src][dst]["hierarchy {}".format(access)] = graph.nodes[src]["hierarchy {}".format(access)]
+    for src, dst in local_graph.edges:
+        if local_graph.nodes[src]["hierarchy {}".format(access)] < local_graph.nodes[dst]["hierarchy {}".format(access)]:
+            local_graph[src][dst]["hierarchy {}".format(access)] = local_graph.nodes[src]["hierarchy {}".format(access)]
         else:
-            graph[src][dst]["hierarchy {}".format(access)] = graph.nodes[dst]["hierarchy {}".format(access)]
+            local_graph[src][dst]["hierarchy {}".format(access)] = local_graph.nodes[dst]["hierarchy {}".format(access)]
 
-    return graph
+    return local_graph
 
-def unify_subgraphs(case_dir, centerline_graph, subgraphs):
+def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
     """
     This funciton makes one large connected graph resulting from the union between all 
     subgraphs. To do that, the candidate points for graph union are identified and then a union node 
@@ -138,21 +133,19 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
-    centerline_graph : networkx.Graph
-        Centerline graph built in build_centerline_graph.
+    centerline_segments_array : numpy.ndarray
+        Array with centerline segments coordinates and radius.
+    local_graph : networkx.Graph
+        Centerline graph built in build_local_graph.
     subgraphs : list of networkx.Graph objects
-        Separate subgraphs from the centerline_graph build in build_centerline_graph.
+        Separate subgraphs from the local_graph build in build_local_graph.
 
     Returns
     -------
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Unified centerline graph.
 
     """
-    # Get centerline_segments_array
-    centerline_segments_array = np.load(os.path.join(case_dir, "extracranial_vessels_centerline_segments_array.npy"), allow_pickle = True)
     # Get coordinates array from centerline_segments_array
     coordinate_array = centerline_segments_array[:, 0]
     # Get radius array from centerline_segments_array
@@ -175,8 +168,8 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     # Declare empty list for subgraphs union edges
     subgraphs_union_edges = []
     # Predicted vessel types and vessel type names
-    predicted_vessel_types = centerline_graph.graph["predicted_vessel_types"]
-    predicted_vessel_type_names = centerline_graph.graph["predicted_vessel_type_names"]
+    predicted_vessel_types = local_graph.graph["predicted_vessel_types"]
+    predicted_vessel_type_names = local_graph.graph["predicted_vessel_type_names"]
 
     # Compute the center of mass of each of the subgraphs
     if len(subgraphs) > 1:
@@ -272,9 +265,9 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                         # If it exists and has a different cell_id, store all node coordinates
                         for node_subgraph_idx in subgraphs[subgraph_idx]:
                             if predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]] == predicted_vessel_type_names[subgraphs[subgraph_idx].nodes[node_subgraph_idx]["cell_id"]] and subgraphs[idx].nodes[candidate_node]["cell_id"] != subgraphs[subgraph_idx].nodes[node_subgraph_idx]["cell_id"]:
-                                # In the rare event that the connection node is found to be the centerline_graph.graph["rightmost"], then choose its neighbor
-                                if node_subgraph_idx == centerline_graph.graph["rightmost"]:
-                                    node_subgraph_idx = subgraphs[subgraph_idx].neighbors(centerline_graph.graph["rightmost"]).__next__()
+                                # In the rare event that the connection node is found to be the local_graph.graph["rightmost"], then choose its neighbor
+                                if node_subgraph_idx == local_graph.graph["rightmost"]:
+                                    node_subgraph_idx = subgraphs[subgraph_idx].neighbors(local_graph.graph["rightmost"]).__next__()
                                 # In the case that we are looking at the same subgraph as the candidate node, forbid union with segments in contact
                                 if subgraph_idx == idx:
                                     cell_ids_in_contact = []
@@ -305,9 +298,9 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                         # If it exists, store all node coordinates
                         for node_subgraph_idx in subgraphs[subgraph_idx]:
                             if preferred_vessel_types[predicted_vessel_type_names[subgraphs[idx].nodes[candidate_node]["cell_id"]]] == predicted_vessel_type_names[subgraphs[subgraph_idx].nodes[node_subgraph_idx]["cell_id"]]:
-                                # In the rare event that the connection node is found to be the centerline_graph.graph["rightmost"], then choose its neighbor
-                                if node_subgraph_idx == centerline_graph.graph["rightmost"]:
-                                    node_subgraph_idx = subgraphs[subgraph_idx].neighbors(centerline_graph.graph["rightmost"]).__next__()
+                                # In the rare event that the connection node is found to be the local_graph.graph["rightmost"], then choose its neighbor
+                                if node_subgraph_idx == local_graph.graph["rightmost"]:
+                                    node_subgraph_idx = subgraphs[subgraph_idx].neighbors(local_graph.graph["rightmost"]).__next__()
                                 # In the case that we are looking at the same subgraph as the candidate node, group cell_ids in contact with candidate node. Forbid union with segments in contact
                                 if subgraph_idx == idx:
                                     cell_ids_in_contact = []
@@ -364,33 +357,33 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     # we will include artificial edges to the graphs, and we will divide segments (segmentsCoordinatesArray and radius_array) into new cell_ids
     # We analyze each artificial union
     for main_graph_node, candidate_node in subgraphs_union_edges:
-        candidate_cell_id = centerline_graph.nodes[candidate_node]["cell_id"]
+        candidate_cell_id = local_graph.nodes[candidate_node]["cell_id"]
         # We add the position and radius of the main_graph_node to the candidate_cell_id segment to the first (or last) position of the segments arrays
-        if np.linalg.norm(centerline_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][0]) < np.linalg.norm(centerline_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][-1]):
-            coordinate_array[candidate_cell_id] = np.insert(coordinate_array[candidate_cell_id], 0, [centerline_graph.nodes[main_graph_node]["pos"]], axis = 0)
-            radius_array[candidate_cell_id] = np.insert(radius_array[candidate_cell_id], 0, centerline_graph.nodes[main_graph_node]["radius"]) 
+        if np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][0]) < np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][-1]):
+            coordinate_array[candidate_cell_id] = np.insert(coordinate_array[candidate_cell_id], 0, [local_graph.nodes[main_graph_node]["pos"]], axis = 0)
+            radius_array[candidate_cell_id] = np.insert(radius_array[candidate_cell_id], 0, local_graph.nodes[main_graph_node]["radius"]) 
         else:
-            coordinate_array[candidate_cell_id] = np.append(coordinate_array[candidate_cell_id], [centerline_graph.nodes[main_graph_node]["pos"]], axis = 0)
-            radius_array[candidate_cell_id] = np.append(radius_array[candidate_cell_id], centerline_graph.nodes[main_graph_node]["radius"]) 
+            coordinate_array[candidate_cell_id] = np.append(coordinate_array[candidate_cell_id], [local_graph.nodes[main_graph_node]["pos"]], axis = 0)
+            radius_array[candidate_cell_id] = np.append(radius_array[candidate_cell_id], local_graph.nodes[main_graph_node]["radius"]) 
         
         # We add the edge to the graph
-        centerline_graph.add_edge(main_graph_node, candidate_node, cell_id = centerline_graph.nodes[candidate_node]["cell_id"])
-        centerline_graph[main_graph_node][candidate_node]["vessel_type"] = predicted_vessel_types[centerline_graph[main_graph_node][candidate_node]["cell_id"]]
-        centerline_graph[main_graph_node][candidate_node]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[main_graph_node][candidate_node]["cell_id"]]
-        centerline_graph[main_graph_node][candidate_node]["indices"] = np.array([])
-        centerline_graph[main_graph_node][candidate_node]["coordinate_array"] = np.ndarray([0, 3])
-        centerline_graph[main_graph_node][candidate_node]["radius_array"] = np.array([])
+        local_graph.add_edge(main_graph_node, candidate_node, cell_id = local_graph.nodes[candidate_node]["cell_id"])
+        local_graph[main_graph_node][candidate_node]["vessel_type"] = predicted_vessel_types[local_graph[main_graph_node][candidate_node]["cell_id"]]
+        local_graph[main_graph_node][candidate_node]["vessel_type_name"] = predicted_vessel_type_names[local_graph[main_graph_node][candidate_node]["cell_id"]]
+        local_graph[main_graph_node][candidate_node]["indices"] = np.array([])
+        local_graph[main_graph_node][candidate_node]["coordinate_array"] = np.ndarray([0, 3])
+        local_graph[main_graph_node][candidate_node]["radius_array"] = np.array([])
         
         # Now, for the modification of the segments arrays and the cell_ids and indices of nodes and edges, we perform an indepth analysis.
         # First of all, it only makes sense to split the segment if the node has degree 2 (otherwise it will already be a border between different segments)
-        if centerline_graph.degree(main_graph_node) == 3:
+        if local_graph.degree(main_graph_node) == 3:
             # The position of the main_graph_node will be the division point between segments
-            cut_off_idx = np.argmin(np.linalg.norm(coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]] - centerline_graph.nodes[main_graph_node]["pos"], axis = 1))
+            cut_off_idx = np.argmin(np.linalg.norm(coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]] - local_graph.nodes[main_graph_node]["pos"], axis = 1))
             # Check if segment goes downstream with respect to hierarchy. If it is, go against hierarchy. If it is not (normal case), go with hierarchy
             downstream = False
-            for neighbor in centerline_graph.neighbors(main_graph_node):
+            for neighbor in local_graph.neighbors(main_graph_node):
                 # If neighbor with higher hierarchy has smaller indices indices than cut_off_idx, the segment is downstream. Otherwise it is not
-                if centerline_graph.nodes[main_graph_node]["cell_id"] == centerline_graph.nodes[neighbor]["cell_id"] and centerline_graph.nodes[neighbor]["hierarchy femoral"] > centerline_graph.nodes[main_graph_node]["hierarchy femoral"] and np.mean(centerline_graph[neighbor][main_graph_node]["indices"]) < cut_off_idx:
+                if local_graph.nodes[main_graph_node]["cell_id"] == local_graph.nodes[neighbor]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] > local_graph.nodes[main_graph_node]["hierarchy femoral"] and np.mean(local_graph[neighbor][main_graph_node]["indices"]) < cut_off_idx:
                     downstream = True
             # We keep main_graph_node as initial previous_node for recursive node analysis
             previous_node = main_graph_node
@@ -400,36 +393,36 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                 # Auxiliar boolean variable to check if a neighbor fulfilling the conditions has been found
                 neighbor_found = False
                 # Sweep through neighbors of previous_node
-                for neighbor in centerline_graph.neighbors(previous_node):
+                for neighbor in local_graph.neighbors(previous_node):
                     # If not downstream and there is a node with the same cell_id as the main_graph_node and a higher hierarchy
-                    if not downstream and centerline_graph.nodes[neighbor]["cell_id"] == centerline_graph.nodes[main_graph_node]["cell_id"] and centerline_graph.nodes[neighbor]["hierarchy femoral"] > centerline_graph.nodes[previous_node]["hierarchy femoral"]:
+                    if not downstream and local_graph.nodes[neighbor]["cell_id"] == local_graph.nodes[main_graph_node]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] > local_graph.nodes[previous_node]["hierarchy femoral"]:
                         # Update node cell_id
-                        centerline_graph.nodes[neighbor]["cell_id"] = next_cell_id
+                        local_graph.nodes[neighbor]["cell_id"] = next_cell_id
                         # Update edge cell_id
-                        centerline_graph[previous_node][neighbor]["cell_id"] = next_cell_id
+                        local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
                         # Update edge indices with cut_off_idx
-                        centerline_graph[previous_node][neighbor]["indices"] = centerline_graph[previous_node][neighbor]["indices"] - cut_off_idx
+                        local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
                         # Eliminate negative edges if found (this)
-                        while centerline_graph[previous_node][neighbor]["indices"][0] < 0 and len(centerline_graph[previous_node][neighbor]["indices"]) > 1:
-                            centerline_graph[previous_node][neighbor]["indices"] = np.delete(centerline_graph[previous_node][neighbor]["indices"], 0)
-                            centerline_graph[previous_node][neighbor]["coordinate_array"] = np.delete(centerline_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
-                            centerline_graph[previous_node][neighbor]["radius_array"] = np.delete(centerline_graph[previous_node][neighbor]["radius_array"], 0)
+                        while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
+                            local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
+                            local_graph[previous_node][neighbor]["coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
+                            local_graph[previous_node][neighbor]["radius_array"] = np.delete(local_graph[previous_node][neighbor]["radius_array"], 0)
                         # Update previous_node
                         previous_node = neighbor
                         # Check found neighbor
                         neighbor_found = True
                     # If downstream and there is a node with the same cell_id as the main_graph_node and a lower hierarchy
-                    elif downstream and centerline_graph.nodes[neighbor]["cell_id"] == centerline_graph.nodes[main_graph_node]["cell_id"] and centerline_graph.nodes[neighbor]["hierarchy femoral"] < centerline_graph.nodes[previous_node]["hierarchy femoral"]:
+                    elif downstream and local_graph.nodes[neighbor]["cell_id"] == local_graph.nodes[main_graph_node]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] < local_graph.nodes[previous_node]["hierarchy femoral"]:
                         # Update node cell_id
-                        centerline_graph.nodes[neighbor]["cell_id"] = next_cell_id
+                        local_graph.nodes[neighbor]["cell_id"] = next_cell_id
                         # Update edge cell_id
-                        centerline_graph[previous_node][neighbor]["cell_id"] = next_cell_id
+                        local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
                         # Update edge indices with cut_off_idx
-                        centerline_graph[previous_node][neighbor]["indices"] = centerline_graph[previous_node][neighbor]["indices"] - cut_off_idx
-                        while centerline_graph[previous_node][neighbor]["indices"][0] < 0 and len(centerline_graph[previous_node][neighbor]["indices"]) > 1:
-                            centerline_graph[previous_node][neighbor]["indices"] = np.delete(centerline_graph[previous_node][neighbor]["indices"], 0)
-                            centerline_graph[previous_node][neighbor]["coordinate_array"] = np.delete(centerline_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
-                            centerline_graph[previous_node][neighbor]["radius_array"] = np.delete(centerline_graph[previous_node][neighbor]["radius_array"], 0)
+                        local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
+                        while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
+                            local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
+                            local_graph[previous_node][neighbor]["coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
+                            local_graph[previous_node][neighbor]["radius_array"] = np.delete(local_graph[previous_node][neighbor]["radius_array"], 0)
                         # Update previous_node
                         previous_node = neighbor
                         # Check found neighbor
@@ -441,18 +434,18 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
             # Create a new object at the end of the array
             coordinate_array = np.hstack((coordinate_array, np.empty(1)))
             # The new cell will contain all points from the original cell_id from cut_off_idx onwards
-            coordinate_array[next_cell_id] = coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
+            coordinate_array[next_cell_id] = coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
             # The original cell will only keep points up until cut_off_idx (included)
-            coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]] = coordinate_array[centerline_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
+            coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]] = coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
             # Create a new object at the end of the array
             radius_array = np.hstack((radius_array, np.empty(1)))
             # The new cell will contain all points from the original cell_id from cut_off_idx onwards
-            radius_array[next_cell_id] = radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
+            radius_array[next_cell_id] = radius_array[local_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
             # The original cell will only keep points up until cut_off_idx (included)
-            radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]] = radius_array[centerline_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
+            radius_array[local_graph.nodes[main_graph_node]["cell_id"]] = radius_array[local_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
             # Also, add new cell_id to label dicts
-            predicted_vessel_types[next_cell_id] = predicted_vessel_types[centerline_graph.nodes[main_graph_node]["cell_id"]]
-            predicted_vessel_type_names[next_cell_id] = predicted_vessel_type_names[centerline_graph.nodes[main_graph_node]["cell_id"]]
+            predicted_vessel_types[next_cell_id] = predicted_vessel_types[local_graph.nodes[main_graph_node]["cell_id"]]
+            predicted_vessel_type_names[next_cell_id] = predicted_vessel_type_names[local_graph.nodes[main_graph_node]["cell_id"]]
             # Update next_cell_id
             next_cell_id += 1
 
@@ -462,7 +455,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
         nodes_in_subgraph_union_edges.append(dst)
 
     # Check for separate subgraphs after graph unification
-    subgraphs_aux = [centerline_graph.subgraph(components) for components in nx.connected_components(centerline_graph)]
+    subgraphs_aux = [local_graph.subgraph(components) for components in nx.connected_components(local_graph)]
 
     # If more than one subgraph is still found, it is probably a problematic one. We remove all nodes from all remaining secondary subgraphs
     # One exception will be when the rightmost node is found in a secondary subgraph. In this case, we will keep the subgraph and connect it to the main graph
@@ -471,7 +464,7 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     if len(subgraphs_aux) > 1:
         main_subgraph = subgraphs_aux[0]
         for subgraph in subgraphs_aux[1:]:
-            if centerline_graph.graph["rightmost"] in subgraph:
+            if local_graph.graph["rightmost"] in subgraph:
                 # Join the closest degree 1 node from the subgraph to the closest node from the main graph
                 deg_1_nodes = []
                 for node in subgraph:
@@ -499,16 +492,16 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                 deg_1_node = deg_1_nodes[np.argmin(closest_distances)]
 
                 # If the deg_1_node is the rightmost, choose the neighbor
-                if deg_1_node == centerline_graph.graph["rightmost"]:
-                    deg_1_node = centerline_graph.neighbors(centerline_graph.graph["rightmost"]).__next__()
+                if deg_1_node == local_graph.graph["rightmost"]:
+                    deg_1_node = local_graph.neighbors(local_graph.graph["rightmost"]).__next__()
 
                 # Add edge to main graph
-                centerline_graph.add_edge(closest_node, deg_1_node, cell_id = main_subgraph.nodes[closest_node]["cell_id"])
-                centerline_graph[closest_node][deg_1_node]["vessel_type"] = predicted_vessel_types[centerline_graph[closest_node][deg_1_node]["cell_id"]]
-                centerline_graph[closest_node][deg_1_node]["vessel_type_name"] = predicted_vessel_type_names[centerline_graph[closest_node][deg_1_node]["cell_id"]]
-                centerline_graph[closest_node][deg_1_node]["indices"] = np.array([])
-                centerline_graph[closest_node][deg_1_node]["coordinate_array"] = np.ndarray([0, 3])
-                centerline_graph[closest_node][deg_1_node]["radius_array"] = np.array([])
+                local_graph.add_edge(closest_node, deg_1_node, cell_id = main_subgraph.nodes[closest_node]["cell_id"])
+                local_graph[closest_node][deg_1_node]["vessel_type"] = predicted_vessel_types[local_graph[closest_node][deg_1_node]["cell_id"]]
+                local_graph[closest_node][deg_1_node]["vessel_type_name"] = predicted_vessel_type_names[local_graph[closest_node][deg_1_node]["cell_id"]]
+                local_graph[closest_node][deg_1_node]["indices"] = np.array([])
+                local_graph[closest_node][deg_1_node]["coordinate_array"] = np.ndarray([0, 3])
+                local_graph[closest_node][deg_1_node]["radius_array"] = np.array([])
 
                 # Add to the subgraphs_union_edges
                 subgraphs_union_edges.append([closest_node, deg_1_node])
@@ -518,12 +511,12 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
                         positions_subgraph.append(subgraph.nodes[subgraph_node]["pos"])
                 # Remove subgraph
                 remove_nodes = []
-                for node in centerline_graph:
-                    if np.amin(np.linalg.norm(centerline_graph.nodes[node]["pos"] - positions_subgraph, axis = 1)) < 1e-5:
+                for node in local_graph:
+                    if np.amin(np.linalg.norm(local_graph.nodes[node]["pos"] - positions_subgraph, axis = 1)) < 1e-5:
                         remove_nodes.append(node)
 
                 for node in remove_nodes:
-                    centerline_graph.remove_node(node)
+                    local_graph.remove_node(node)
 
                 all_remove_nodes += remove_nodes
 
@@ -537,12 +530,12 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
 
     # Check if any of the nodes in the subgraphs_union_edges has degree 1. If it has, remove the edge from the graph and from subgraphs_union_edges
     for edge in subgraphs_union_edges:
-        if centerline_graph.degree(edge[0]) == 1 or centerline_graph.degree(edge[1]) == 1:
-            centerline_graph.remove_edge(edge[0], edge[1])
+        if local_graph.degree(edge[0]) == 1 or local_graph.degree(edge[1]) == 1:
+            local_graph.remove_edge(edge[0], edge[1])
             subgraphs_union_edges.remove(edge)
 
     # Add edges to remove to global attributes
-    centerline_graph.graph["subgraphs_union_edges"] = subgraphs_union_edges
+    local_graph.graph["subgraphs_union_edges"] = subgraphs_union_edges
 
     # Initiaize new centerline segments array
     new_centerline_segments_array = np.ndarray([len(coordinate_array), 2], dtype = object)
@@ -551,11 +544,11 @@ def unify_subgraphs(case_dir, centerline_graph, subgraphs):
     # Overwrite radius array from centerline_segments_array
     new_centerline_segments_array[:, 1] = radius_array
     # Update global features
-    centerline_graph.graph["predicted_vessel_types"] = predicted_vessel_types
-    centerline_graph.graph["predicted_vessel_type_names"] = predicted_vessel_type_names
-    centerline_graph.graph["centerline_segments_array"] = new_centerline_segments_array
+    local_graph.graph["predicted_vessel_types"] = predicted_vessel_types
+    local_graph.graph["predicted_vessel_type_names"] = predicted_vessel_type_names
+    local_graph.graph["centerline_segments_array"] = new_centerline_segments_array
 
-    return centerline_graph
+    return local_graph
 
 def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
     """
@@ -567,7 +560,7 @@ def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
     Parameters
     ----------
     subgraphs : list of networkx.Graph objects
-        Separate subgraphs from the centerline_graph build in build_centerline_graph.
+        Separate subgraphs from the local_graph build in build_local_graph.
 
     Returns
     -------
@@ -614,51 +607,12 @@ def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
 
     return sanity_check, skip_cell_ids
 
-def make_graph_plot(case_dir, graph, filename = None, label = None):
-    """
-    Makes matplotlib.pyplot figure of the coronal plane of a networkx graph.
-
-    Parameters
-    ----------
-    case_dir : string or path-like object
-        Path to case directory. 
-    graph : networkx.Graph
-        Graph that we want to plot.
-    filename : string
-        Fine name of the final image. Make sure to add a valid extension (e.g. .png, .eps, etc)
-    label : string
-        Edge attribute to be printed at the center of each graph edge.
-
-    Returns
-    -------
-
-    """
-    # Generate plot of dense graph for quick visualization
-    _ = plt.figure(figsize = [5, 10])
-    ax = plt.gca()
-
-    # In order to place the nodes in the visualization of the graph in a sagittal view, 
-    # we use L and S coordinates (the view will be from the coronal plane, P axis)
-    node_pos_dict_p = {}
-    for n in graph.nodes():
-        node_pos_dict_p[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
-
-    if label is not None:
-        edge_labels = nx.get_edge_attributes(graph, label)
-        nx.draw(graph, node_pos_dict_p, node_size=20, ax=ax)
-        nx.draw_networkx_edge_labels(graph, node_pos_dict_p, edge_labels = edge_labels, ax=ax)
+def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=None, show=False, output_path=None):
+    if subplot is None:
+        _, ax = plt.subplots(figsize=[5, 10])
     else:
-        nx.draw(graph, node_pos_dict_p, node_size=20, ax=ax)
-
-    if filename is not None:
-        plt.savefig(os.path.join(case_dir, filename))
-        plt.close()
-
-from mycolorpy import colorlist as mcp
-
-def make_dense_graph_plot(graph, feature = None, access = "femoral", cmap = "bwr"):
-    _ = plt.figure(figsize = [6, 10])
-    ax = plt.gca()
+        ax = subplot
+        
     if feature is not None:
         # Color map
         feature_values = [graph.nodes[node]["features " + access][feature] for node in graph]
@@ -680,7 +634,7 @@ def make_dense_graph_plot(graph, feature = None, access = "femoral", cmap = "bwr
         node_pos_dict_P[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
 
     nx.draw(graph, node_pos_dict_P, node_size=10, node_color=color_map)
-    ax.set_xlim([-200, 10])
+    ax.set_xlim([-250, -40])
     ax.set_ylim([-10, 300])
     # Set title as feature
     if feature is not None:
@@ -689,3 +643,11 @@ def make_dense_graph_plot(graph, feature = None, access = "femoral", cmap = "bwr
         sm._A = []
         plt.colorbar(sm, fraction=0.046, pad=0.04)
         plt.title(feature.capitalize().replace("_", " "))  
+
+    if subplot is None:
+        if output_path is not None:
+            plt.savefig(output_path)
+        if show:
+            plt.show()
+        else:
+            plt.close()

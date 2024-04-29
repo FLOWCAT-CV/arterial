@@ -11,7 +11,7 @@ import pickle
 import matplotlib.pyplot as plt
 from mycolorpy import colorlist as mcp
 
-def supersegment_prediction(centerline_graph):
+def supersegment_prediction(local_graph):
     """ 
     Performs supersegment search and associates all possible supersegment configurations to all
     reference configurations.
@@ -29,7 +29,7 @@ def supersegment_prediction(centerline_graph):
 
     Parameters
     ----------
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Featurized dense centerline graph.
 
     Returns
@@ -39,19 +39,19 @@ def supersegment_prediction(centerline_graph):
         startpoint for each access (femoral or radial) to all other endpoints.
     
     """
-    def rescale_hierarchy(graph, access):
+    def rescale_hierarchy(local_graph, access):
         """
         Rescales hierarchy for startpoint to start from hierarchy = 0. In this script, we use it 
         just to retrieve the maximum hierarchy.
 
         Parameters 
         ----------
-        graph : networkx.Graph
+        local_graph : networkx.Graph
             Segment graph.
 
         Returns
         -------
-        graph : networkx.Graph
+        local_graph : networkx.Graph
             Segment graph with updated hierarchy.
         new_max_hierarchy : 
             Maximum hierarchy of the new rescaled graph.
@@ -61,18 +61,18 @@ def supersegment_prediction(centerline_graph):
         min_hierarchy = 1000
         max_hierarchy = 0
         # Iterate over all nodes to findmin and max hierarchies
-        for node in graph:
-            if graph.nodes[node]["hierarchy {}".format(access)] < min_hierarchy:
-                min_hierarchy = graph.nodes[node]["hierarchy {}".format(access)]
-            if graph.nodes[node]["hierarchy {}".format(access)] > max_hierarchy:
-                max_hierarchy = graph.nodes[node]["hierarchy {}".format(access)]
+        for node in local_graph:
+            if local_graph.nodes[node]["hierarchy {}".format(access)] < min_hierarchy:
+                min_hierarchy = local_graph.nodes[node]["hierarchy {}".format(access)]
+            if local_graph.nodes[node]["hierarchy {}".format(access)] > max_hierarchy:
+                max_hierarchy = local_graph.nodes[node]["hierarchy {}".format(access)]
         # Rescale all hierarchy indices to start from 0
-        for node in graph:
-            graph.nodes[node]["hierarchy {}".format(access)] = graph.nodes[node]["hierarchy {}".format(access)] - min_hierarchy
+        for node in local_graph:
+            local_graph.nodes[node]["hierarchy {}".format(access)] = local_graph.nodes[node]["hierarchy {}".format(access)] - min_hierarchy
 
-        return graph, max_hierarchy - min_hierarchy
+        return local_graph, max_hierarchy - min_hierarchy
 
-    def vessel_type_sequence_to_one_hot(sequence, highlights = None, counter_highlights = None):
+    def vessel_type_sequence_to_one_hot(sequence, highlights=None, counter_highlights=None):
         """
         Passes any vessel type sequence to one-hot encoding. Highlights and counter_highlights
         (optional) can be used to favor/disfavor the presence of some vessel types for some 
@@ -155,65 +155,59 @@ def supersegment_prediction(centerline_graph):
 
     # Build standard reference configurations
     configurations = {}
-    # Configurations from femoral access
-    configurations["femoral"] = []
     # Configuration 0: femoral + right + anterior
     priority_order = ["AA", "BT", "RCCA", "RICA"]
     highlights = ["RCCA", "RICA"]
     counter_highlights = ["RSA"]
-    configurations["femoral"].append([priority_order, highlights, counter_highlights, "0_femoral_right_anterior"])
+    configurations[("femoral", "right", "anterior")] = (priority_order, highlights, counter_highlights, "0_femoral_right_anterior")
     # Configuration 1: femoral + right + posterior
     priority_order = ["AA", "BT", "RSA", "RVA", "BA"]
     highlights = ["RVA"]
     counter_highlights = ["LVA"]
-    configurations["femoral"].append([priority_order, highlights, counter_highlights, "1_femoral_right_posterior"])
+    configurations[("femoral", "right", "posterior")] = (priority_order, highlights, counter_highlights, "1_femoral_right_posterior")
     # Configuration 2: femoral + left + anterior
     priority_order = ["AA", "LCCA", "LICA"]
     highlights = ["LCCA", "LICA"]
     counter_highlights = []
-    configurations["femoral"].append([priority_order, highlights, counter_highlights, "2_femoral_left_anterior"])
+    configurations[("femoral", "left", "anterior")] = (priority_order, highlights, counter_highlights, "2_femoral_left_anterior")
     # Configuration 3: femoral + left + posterior
     priority_order = ["AA", "LSA", "LVA", "BA"]
     highlights = ["LVA"]
     counter_highlights = ["RVA"]
-    configurations["femoral"].append([priority_order, highlights, counter_highlights, "3_femoral_left_posterior"])
-    # Configurations from radial access
-    configurations["radial"] = []
+    configurations[("femoral", "left", "posterior")] = (priority_order, highlights, counter_highlights, "3_femoral_left_posterior")
     # Configuration 4: radial + right + anterior
     priority_order = ["RSA", "RCCA", "RICA"]
     highlights = ["RCCA", "RICA"]
     counter_highlights = ["BT"]
-    configurations["radial"].append([priority_order, highlights, counter_highlights, "4_radial_right_anterior"])
+    configurations[("radial", "right", "anterior")] = (priority_order, highlights, counter_highlights, "4_radial_right_anterior")
     # Configuration 5: radial + right + posterior
     priority_order = ["RSA", "RVA", "BA"]
     highlights = ["RVA"]
     counter_highlights = ["LVA"]
-    configurations["radial"].append([priority_order, highlights, counter_highlights, "5_radial_right_posterior"])
+    configurations[("radial", "right", "posterior")] = (priority_order, highlights, counter_highlights, "5_radial_right_posterior")
     # Configuration 6: radial + left + anterior
     priority_order = ["RSA", "BT", "LCCA", "LICA"]
     highlights = ["LCCA", "LICA"]
     counter_highlights = []
-    configurations["radial"].append([priority_order, highlights, counter_highlights, "6_radial_left_anterior"])
+    configurations[("radial", "left", "anterior")] = (priority_order, highlights, counter_highlights, "6_radial_left_anterior")
     # Configuration 7: radial + left + posterior
     priority_order = ["RSA", "BT", "LSA", "LVA", "BA"]
     highlights = ["LVA"]
     counter_highlights = ["RVA"]
-    configurations["radial"].append([priority_order, highlights, counter_highlights, "7_radial_left_posterior"])
+    configurations[("radial", "left", "posterior")] = (priority_order, highlights, counter_highlights, "7_radial_left_posterior")
 
     # We also have to pass the reference configurations to one-hot encoding
     configurations_one_hot = {}
-    for access in ["femoral", "radial"]:
-        configurations_one_hot[access] = []
-        for configuration in configurations[access]:
-            config_sequence, highlights, counter_highlights, _ = configuration
-            configurations_one_hot[access].append(vessel_type_sequence_to_one_hot(config_sequence, highlights, counter_highlights))
+    for key, configuration in configurations.items():
+        config_sequence, highlights, counter_highlights, _ = configuration
+        configurations_one_hot[key] = (vessel_type_sequence_to_one_hot(config_sequence, highlights, counter_highlights))
 
     # Define predicted configurations (cell_ids sequences)
     predicted_configurations = {}
-    predicted_vessel_type_names = centerline_graph.graph["predicted_vessel_type_names"]
+    predicted_vessel_type_names = local_graph.graph["predicted_vessel_type_names"]
 
     # Get coordinate array
-    segments_coordinate_array = centerline_graph.graph["centerline_segments_array"][0]
+    segments_coordinate_array = local_graph.graph["centerline_segments_array"][0]
 
     # Create supersegment_candidates, storing all nodes for all possible paths for each access startNode (hierarchy == 0)
     supersegment_candidates = {}
@@ -223,8 +217,8 @@ def supersegment_prediction(centerline_graph):
     bifurcating_segments_candidates_cell_ids = {}
     bifurcating_segments_candidates_vessel_types = {}
     # For both access, perform supersegment search
-    for idx, access in enumerate(["femoral", "radial"]):
-        _, max_hierarchy = rescale_hierarchy(centerline_graph, access)
+    for access in ["femoral", "radial"]:
+        _, max_hierarchy = rescale_hierarchy(local_graph, access)
         # Initialize list for supersegment depending on access
         supersegment_candidates[access] = []
         # This is used to avoid advancing over finished supersegments segments (supersegment candidates are added when an endnode is reached)
@@ -233,8 +227,8 @@ def supersegment_prediction(centerline_graph):
         number_of_nodes_for_cell_id = {}
         for cell_id in range(len(segments_coordinate_array)):
             number_of_nodes = 0
-            for node in centerline_graph:
-                if centerline_graph.nodes[node]["cell_id"] == cell_id:
+            for node in local_graph:
+                if local_graph.nodes[node]["cell_id"] == cell_id:
                     number_of_nodes += 1
             number_of_nodes_for_cell_id[cell_id] = number_of_nodes
 
@@ -242,11 +236,11 @@ def supersegment_prediction(centerline_graph):
         # Every time we find a bifurcation, we create a new path. From here, we can extract a cell_id sequence for each of the paths    
         # To detect bifurcations, we check the node degree        
         for current_hierarchy in range(max_hierarchy + 1):
-            for node in centerline_graph:
-                if centerline_graph.nodes[node][f"hierarchy {access}"] == current_hierarchy:
+            for node in local_graph:
+                if local_graph.nodes[node][f"hierarchy {access}"] == current_hierarchy:
                     # Store neighbor nodes
                     neighbor_nodes = []
-                    for neighbor in centerline_graph.neighbors(node):
+                    for neighbor in local_graph.neighbors(node):
                         neighbor_nodes.append(neighbor)
                     # For startNode, just start a new supersegment candidate
                     if len(supersegment_candidates[access]) == 0:
@@ -260,17 +254,17 @@ def supersegment_prediction(centerline_graph):
                             if idx not in finished_paths:
                                 # Endpoints
                                 # Since the startNode is treated differently, all nodes with degree == 0 are endpoints
-                                if centerline_graph.degree(node) == 1 and path[-1] in neighbor_nodes:
+                                if local_graph.degree(node) == 1 and path[-1] in neighbor_nodes:
                                     supersegment_candidates[access][idx].append(node)
                                     # When an endpoint is reached, add the sequence to finished_paths to discontinue attention over it
                                     finished_paths.append(idx)
                                 # Normal node
                                 # For nodes with degree == 2, just add to every active sequence
-                                elif centerline_graph.degree(node) == 2 and path[-1] in neighbor_nodes:
+                                elif local_graph.degree(node) == 2 and path[-1] in neighbor_nodes:
                                     supersegment_candidates[access][idx].append(node)
                                 # Multifurcations
                                 # For multifurcations, create new segments for all bifurcations except for one (which can continue previously existing segment)
-                                elif centerline_graph.degree(node) > 2 and path[-1] in neighbor_nodes:
+                                elif local_graph.degree(node) > 2 and path[-1] in neighbor_nodes:
                                     # Auxiliar boolean variable
                                     first_bifurcation = True
                                     supersegment_candidates[access][idx].append(node)
@@ -289,7 +283,7 @@ def supersegment_prediction(centerline_graph):
                                 # Special case: when two bifurcations come in consecutive nodes
                                 # The second bifurcation will share hierarchy with the neighbors from the first bifurcation,
                                 # and it will have already been added to one of the paths
-                                elif centerline_graph.degree(node) > 2 and node == path[-1]:
+                                elif local_graph.degree(node) > 2 and node == path[-1]:
                                     first_bifurcation = True
                                     for _, neighbor in enumerate(neighbor_nodes):
                                         if neighbor != path[-1] and neighbor not in supersegment_candidates[access][idx]:
@@ -317,7 +311,7 @@ def supersegment_prediction(centerline_graph):
             supersegment_candidate_cell_ids = []
             bifurcating_segments_candidate_cell_ids = []
             # Add cell_id from first node
-            supersegment_candidate_cell_ids.append(centerline_graph.nodes[supersegment_candidate[0]]["cell_id"])
+            supersegment_candidate_cell_ids.append(local_graph.nodes[supersegment_candidate[0]]["cell_id"])
             # Keep track of previous node
             previous_node = None
             # Iterate over all nodes searching for the cell_id sequence
@@ -328,14 +322,14 @@ def supersegment_prediction(centerline_graph):
                     # Every other node
                 else:
                     # If cell_id from current node corresponds to the last added cell_id from the supersegment canidate cell_id list, skip node
-                    if centerline_graph[previous_node][node]["cell_id"] != supersegment_candidate_cell_ids[-1]:
+                    if local_graph[previous_node][node]["cell_id"] != supersegment_candidate_cell_ids[-1]:
                         # Else, add cell_id from edge, not from node. This helps avoid problems when covering segments that advance downstream
-                        supersegment_candidate_cell_ids.append(centerline_graph[previous_node][node]["cell_id"])
+                        supersegment_candidate_cell_ids.append(local_graph[previous_node][node]["cell_id"])
                         # If previous node is a bifurcation, add all other cell_ids to bifurcating segments list
-                        if centerline_graph.degree(previous_node) > 2:
-                            for neighbor in centerline_graph.neighbors(previous_node):
-                                if centerline_graph[previous_node][neighbor]["cell_id"] not in supersegment_candidate_cell_ids:
-                                    bifurcating_segments_candidate_cell_ids.append(centerline_graph[previous_node][neighbor]["cell_id"])
+                        if local_graph.degree(previous_node) > 2:
+                            for neighbor in local_graph.neighbors(previous_node):
+                                if local_graph[previous_node][neighbor]["cell_id"] not in supersegment_candidate_cell_ids:
+                                    bifurcating_segments_candidate_cell_ids.append(local_graph[previous_node][neighbor]["cell_id"])
                     # Update previous node
                     previous_node = node
             # Add supersegment and bifuracating segment cell_id sequences to candidate list
@@ -362,11 +356,11 @@ def supersegment_prediction(centerline_graph):
                 if supersegment_candidate_cell_ids_a[:-1] == supersegment_candidate_cell_ids_b[:-1] and predicted_vessel_type_names[supersegment_candidate_cell_ids_a[-1]] == predicted_vessel_type_names[supersegment_candidate_cell_ids_b[-1]]:
                     distance_a = 0
                     distance_b = 0
-                    for src, dst in centerline_graph.edges:
-                        if centerline_graph[src][dst]["cell_id"] == supersegment_candidate_cell_ids_a[-1] and len(centerline_graph[src][dst]["indices"]) != 0:
-                            distance_a += np.linalg.norm(centerline_graph.nodes[src]["pos"] - centerline_graph.nodes[dst]["pos"])
-                        elif centerline_graph[src][dst]["cell_id"] == supersegment_candidate_cell_ids_b[-1] and len(centerline_graph[src][dst]["indices"]) != 0:
-                            distance_b += np.linalg.norm(centerline_graph.nodes[src]["pos"] - centerline_graph.nodes[dst]["pos"])
+                    for src, dst in local_graph.edges:
+                        if local_graph[src][dst]["cell_id"] == supersegment_candidate_cell_ids_a[-1] and len(local_graph[src][dst]["indices"]) != 0:
+                            distance_a += np.linalg.norm(local_graph.nodes[src]["pos"] - local_graph.nodes[dst]["pos"])
+                        elif local_graph[src][dst]["cell_id"] == supersegment_candidate_cell_ids_b[-1] and len(local_graph[src][dst]["indices"]) != 0:
+                            distance_b += np.linalg.norm(local_graph.nodes[src]["pos"] - local_graph.nodes[dst]["pos"])
                     if distance_a > distance_b:
                         delete_idx.append(idx_b)
                     else:
@@ -390,28 +384,23 @@ def supersegment_prediction(centerline_graph):
     # Now we select the closest candidate to each of the reference configurations, using the cosine similarity between the one-hot
     # encoded version of the vessel_type sequences and the enhanced one-hot encoded version of the reference configurations
     for access in supersegment_candidates_one_hot.keys():
-        predicted_configurations[access] = []
-        for idx, configuration_one_hot in enumerate(configurations_one_hot[access]):
-            cosine_similarities = []
-            for supersegment_candidate_one_hot in supersegment_candidates_one_hot[access]:
-                cosine_similarities.append(cosine_similarity(configuration_one_hot, supersegment_candidate_one_hot))
-            # For the most similar configuration, we store the cell_id sequences for the supersegment and the bifurcating segments
-            predicted_configurations[access].append([supersegment_candidates_cell_ids[access][np.argmax(cosine_similarities)], bifurcating_segments_candidates_cell_ids[access][np.argmax(cosine_similarities)]])
+        for key, configuration_one_hot in configurations_one_hot.items():
+            if key[0] == access:
+                cosine_similarities = []
+                for supersegment_candidate_one_hot in supersegment_candidates_one_hot[access]:
+                    cosine_similarities.append(cosine_similarity(configuration_one_hot, supersegment_candidate_one_hot))
+                # For the most similar configuration, we store the cell_id sequences for the supersegment and the bifurcating segments
+                predicted_configurations[key] = (supersegment_candidates_cell_ids[access][np.argmax(cosine_similarities)], bifurcating_segments_candidates_cell_ids[access][np.argmax(cosine_similarities)])
 
     return predicted_configurations
 
-def supersegment_built(case_dir, centerline_graph, predicted_configurations):
+def build_supersegments(local_graph, predicted_configurations):
     """ 
     Using the predicted_configurations dictionary, creates featurized supersegments 
     for each of the possible thrombectomy configurations. Uses the same process as 
-    for the creation of the centerline_graph, but including nodes from the cell_id 
+    for the creation of the local_graph, but including nodes from the cell_id 
     sequences stored in predicted_configurations. Nodes from the bifurcating segment 
     cell_id list are only included up to a distance equal to a chosen threshold.
-
-    Returns predicted_configurations and saves supersegments and an image as:
-
-    >>> case_dir/supersegments/{configuration_name}.pickle
-    >>> case_dir/supersegments.png
 
     There are 8 possible configurations, resulting from two binary features that
     describe the access of a past operation and the occlusion localization:
@@ -421,9 +410,7 @@ def supersegment_built(case_dir, centerline_graph, predicted_configurations):
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Featurized dense centerline graph.
     predicted_configurations : dict
         Dictionary with two lists, one for each access, with all possible configurations
@@ -431,195 +418,119 @@ def supersegment_built(case_dir, centerline_graph, predicted_configurations):
 
     Returns
     -------
+    supersegments : dict
+        Dictionary with all possible supersegments for each of the 8 possible configurations.
     
     """
-    def make_supersegment_plots(case_dir, supersegments):
-        """
-        Makes plots for all possible supersegment configurations and saves an
-        image with all 8 configurations:
-
-        >>> case_dir/supersegments.png
-
-        Parameters
-        ----------
-        case_dir : string or path-like object
-            Path to case directory. 
-        supersegments : dict
-            Dictionary with two lists (one for each access, femoral and radial)
-            with all supersegment graphs.
-
-        Returns
-        -------
-        
-        """
-        # We can visualize first the original hierarchic dense graph
-        configuration_titles = ["Femoral + right + anterior",
-                                "Femoral + right + posterior",
-                                "Femoral + left + anterior",
-                                "Femoral + left + posterior",
-                                "Radial + right + anterior",
-                                "Radial + right + posterior",
-                                "Radial + left + anterior",
-                                "Radial + left + posterior"]
-
-        rows = 2
-        columns = len(configuration_titles) // rows
-
-        _, ax = plt.subplots(rows, columns, figsize = [16, 18])
-
-        for idx_access, access in enumerate(supersegments.keys()):
-            for idx, supersegment in enumerate(supersegments[access]):
-                highlight_node = None
-                for node in supersegment:
-                    if supersegment.nodes[node]["hierarchy"] == 0:
-                        highlight_node = node
-                    
-                colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
-                color_map = [colorPalette[not supersegment.nodes[node]["is_supersegment"]] for node in supersegment] 
-                
-                if highlight_node is not None:
-                    color_map[highlight_node] = "chartreuse"
-
-                # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
-                node_pos_dict_p = {}
-                for n in supersegment.nodes():
-                    node_pos_dict_p[n] = [-supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
-
-                nx.draw(supersegment, node_pos_dict_p, node_size=10, node_color=color_map, ax=ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns])
-                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_title(configuration_titles[(4 * idx_access + idx)], fontsize=12)
-                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_xlim([-200, 10])
-                ax[(4 * idx_access + idx) // columns, (4 * idx_access + idx) % columns].set_ylim([-10, 350])
-            
-        plt.savefig(os.path.join(case_dir, "supersegments.png"))
-        plt.close()
-
     supersegments = {}
-
-    # Make supersegment directory in case it is missing
-    if not os.path.isdir(os.path.join(case_dir, "supersegments")): os.mkdir(os.path.join(case_dir, "supersegments"))
 
     # Specify the maximum length for a bifurcating segment
     limit_bifurcation_length = 15
 
-    configuration_names = [
-        "right + anterior",
-        "right + posterior",
-        "left + anterior",
-        "left + posterior"]
-
     # Extract sequences for both accesses
-    for access in ["femoral", "radial"]:
-        # Initiaize supersegment list for both accesses
-        supersegments[access] = []
-        # Build supersegment for each of the existing reference configurations
-        for config_idx, predicted_configuration in enumerate(predicted_configurations[access]):
-            configuration_name = "{} + {}".format(access, configuration_names[config_idx])
-            # Get predicted confirguration
-            supersegment_segments, bifurcating_segments = predicted_configuration
-            if type(supersegment_segments) is not list:
-                supersegment_segments = [supersegment_segments]
-            # Initialize a graph with networkx for each supersegment 
-            supersegment = centerline_graph.copy()
-            # Define empty list to store centerline_graph nodes connected by edges with cell_id in supersegment_segments
-            supersegment_nodes = []
-            # Define empty list to store centerline_graph edges with cell_id in supersegment_segments
-            supersegment_edges = []
-            # Define empty list to store centerline_graph nodes connected by edges with cell_id in bifurcating_segments up to the limit_bifurcation_length
-            bifurcating_nodes = []
-            # Define empty list to store first centerline_graph edges with cell_id in bifurcating_segments
-            bifurcating_edges = []
-            
-            # Store all corresponding nodes and edges in supersegment_nodes and supersegment_edges
-            for src, dst in supersegment.edges:
-                if supersegment[src][dst]["cell_id"] in supersegment_segments:
-                    if src not in supersegment_nodes:
-                        supersegment_nodes.append(src)
-                    if dst not in supersegment_nodes:
-                        supersegment_nodes.append(dst)
-                    supersegment_edges.append((src, dst))
+    for config, predicted_configuration in predicted_configurations.items():
+        access, laterality, antero_posterior = config
+        # Get predicted confirguration
+        supersegment_segments, bifurcating_segments = predicted_configuration
+        if type(supersegment_segments) is not list:
+            supersegment_segments = [supersegment_segments]
+        # Initialize a graph with networkx for each supersegment 
+        supersegment = local_graph.copy()
+        # Define empty list to store local_graph nodes connected by edges with cell_id in supersegment_segments
+        supersegment_nodes = []
+        # Define empty list to store local_graph edges with cell_id in supersegment_segments
+        supersegment_edges = []
+        # Define empty list to store local_graph nodes connected by edges with cell_id in bifurcating_segments up to the limit_bifurcation_length
+        bifurcating_nodes = []
+        # Define empty list to store first local_graph edges with cell_id in bifurcating_segments
+        bifurcating_edges = []
+        
+        # Store all corresponding nodes and edges in supersegment_nodes and supersegment_edges
+        for src, dst in supersegment.edges:
+            if supersegment[src][dst]["cell_id"] in supersegment_segments:
+                if src not in supersegment_nodes:
+                    supersegment_nodes.append(src)
+                if dst not in supersegment_nodes:
+                    supersegment_nodes.append(dst)
+                supersegment_edges.append((src, dst))
+                
+        # Store all corresponding nodes and edges from immediate bfiurcating edges in bifurcating_nodes and bifurcating_edges
+        for src, dst in supersegment.edges:
+            if (src, dst) not in supersegment_edges and supersegment[src][dst]["cell_id"] in bifurcating_segments:
+                if src in supersegment_nodes and dst not in supersegment_nodes:
+                    bifurcating_nodes.append(dst)
+                    bifurcating_edges.append((src, dst))
+                elif dst in supersegment_nodes and src not in supersegment_nodes:
+                    bifurcating_nodes.append(src)
+                    bifurcating_edges.append((src, dst))
                     
-            # Store all corresponding nodes and edges from immediate bfiurcating edges in bifurcating_nodes and bifurcating_edges
-            for src, dst in supersegment.edges:
-                if (src, dst) not in supersegment_edges and supersegment[src][dst]["cell_id"] in bifurcating_segments:
-                    if src in supersegment_nodes and dst not in supersegment_nodes:
-                        bifurcating_nodes.append(dst)
-                        bifurcating_edges.append((src, dst))
-                    elif dst in supersegment_nodes and src not in supersegment_nodes:
-                        bifurcating_nodes.append(src)
-                        bifurcating_edges.append((src, dst))
-                        
-            # Store all corresponding nodes left in bifurcating_nodes and bifurcating_edges
-            for src, dst in bifurcating_edges:
-                if src in bifurcating_nodes:
-                    current_dst = src
+        # Store all corresponding nodes left in bifurcating_nodes and bifurcating_edges
+        for src, dst in bifurcating_edges:
+            if src in bifurcating_nodes:
+                current_dst = src
+            else:
+                current_dst = dst
+            distance = 0
+            continue_search = True
+            check = True
+            # We only include cases where first bifurcating edge is connected to a deg = 2 node. Else, we only include the first bifurcating node
+            if supersegment.degree(current_dst) == 2:
+                while distance < limit_bifurcation_length and continue_search and check:
+                    check = False
+                    for neighbor in supersegment.neighbors(current_dst):
+                        if neighbor not in supersegment_nodes and neighbor not in bifurcating_nodes:
+                            check = True
+                            if supersegment.degree(neighbor) == 2:
+                                bifurcating_nodes.append(neighbor)
+                                distance += np.linalg.norm(supersegment.nodes[current_dst]["pos"] - supersegment.nodes[neighbor]["pos"])
+                                current_dst = neighbor
+                            else:
+                                bifurcating_nodes.append(neighbor)
+                                continue_search = False
+
+        # We now search for all non-included nodes from hierarchicDenseG, which will be masked out
+        remove_nodes = []
+        for node in supersegment:
+            if node not in supersegment_nodes and node not in bifurcating_nodes:
+                remove_nodes.append(node)
+            else:
+                if node in supersegment_nodes:
+                    supersegment.nodes[node]["is_supersegment"] = 1
                 else:
-                    current_dst = dst
-                distance = 0
-                continue_search = True
-                check = True
-                # We only include cases where first bifurcating edge is connected to a deg = 2 node. Else, we only include the first bifurcating node
-                if supersegment.degree(current_dst) == 2:
-                    while distance < limit_bifurcation_length and continue_search and check:
-                        check = False
-                        for neighbor in supersegment.neighbors(current_dst):
-                            if neighbor not in supersegment_nodes and neighbor not in bifurcating_nodes:
-                                check = True
-                                if supersegment.degree(neighbor) == 2:
-                                    bifurcating_nodes.append(neighbor)
-                                    distance += np.linalg.norm(supersegment.nodes[current_dst]["pos"] - supersegment.nodes[neighbor]["pos"])
-                                    current_dst = neighbor
-                                else:
-                                    bifurcating_nodes.append(neighbor)
-                                    continue_search = False
+                    supersegment.nodes[node]["is_supersegment"] = 0
+                supersegment.nodes[node]["hierarchy"] = supersegment.nodes[node][f"hierarchy {access}"]
+                supersegment.nodes[node]["features"] = supersegment.nodes[node][f"features {access}"]
+                supersegment.nodes[node]["features"]["is_supersegment"] = supersegment.nodes[node]["is_supersegment"]
+                supersegment.nodes[node].pop("features femoral")
+                supersegment.nodes[node].pop("features radial")
+                supersegment.nodes[node].pop("hierarchy femoral")
+                supersegment.nodes[node].pop("hierarchy radial")
 
-            # We now search for all non-included nodes from hierarchicDenseG, which will be masked out
-            remove_nodes = []
-            for node in supersegment:
-                if node not in supersegment_nodes and node not in bifurcating_nodes:
-                    remove_nodes.append(node)
-                else:
-                    if node in supersegment_nodes:
-                        supersegment.nodes[node]["is_supersegment"] = 1
-                    else:
-                        supersegment.nodes[node]["is_supersegment"] = 0
-                    supersegment.nodes[node]["hierarchy"] = supersegment.nodes[node][f"hierarchy {access}"]
-                    supersegment.nodes[node]["features"] = supersegment.nodes[node][f"features {access}"]
-                    supersegment.nodes[node]["features"]["is_supersegment"] = supersegment.nodes[node]["is_supersegment"]
-                    supersegment.nodes[node].pop("features femoral")
-                    supersegment.nodes[node].pop("features radial")
-                    supersegment.nodes[node].pop("hierarchy femoral")
-                    supersegment.nodes[node].pop("hierarchy radial")
+        for src, dst in supersegment.edges:
+            if (src, dst) in supersegment_edges:
+                supersegment[src][dst]["is_supersegment"] = 1
+            else:
+                supersegment[src][dst]["is_supersegment"] = 0
 
-            for src, dst in supersegment.edges:
-                if (src, dst) in supersegment_edges:
-                    supersegment[src][dst]["is_supersegment"] = 1
-                else:
-                    supersegment[src][dst]["is_supersegment"] = 0
+        # Perform masking (remove non-included nodes)
+        for node in remove_nodes:
+            supersegment.remove_node(node)
+                
+        # Relabel nodes as sequential labels
+        mapping = {}
+        new_node = 0
+        for old_node in supersegment.nodes():
+            mapping[old_node] = new_node
+            new_node += 1
+        supersegment = nx.relabel.relabel_nodes(supersegment, mapping)
+        
+        #### Only thing left would be to remove artificial edges (they do not have edge features (necessary?)
+        # Add to the supersegments dict
+        supersegments[config] = supersegment
 
-            # Perform masking (remove non-included nodes)
-            for node in remove_nodes:
-                supersegment.remove_node(node)
-                    
-            # Relabel nodes as sequential labels
-            mapping = {}
-            new_node = 0
-            for old_node in supersegment.nodes():
-                mapping[old_node] = new_node
-                new_node += 1
-            supersegment = nx.relabel.relabel_nodes(supersegment, mapping)
-            
-            #### Only thing left would be to remove artificial edges (they do not have edge features)
+    return supersegments
 
-            # Add to the supersegments dict
-            supersegments[access].append(supersegment)
-            # Save supersegment as pickle
-            with open(os.path.join(case_dir, "supersegments", f"{configuration_name}.pickle"), "wb") as f:
-                pickle.dump(supersegment, f, protocol = 4)
-
-    # Make plot with all supersegments
-    make_supersegment_plots(case_dir, supersegments)
-
-def select_configuration(case_dir, centerline_graph):
+def select_configuration(case_dir, local_graph):
     """
     Selects supersegment configuration if patient_configuration.json is present in case_dir.
     Also adds global features derived from a past intervention to the global attributes of the
@@ -634,7 +545,7 @@ def select_configuration(case_dir, centerline_graph):
     ----------
     case_dir : string or path-like object
         Path to case directory. 
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Dense centerline graph returned by graph builder.
 
     Returns
@@ -840,7 +751,7 @@ def select_configuration(case_dir, centerline_graph):
 
     # If laterality for thrombectomy is undetermined but it is known that occlusion was vertebrobasilar, choose side with larger VA (mean radius)
     if "Vertebrobasilar" in patient_configuration["Laterality"]:
-        patient_configuration["Laterality"] = select_vertebrobasilar_laterality(centerline_graph, patient_configuration["Laterality"])
+        patient_configuration["Laterality"] = select_vertebrobasilar_laterality(local_graph, patient_configuration["Laterality"])
 
     if patient_configuration["Laterality"] in ["Right", "Left"]:
         configuration_id = 0
@@ -892,3 +803,63 @@ def select_configuration(case_dir, centerline_graph):
 
     else:
         print("Laterality is ambiguous:", patient_configuration["Laterality"])
+
+def make_supersegment_plots(supersegments, show=False, output_path=None):
+    """
+    Makes plots for all possible supersegment configurations and saves an
+    image with all 8 configurations:
+
+    >>> case_dir/supersegments.png
+
+    Parameters
+    ---------- 
+    supersegments : dict
+        Dictionary with two lists (one for each access, femoral and radial)
+        with all supersegment graphs.
+    show : bool, optional
+        If True, shows the plot. Default is False.
+    output_path : string or path-like object, optional  
+        Path to save the plot. Default is None.
+
+    Returns
+    -------
+    
+    """
+    rows = 2
+    columns = 4
+
+    _, ax = plt.subplots(rows, columns, figsize = [16, 18])
+
+    idx = 0
+    for config, supersegment in supersegments.items():
+        highlight_node = None
+        for node in supersegment:
+            if supersegment.nodes[node]["hierarchy"] == 0:
+                highlight_node = node
+            
+        colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
+        color_map = [colorPalette[not supersegment.nodes[node]["is_supersegment"]] for node in supersegment] 
+        
+        if highlight_node is not None:
+            color_map[highlight_node] = "chartreuse"
+
+        # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
+        node_pos_dict_p = {}
+        for n in supersegment.nodes():
+            node_pos_dict_p[n] = [-supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
+
+        config_name = f"{config[0]} + {config[1]} + {config[2]}"
+
+        nx.draw(supersegment, node_pos_dict_p, node_size=10, node_color=color_map, ax=ax[idx // 4, idx % 4])
+        ax[idx // 4, idx % 4].set_title(config_name, fontsize=12)
+        ax[idx // 4, idx % 4].set_xlim([-200, 10])
+        ax[idx // 4, idx % 4].set_ylim([-10, 350])
+
+        idx += 1
+        
+    if output_path is not None:
+        plt.savefig(output_path)
+    if show:
+        plt.show()
+    else:
+        plt.close()

@@ -9,29 +9,29 @@ import matplotlib.pyplot as plt
 
 from scipy.interpolate import interp1d
 
-def get_single_segments_vessel_type(centerline_graph):
+def get_and_featurize_single_segments_vessel_types(local_graph):
     """"
     Gets an ordered, oriented single segment graph for each of the present vessel
     types of a centerline graph.
 
     Parameters
     ----------
-    centerline_graph : netowrkx.Graph
+    local_graph : netowrkx.Graph
 
     Returns
     -------
-    segments_vessel_type : dict
+    segments_vessel_type_dict : dict
         Dictionary with all present vessel types as keys and featurized graphs 
         (networkx.Graph objects) as values.
 
     """
-    def find_vessel_types(centerline_graph):
+    def find_vessel_types(local_graph):
         """
         Finds all unique vessel types from a centerline graph.
 
         Parameters
         ----------
-        centerline_graph : networkx.Graph
+        local_graph : networkx.Graph
             Centerline predicted graph.
 
         Returns
@@ -43,34 +43,34 @@ def get_single_segments_vessel_type(centerline_graph):
         # Initializes vessel type list
         vessel_type_list = []
         # Iterates over all edges of the simple graph to find unique vessel types
-        for node in centerline_graph:
-            vessel_type = centerline_graph.nodes[node]["vessel_type_name"]
+        for node in local_graph:
+            vessel_type = local_graph.nodes[node]["vessel_type_name"]
             if vessel_type != "other" and vessel_type not in vessel_type_list:
                 vessel_type_list.append(vessel_type)
 
         return vessel_type_list
 
     # Initialize empty segment dict
-    segments_vessel_type = {}
+    segments_vessel_type_dict = {}
     # Get vessel type list
-    vessel_type_list = find_vessel_types(centerline_graph)
+    vessel_type_list = find_vessel_types(local_graph)
     # Iterate over all vessel types in list to find segments for all of them
     for vessel_type in vessel_type_list:
         # Extract individual segments according to vessel type
-        segments_vessel_type[vessel_type] = get_single_segment(centerline_graph, vessel_type, identifier_type = "vessel_type")        
-        if segments_vessel_type[vessel_type] is not None:
+        segments_vessel_type_dict[vessel_type] = get_single_segment(local_graph, vessel_type, identifier_type = "vessel_type")        
+        if segments_vessel_type_dict[vessel_type] is not None:
             # Perform feature extraction
-            segments_vessel_type[vessel_type] = extract_segment_features(segments_vessel_type[vessel_type])
+            segments_vessel_type_dict[vessel_type] = extract_segment_features(segments_vessel_type_dict[vessel_type])
         else:
             # If segment is none, pop from dict to eliminate future errors
-            segments_vessel_type.pop(vessel_type)
+            segments_vessel_type_dict.pop(vessel_type)
 
-    if "RCCA" in segments_vessel_type.keys() and "RICA" in segments_vessel_type.keys():
+    if "RCCA" in segments_vessel_type_dict.keys() and "RICA" in segments_vessel_type_dict.keys():
         # Get both segments
         # Add them together (Add nodes from RICA to RCCA)
         # For all nodes in RICA, add max hierarchy from RCCA
-        rcca_segment = segments_vessel_type["RCCA"].copy()
-        rica_segment = segments_vessel_type["RICA"].copy()
+        rcca_segment = segments_vessel_type_dict["RCCA"].copy()
+        rica_segment = segments_vessel_type_dict["RICA"].copy()
         
         max_hierarchy_rcca = 0
         previous_node = None
@@ -95,16 +95,16 @@ def get_single_segments_vessel_type(centerline_graph):
                     previous_node = node
                     
         # Add to dict
-        segments_vessel_type["RCA"] = rcca_segment
+        segments_vessel_type_dict["RCA"] = rcca_segment
         # Perform feature extraction
-        segments_vessel_type["RCA"] = extract_segment_features(segments_vessel_type["RCA"])
+        segments_vessel_type_dict["RCA"] = extract_segment_features(segments_vessel_type_dict["RCA"])
         
-    if "LCCA" in segments_vessel_type.keys() and "LICA" in segments_vessel_type.keys():
+    if "LCCA" in segments_vessel_type_dict.keys() and "LICA" in segments_vessel_type_dict.keys():
         # Get both segments
         # Add them together (Add nodes from LICA to LCCA)
         # For all nodes in LICA, add max hierarchy from LCCA
-        lcca_segment = segments_vessel_type["LCCA"].copy()
-        lica_segment = segments_vessel_type["LICA"].copy()
+        lcca_segment = segments_vessel_type_dict["LCCA"].copy()
+        lica_segment = segments_vessel_type_dict["LICA"].copy()
         
         max_hierarchy_lcca = 0
         previous_node = None
@@ -129,20 +129,20 @@ def get_single_segments_vessel_type(centerline_graph):
                     previous_node = node
                     
         # Add to dict
-        segments_vessel_type["LCA"] = lcca_segment
+        segments_vessel_type_dict["LCA"] = lcca_segment
         # Perform feature extraction
-        segments_vessel_type["LCA"] = extract_segment_features(segments_vessel_type["LCA"])
+        segments_vessel_type_dict["LCA"] = extract_segment_features(segments_vessel_type_dict["LCA"])
 
-    return segments_vessel_type
+    return segments_vessel_type_dict
 
-def get_single_segments_cell_ids(centerline_graph):
+def get_and_featurize_single_segments_cell_ids(local_graph):
     """"
     Gets an ordered, oriented single segment graph for each of the present cell ids of 
     a centerline graph.
 
     Parameters
     ----------
-    centerline_graph : netowrkx.Graph
+    local_graph : netowrkx.Graph
 
     Returns
     -------
@@ -151,13 +151,13 @@ def get_single_segments_cell_ids(centerline_graph):
         (networkx.Graph objects) as values.
 
     """
-    def find_cell_ids(centerline_graph):
+    def find_cell_ids(local_graph):
         """
         Finds all unique cell ids from a centerline graph.
 
         Parameters
         ----------
-        centerline_graph : networkx.Graph
+        local_graph : networkx.Graph
             Centerline predicted graph.
 
         Returns
@@ -169,8 +169,8 @@ def get_single_segments_cell_ids(centerline_graph):
         # Initializes vessel type list
         cell_id_list = []
         # Iterates over all edges of the simple graph to find unique vessel types
-        for node in centerline_graph:
-            cell_id = centerline_graph.nodes[node]["cell_id"]
+        for node in local_graph:
+            cell_id = local_graph.nodes[node]["cell_id"]
             if cell_id not in cell_id_list:
                 cell_id_list.append(cell_id)
 
@@ -179,18 +179,18 @@ def get_single_segments_cell_ids(centerline_graph):
     # Initialize empty segment dict
     segments_cell_id = {}
     # Get vessel type list
-    cell_id_list = find_cell_ids(centerline_graph)
+    cell_id_list = find_cell_ids(local_graph)
     # Iterate over all vessel types in list to find segments for all of them
     for cell_id in cell_id_list:
         # Extract individual segments according to cell id
-        segments_cell_id[cell_id] = get_single_segment(centerline_graph, cell_id, identifier_type = "cell_id")
+        segments_cell_id[cell_id] = get_single_segment(local_graph, cell_id, identifier_type = "cell_id")
         if segments_cell_id[cell_id] is not None:
             # Perform feature extraction
             segments_cell_id[cell_id] = extract_segment_features(segments_cell_id[cell_id])
         
     return segments_cell_id
 
-def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_type"):
+def get_single_segment(local_graph, identifier, identifier_type = "vessel_type"):
     """
     Extracts single centerline segment linked to an identifier (vessel type or cell id).
     Extracted segment will be 2D (no bifurcations), oriented with respect to the aortic 
@@ -198,7 +198,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
 
     Parameters
     ----------
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Dense centerline graph.
     identifier : string or integer
         Can be either vessel type (str) or cell id (int).
@@ -212,13 +212,13 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
         Graph of the individual segment.
     
     """
-    def get_orientation_reference(centerline_graph):
+    def get_orientation_reference(local_graph):
         """
         Get center of mass of aortic arch as orientation reference for segments.
 
         Parameters
         ----------
-        centerline_graph : networkx.Graph
+        local_graph : networkx.Graph
             Dense centerline graph.
 
         Returns
@@ -230,9 +230,9 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
         # Initialize array
         aortic_arch_coordinates = np.ndarray([0, 3])
         # Store all aortic arch coordinates
-        for node in centerline_graph:
-            if centerline_graph.nodes[node]["vessel_type_name"] == "AA":
-                aortic_arch_coordinates = np.append(aortic_arch_coordinates, [centerline_graph.nodes[node]["pos"]], axis = 0)
+        for node in local_graph:
+            if local_graph.nodes[node]["vessel_type_name"] == "AA":
+                aortic_arch_coordinates = np.append(aortic_arch_coordinates, [local_graph.nodes[node]["pos"]], axis = 0)
         # Compute center of mass as mean position of all aortic arch nodes
         return np.mean(aortic_arch_coordinates, axis = 0)
 
@@ -354,8 +354,8 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
     else:
         raise KeyError("Identifier type should be `vessel_type` or `cell_id`")
     
-    # Initialize subsegment graph (it will be a masked centerline_graph)
-    masked_centerline_graph = centerline_graph.copy()
+    # Initialize subsegment graph (it will be a masked local_graph)
+    masked_centerline_graph = local_graph.copy()
     # We want to remove all nodes not connected to at least one edge of the explored vessel type
     remove_nodes = []
     for node in masked_centerline_graph:
@@ -476,7 +476,7 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
             if masked_centerline_graph.degree(node) == 1:
                 end_nodes.append(node)
                 # Compute distance to AA center of mass
-                distance_end_nodes.append(np.linalg.norm(masked_centerline_graph.nodes[node]["pos"] - get_orientation_reference(centerline_graph)))
+                distance_end_nodes.append(np.linalg.norm(masked_centerline_graph.nodes[node]["pos"] - get_orientation_reference(local_graph)))
 
     # Select closest node to reference
     if len(distance_end_nodes) > 0:
@@ -493,8 +493,8 @@ def get_single_segment(centerline_graph, identifier, identifier_type = "vessel_t
                     pass
                 else:
                     masked_centerline_graph[src][dst]["indices"] = np.flip(masked_centerline_graph[src][dst]["indices"])
-                    masked_centerline_graph[src][dst]["coordinate_array"] = np.flip(masked_centerline_graph[src][dst]["coordinate_array"], axis = 0)
-                    masked_centerline_graph[src][dst]["radius_array"] = np.flip(masked_centerline_graph[src][dst]["radius_array"])
+                    masked_centerline_graph[src][dst]["centerline_coordinate_array"] = np.flip(masked_centerline_graph[src][dst]["centerline_coordinate_array"], axis = 0)
+                    masked_centerline_graph[src][dst]["centerline_radius_array"] = np.flip(masked_centerline_graph[src][dst]["centerline_radius_array"])
 
     if len(masked_centerline_graph) > 2:
         return masked_centerline_graph
@@ -1267,7 +1267,7 @@ def clean_azimuth(graph):
     new_graph = graph.copy()
     
     try:
-        segments = get_single_segments_vessel_type(new_graph)
+        segments = get_and_featurize_single_segments_vessel_types(new_graph)
         vessel_types = [vessel_type for vessel_type in segments.keys()]
         vessel_types.reverse()
     except:
@@ -1363,7 +1363,7 @@ def clean_azimuth(graph):
 
 ## Plot functions
 
-def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
+def plot_single_segments(local_graph, segments_vessel_type_dict, show=False, output_path=None):
     """
     Makes graph plot of all individual centerline segments for a case.
 
@@ -1375,9 +1375,9 @@ def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
     ----------
     case_dir : string or path-like object
         Path to case directory. 
-    centerline_graph : networkx.Graph
+    local_graph : networkx.Graph
         Dense centerline graph returned by graph builder.
-    segments_vessel_type : dict
+    segments_vessel_type_dict : dict
         Dictionary with all detected segments as keys and 
         networkx.Graph objects for each segment as values.
 
@@ -1385,51 +1385,55 @@ def plot_single_segments(case_dir, centerline_graph, segments_vessel_type):
     -------
     
     """
-    # Make dummy plot of centerline_graph to get xlim and ylim
+    # Make dummy plot of local_graph to get xlim and ylim
     _ = plt.figure(figsize = [5, 10])
     ax = plt.gca()
     # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
     node_pos_dict_P = {}
-    for n in centerline_graph.nodes():
-        node_pos_dict_P[n] = [-centerline_graph.nodes(data=True)[n]["pos"][0], centerline_graph.nodes(data=True)[n]["pos"][2]]
-    # Draw centerline_graph
+    for n in local_graph.nodes():
+        node_pos_dict_P[n] = [-local_graph.nodes(data=True)[n]["pos"][0], local_graph.nodes(data=True)[n]["pos"][2]]
+    # Draw local_graph
     for _ in range(1):
-        nx.draw(centerline_graph, node_pos_dict_P, node_size=10, ax=ax)
+        nx.draw(local_graph, node_pos_dict_P, node_size=10, ax=ax)
     # get xlim and ylim
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
-    # Determine number of columns according to the number of entries in segments_vessel_type
+    # Determine number of columns according to the number of entries in segments_vessel_type_dict
     # We will limit the number of rows to 2, and adjust the number of columns 
-    if len(segments_vessel_type) % 2 == 0:
-        columns = len(segments_vessel_type) // 2
+    if len(segments_vessel_type_dict) % 2 == 0:
+        columns = len(segments_vessel_type_dict) // 2
     else:
-        columns = len(segments_vessel_type) // 2 + 1
-    rows = len(segments_vessel_type) // columns
-    if len(segments_vessel_type) % columns > 0:
+        columns = len(segments_vessel_type_dict) // 2 + 1
+    rows = len(segments_vessel_type_dict) // columns
+    if len(segments_vessel_type_dict) % columns > 0:
         rows += 1
     # Create template for subplots
     _, ax = plt.subplots(rows, columns, figsize = [5 * columns, 10 * rows])
     # Draw each segment in a subplot space
-    for idx, vessel_type in enumerate(segments_vessel_type.keys()):
+    for idx, vessel_type in enumerate(segments_vessel_type_dict.keys()):
         # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
         node_pos_dict_P = {}
-        for n in segments_vessel_type[vessel_type].nodes():
-            node_pos_dict_P[n] = [-segments_vessel_type[vessel_type].nodes(data=True)[n]["pos"][0], segments_vessel_type[vessel_type].nodes(data=True)[n]["pos"][2]]
+        for n in segments_vessel_type_dict[vessel_type].nodes():
+            node_pos_dict_P[n] = [-segments_vessel_type_dict[vessel_type].nodes(data=True)[n]["pos"][0], segments_vessel_type_dict[vessel_type].nodes(data=True)[n]["pos"][2]]
         
         # If there are multiple axes, use them
         if isinstance(ax, np.ndarray):
             for _ in range(1):
-                nx.draw(segments_vessel_type[vessel_type], node_pos_dict_P, node_size = 10, ax = ax[idx // columns, idx % columns])
+                nx.draw(segments_vessel_type_dict[vessel_type], node_pos_dict_P, node_size = 10, ax = ax[idx // columns, idx % columns])
                 ax[idx // columns, idx % columns].set_title(vessel_type, fontsize=12)
                 ax[idx // columns, idx % columns].set_xlim(xlim)
                 ax[idx // columns, idx % columns].set_ylim(ylim)
         else:
             for _ in range(1):
-                nx.draw(segments_vessel_type[vessel_type], node_pos_dict_P, node_size = 10, ax = ax)
+                nx.draw(segments_vessel_type_dict[vessel_type], node_pos_dict_P, node_size = 10, ax = ax)
                 ax.set_title(vessel_type, fontsize=12)
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
 
-    # Save plot
-    plt.savefig(os.path.join(case_dir, "single_segments.png"))
+    if output_path is not None:
+        plt.savefig(output_path)
+    if show:
+        plt.show()
+    else:
+        plt.close()

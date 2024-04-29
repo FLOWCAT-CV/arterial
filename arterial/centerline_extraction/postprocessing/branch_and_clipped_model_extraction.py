@@ -45,12 +45,10 @@ def extract_branch_model(centerlines_model, BlankingArrayName="Blanking", Radius
     branchExtractor.SetGroupIdsArrayName(GroupIdsArrayName)
     branchExtractor.SetCenterlineIdsArrayName(CenterlineIdsArrayName)
     branchExtractor.SetTractIdsArrayName(TractIdsArrayName)
-    branchExtractor.Update()
 
     # Execute the branch extraction
-    branch_model = branchExtractor.GetOutput()
-    # Execute the branch extraction
     try:
+        branchExtractor.Update()
         branch_model = branchExtractor.GetOutput()
     except:
         print("Centerline branching failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \
@@ -223,10 +221,10 @@ def extract_clipped_model(surface_model, branch_model, BlankingArrayName="Blanki
     branchClipper.SetClipValue(1.)
     branchClipper.SetUseRadiusInformation(True)
     branchClipper.ClipAllCenterlineGroupIdsOn() # Interesting that you can set a list of group Ids and only apply clipping to those groups. See https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchclipper.py for the recipe
-    branchClipper.Update()
 
     # Execute the branch clipping
     try:
+        branchClipper.Update()
         clipped_model = branchClipper.GetOutput()
     except:
         print("Clipping failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \

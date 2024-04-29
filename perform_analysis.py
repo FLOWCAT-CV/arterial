@@ -19,6 +19,8 @@ def main():
     parser.add_argument("-fast", "--fast_segmentation", action="store_true",
         help="Boolean argument to determine if fast segmentation is used or not. Use (True) if fast segmentation is wanted. "
         "Otherwise, full segmentation will be performed. Not required, default = False.")
+    parser.add_argument('-sd', '--sampling_distance_mm', type=int, required=False, default=2,
+        help='Sampling density (in mm) for the dense centerline graph sampling from the centerline models. Not required. Default = 2.')
     parser.add_argument("-ss", "--skip_segmentation", action="store_true",
         help="Boolean argument to determine if segmentation is predicted or not. Use (True) if segmentation is already "
         "predicted, to skip nnUNet inference and save time. If True, there should exist a nifti file with the binary map "
