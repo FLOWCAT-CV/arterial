@@ -6,7 +6,7 @@ class TestCenterlineExtractor(unittest.TestCase):
     def setUp(self):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
-        self.centerline_segments_array_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/centerline_segments_array.npy")
+        self.centerline_segments_array_path = os.path.join(self.case_dir, "input_test_data", "centerline_segments_array.npy")
         self.vesssel_labeller = VesselLabeller(self.case_dir, self.mode, self.centerline_segments_array_path)
 
     def test_init(self):

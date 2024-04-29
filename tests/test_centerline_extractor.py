@@ -6,7 +6,7 @@ class TestCenterlineExtractor(unittest.TestCase):
     def setUp(self):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
-        self.segmentation_nifti_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/segmentation.nii.gz")
+        self.segmentation_nifti_path = os.path.join(self.case_dir, "input_test_data", "segmentation.nii.gz")
         self.fast_segmentation = False
         self.centerline_extractor = CenterlineExtractor(self.case_dir, self.mode, self.segmentation_nifti_path, self.fast_segmentation)
 
