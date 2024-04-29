@@ -5,7 +5,7 @@
 *.pkl
 *test_data/
 batch_processing*
-perform_centerline_extraction.py
+copy_nnunet_models.py
 debugging.py
 *__pycache__/
 *.pyc
