@@ -11,7 +11,7 @@ debugging.py
 *.pyc
 .*
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
-
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
