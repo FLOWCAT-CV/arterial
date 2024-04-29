@@ -19,6 +19,7 @@ setup(
         'nnunetv2',
         'nibabel',
         'networkx',
+        'torch',
         'torch_geometric',
         'torch_scatter',
         'torch_sparse',
