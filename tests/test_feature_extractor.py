@@ -7,10 +7,10 @@ class TestFeatureExtractor(unittest.TestCase):
         self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
         self.mode = "extracranial_vessels"
         self.sampling_distance_mm = 2
-        self.cta_nifti_path = os.path.join(self.case_dir, "input_test_data/cta.nii.gz")
-        self.centerline_segments_array_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/centerline_segments_array.npy")
-        self.branch_model_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/branch_model.vtk")
-        self.segments_graph_pred_path = os.path.join(self.case_dir, f"input_test_data/{self.mode}/segments_graph_pred.pickle")
+        self.cta_nifti_path = os.path.join(self.case_dir, "input_test_data", "cta.nii.gz")
+        self.centerline_segments_array_path = os.path.join(self.case_dir, "input_test_data", "centerline_segments_array.npy")
+        self.branch_model_path = os.path.join(self.case_dir, "input_test_data", "branch_model.vtk")
+        self.segments_graph_pred_path = os.path.join(self.case_dir, "input_test_data", "segments_graph_pred.pickle")
         self.feature_extractor = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path, self.centerline_segments_array_path, self.branch_model_path, self.segments_graph_pred_path)
 
     def test_init(self):

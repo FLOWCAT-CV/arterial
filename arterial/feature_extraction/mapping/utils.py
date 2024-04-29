@@ -1,12 +1,7 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import os, shutil, json
-
-import math
 import numpy as np
 import networkx as nx
-
-import pickle
 
 import matplotlib.pyplot as plt
 from mycolorpy import colorlist as mcp
@@ -530,280 +525,6 @@ def build_supersegments(local_graph, predicted_configurations):
 
     return supersegments
 
-def select_configuration(case_dir, local_graph):
-    """
-    Selects supersegment configuration if patient_configuration.json is present in case_dir.
-    Also adds global features derived from a past intervention to the global attributes of the
-    graph.
-
-    Creats new dir case_dir/thrombectomy_configuration, and stores selected supersegment and image:
-
-    >>> case/dir/thrombectomy_configuration/supersegment.pickle
-    >>> case/dir/thrombectomy_configuration/supersegment.png
-
-    Parameters
-    ----------
-    case_dir : string or path-like object
-        Path to case directory. 
-    local_graph : networkx.Graph
-        Dense centerline graph returned by graph builder.
-
-    Returns
-    -------
-    
-    """
-
-    def select_vertebrobasilar_laterality(graph, laterality):
-        """
-        If, in the patient_configuration.json file, laterality is registered as
-        `Vertebrobasilar`, both vertebral arteries are compared and if one is
-        longer than 3 times the other, that one is chosen. Otherwise, the one 
-        with a larger mean diameter is chosen.
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Centerline graph.
-        laterality : string
-            Should be `Vertebrobasilar`. If no decision can be made between both 
-            vertebral arteries, it will remain unchanged.
-
-        Returns
-        -------
-        laterality : string
-            Laterality of the chosen side.
-        
-        """
-        radius_r, radius_l = [], []
-
-        for node in graph:
-            if graph.nodes[node]["vessel_type_name"] == "RVA":
-                try:
-                    radius_r.append(graph.nodes[node]["features femoral"]["radius"])
-                except:
-                    pass
-            elif graph.nodes[node]["vessel_type_name"] == "LVA":
-                try:
-                    radius_l.append(graph.nodes[node]["features femoral"]["radius"])
-                except:
-                    pass
-
-        if len(radius_r) == 0 and len(radius_l) != 0:
-            return "Left"
-        elif len(radius_r) != 0 and len(radius_l) == 0:
-            return "Right"
-        elif len(radius_r) == 0 and len(radius_l) == 0:
-            return laterality
-        else:
-            if len(radius_r) > 3 * len(radius_l):
-                return "Right"
-            elif len(radius_l) > 3 * len(radius_r):
-                return "Left"
-            else:
-                if np.mean(radius_r) >= np.mean(radius_l):
-                    return "Right"
-                else:
-                    return "Left"
-
-
-    def add_configuration_features(graph, patient_configuration):
-        """
-        Adds global features from patient configuration to graph.
-
-        Paremeters
-        ----------
-        graph : networkx.Graph
-            Graph object where information from the patient configuration will
-            be stored as global attributes.
-        patient_configuration : dict
-            Dictionary with information derived from a past thrombectomy operation.
-
-        Returns
-        -------
-        graph : networkx.Graph
-            Graph with updated global attributes, including features derived on
-            the thrombectomy configuration.
-
-        """
-        # Interventionalist
-        # Define dict
-        interventionalists_dict = {}
-        interventionalists_dict["David"] = 0
-        interventionalists_dict["Tomasello"] = 1
-        interventionalists_dict["Ribo"] = 2
-        interventionalists_dict["Piñana"] = 3
-        interventionalists_dict["Coscojuela"] = 4
-        interventionalists_dict["Remullo"] = 5
-        interventionalists_dict["Bellvitge"] = 6
-        interventionalists_dict["Requena"] = 7
-        interventionalists_dict["Marta"] = 8
-        # Pass to one hot
-        internventionalists_one_hot = np.zeros(9)
-        if patient_configuration["Interventionalist"] in interventionalists_dict.keys():
-            internventionalists_one_hot[interventionalists_dict[patient_configuration["Interventionalist"]]] = 1.
-        graph.graph["Interventionalist"] = internventionalists_one_hot
-
-        # Date
-        year, month, _ = patient_configuration["Date"].split("-")
-        months_from_jan_2018 = 12 * (int(year) - 2018) + int(month) - 1
-        graph.graph["Months from Jan 2018"] = months_from_jan_2018
-
-        # Access
-        if patient_configuration["Access"] == "Femoral":
-            graph.graph["Access"] = 0
-        elif patient_configuration["Access"] == "Radial":
-            graph.graph["Access"] = 1
-        else:
-            graph.graph["Access"] = 2
-
-        # DCP
-        if not math.isnan(patient_configuration["DCP"]):
-            graph.graph["DCP"] = 1
-        else:
-            graph.graph["DCP"] = 0
-
-        # Antero-posterior
-        if patient_configuration["Antero-posterior"] == "Anterior":
-            graph.graph["Antero-posterior"] = 0
-        elif patient_configuration["Antero-posterior"] == "Posterior":
-            graph.graph["Antero-posterior"] = 1
-        else:
-            graph.graph["Antero-posterior"] = 2
-            
-        # Laterality
-        if patient_configuration["Laterality"] == "Right":
-            graph.graph["Laterality"] = 0
-        elif patient_configuration["Laterality"] == "Left":
-            graph.graph["Laterality"] = 1
-        else:
-            graph.graph["Laterality"] = 2
-
-        # Impossible accesses
-        if not math.isnan(patient_configuration["TFA impossible"]):
-            graph.graph["TFA impossible"] = 1
-        else:
-            graph.graph["TFA impossible"] = 0
-            
-        if not math.isnan(patient_configuration["TRA impossible"]):
-            graph.graph["TRA impossible"] = 1
-        else:
-            graph.graph["TRA impossible"] = 0
-
-        # Total supersegment length
-        total_length = 0
-        for node in graph:
-            if graph.nodes[node]["is_supersegment"] > 0.5:
-                total_length += graph.nodes[node]["features"]["segment length"]    
-        graph.graph["Total length"] = total_length
-
-        return graph
-
-    def make_supersegment_plot(case_dir, supersegment, patient_configuration):
-        """
-        Makes plot of supersegment with chosen thrombectomy configuration. Prints 
-        configuration and time to first angiography series acquisition.
-
-        Saves image of supersegment of the patient configuration as:
-
-        >>> case_dir/thrombectomy_configuration/supersegment.png
-
-        Paremeters
-        ----------
-        case_dir : string or path-like object
-            Path to case directory. 
-        supersegment : networkx.Graph
-            Graph containing only the nodes from a supersegment.
-        patient_configuration : dict
-            Dictionary with the necessary information to characterize a thrombectomy.
-
-        Returns
-        -------
-
-        """
-        _ = plt.figure(figsize = [5, 10])
-        ax = plt.gca()
-
-        highlight_node = None
-        for node in supersegment:
-            if supersegment.nodes[node]["hierarchy"] == 0:
-                highlight_node = node
-            
-        colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
-        colorMap = [colorPalette[not supersegment.nodes[node]["is_supersegment"]] for node in supersegment] 
-        
-        if highlight_node is not None:
-            colorMap[highlight_node] = "chartreuse"
-
-        # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
-        node_pos_dict_P = {}
-        for n in supersegment.nodes():
-            node_pos_dict_P[n] = [-supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
-
-        nx.draw(supersegment, node_pos_dict_P, node_size=10, node_color=colorMap)
-        ax.set_title(patient_configuration["Access"] + " + " + patient_configuration["Laterality"] + " + " + patient_configuration["Antero-posterior"] + ". time: " + str(patient_configuration["Time first angiography"]), fontsize=12)
-        ax.set_xlim([-200, 10])
-        ax.set_ylim([-10, 350])
-            
-        plt.savefig(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.png"))
-
-    with open(os.path.join(case_dir, "patient_configuration.json")) as jsonFile:
-        patient_configuration = json.load(jsonFile)[os.path.basename(case_dir)]
-
-    # If laterality for thrombectomy is undetermined but it is known that occlusion was vertebrobasilar, choose side with larger VA (mean radius)
-    if "Vertebrobasilar" in patient_configuration["Laterality"]:
-        patient_configuration["Laterality"] = select_vertebrobasilar_laterality(local_graph, patient_configuration["Laterality"])
-
-    if patient_configuration["Laterality"] in ["Right", "Left"]:
-        configuration_id = 0
-        if patient_configuration["Access"] == "Femoral":
-            configuration_id += 0
-        elif patient_configuration["Access"] == "Radial": 
-            configuration_id += 4
-            
-        if patient_configuration["Laterality"] == "Right":
-            configuration_id += 0
-        elif patient_configuration["Laterality"] == "Left": 
-            configuration_id += 2
-            
-        if patient_configuration["Antero-posterior"] == "Anterior":
-            configuration_id += 0
-        elif patient_configuration["Antero-posterior"] == "Posterior": 
-            configuration_id += 1
-            
-        print("Access:                  ", patient_configuration["Access"])
-        print("Laterality:              ", patient_configuration["Laterality"])
-        print("Antero-posterior:        ", patient_configuration["Antero-posterior"])
-        print("Configuration selected:  ", configuration_id)
-
-        if not os.path.isdir(os.path.join(case_dir, "thrombectomy_configuration")): os.mkdir(os.path.join(case_dir, "thrombectomy_configuration"))
-
-        supersegment_path = "{} + {} + {}.pickle".format(patient_configuration["Access"].lower(), patient_configuration["Laterality"].lower(), patient_configuration["Antero-posterior"].lower())
-        print("Selecting supersegment:", supersegment_path)
-        shutil.copyfile(os.path.join(case_dir, "supersegments", supersegment_path), os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
-        with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "rb") as f:
-            supersegment = pickle.load(f)
-        make_supersegment_plot(case_dir, supersegment, patient_configuration)
-
-        supersegment = add_configuration_features(supersegment, patient_configuration)
-
-        supersegment.graph["features"] = {}
-        for feature in supersegment.graph.keys():
-            if feature not in ["time to first series", "features", "DCP"]:                                                      # Should add more!
-                supersegment.graph["features"][feature] = supersegment.graph[feature]
-
-        # Specially added for database preparation
-        supersegment.graph["time to first series"] = patient_configuration["Time first angiography"]
-        if patient_configuration["Time first angiography"] <= 15:
-            supersegment.graph["time to first series over 15 min"] = 0
-        else:
-            supersegment.graph["time to first series over 15 min"] = 1
-
-        with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "wb") as f:
-            pickle.dump(supersegment, f, protocol = 4)
-
-    else:
-        print("Laterality is ambiguous:", patient_configuration["Laterality"])
-
 def make_supersegment_plots(supersegments, show=False, output_path=None):
     """
     Makes plots for all possible supersegment configurations and saves an
@@ -863,3 +584,279 @@ def make_supersegment_plots(supersegments, show=False, output_path=None):
         plt.show()
     else:
         plt.close()
+
+
+
+# def select_configuration(case_dir, local_graph):
+#     """
+#     Selects supersegment configuration if patient_configuration.json is present in case_dir.
+#     Also adds global features derived from a past intervention to the global attributes of the
+#     graph.
+
+#     Creats new dir case_dir/thrombectomy_configuration, and stores selected supersegment and image:
+
+#     >>> case/dir/thrombectomy_configuration/supersegment.pickle
+#     >>> case/dir/thrombectomy_configuration/supersegment.png
+
+#     Parameters
+#     ----------
+#     case_dir : string or path-like object
+#         Path to case directory. 
+#     local_graph : networkx.Graph
+#         Dense centerline graph returned by graph builder.
+
+#     Returns
+#     -------
+    
+#     """
+
+#     def select_vertebrobasilar_laterality(graph, laterality):
+#         """
+#         If, in the patient_configuration.json file, laterality is registered as
+#         `Vertebrobasilar`, both vertebral arteries are compared and if one is
+#         longer than 3 times the other, that one is chosen. Otherwise, the one 
+#         with a larger mean diameter is chosen.
+
+#         Parameters
+#         ----------
+#         graph : networkx.Graph
+#             Centerline graph.
+#         laterality : string
+#             Should be `Vertebrobasilar`. If no decision can be made between both 
+#             vertebral arteries, it will remain unchanged.
+
+#         Returns
+#         -------
+#         laterality : string
+#             Laterality of the chosen side.
+        
+#         """
+#         radius_r, radius_l = [], []
+
+#         for node in graph:
+#             if graph.nodes[node]["vessel_type_name"] == "RVA":
+#                 try:
+#                     radius_r.append(graph.nodes[node]["features femoral"]["radius"])
+#                 except:
+#                     pass
+#             elif graph.nodes[node]["vessel_type_name"] == "LVA":
+#                 try:
+#                     radius_l.append(graph.nodes[node]["features femoral"]["radius"])
+#                 except:
+#                     pass
+
+#         if len(radius_r) == 0 and len(radius_l) != 0:
+#             return "Left"
+#         elif len(radius_r) != 0 and len(radius_l) == 0:
+#             return "Right"
+#         elif len(radius_r) == 0 and len(radius_l) == 0:
+#             return laterality
+#         else:
+#             if len(radius_r) > 3 * len(radius_l):
+#                 return "Right"
+#             elif len(radius_l) > 3 * len(radius_r):
+#                 return "Left"
+#             else:
+#                 if np.mean(radius_r) >= np.mean(radius_l):
+#                     return "Right"
+#                 else:
+#                     return "Left"
+
+
+#     def add_configuration_features(graph, patient_configuration):
+#         """
+#         Adds global features from patient configuration to graph.
+
+#         Paremeters
+#         ----------
+#         graph : networkx.Graph
+#             Graph object where information from the patient configuration will
+#             be stored as global attributes.
+#         patient_configuration : dict
+#             Dictionary with information derived from a past thrombectomy operation.
+
+#         Returns
+#         -------
+#         graph : networkx.Graph
+#             Graph with updated global attributes, including features derived on
+#             the thrombectomy configuration.
+
+#         """
+#         # Interventionalist
+#         # Define dict
+#         interventionalists_dict = {}
+#         interventionalists_dict["David"] = 0
+#         interventionalists_dict["Tomasello"] = 1
+#         interventionalists_dict["Ribo"] = 2
+#         interventionalists_dict["Piñana"] = 3
+#         interventionalists_dict["Coscojuela"] = 4
+#         interventionalists_dict["Remullo"] = 5
+#         interventionalists_dict["Bellvitge"] = 6
+#         interventionalists_dict["Requena"] = 7
+#         interventionalists_dict["Marta"] = 8
+#         # Pass to one hot
+#         internventionalists_one_hot = np.zeros(9)
+#         if patient_configuration["Interventionalist"] in interventionalists_dict.keys():
+#             internventionalists_one_hot[interventionalists_dict[patient_configuration["Interventionalist"]]] = 1.
+#         graph.graph["Interventionalist"] = internventionalists_one_hot
+
+#         # Date
+#         year, month, _ = patient_configuration["Date"].split("-")
+#         months_from_jan_2018 = 12 * (int(year) - 2018) + int(month) - 1
+#         graph.graph["Months from Jan 2018"] = months_from_jan_2018
+
+#         # Access
+#         if patient_configuration["Access"] == "Femoral":
+#             graph.graph["Access"] = 0
+#         elif patient_configuration["Access"] == "Radial":
+#             graph.graph["Access"] = 1
+#         else:
+#             graph.graph["Access"] = 2
+
+#         # DCP
+#         if not math.isnan(patient_configuration["DCP"]):
+#             graph.graph["DCP"] = 1
+#         else:
+#             graph.graph["DCP"] = 0
+
+#         # Antero-posterior
+#         if patient_configuration["Antero-posterior"] == "Anterior":
+#             graph.graph["Antero-posterior"] = 0
+#         elif patient_configuration["Antero-posterior"] == "Posterior":
+#             graph.graph["Antero-posterior"] = 1
+#         else:
+#             graph.graph["Antero-posterior"] = 2
+            
+#         # Laterality
+#         if patient_configuration["Laterality"] == "Right":
+#             graph.graph["Laterality"] = 0
+#         elif patient_configuration["Laterality"] == "Left":
+#             graph.graph["Laterality"] = 1
+#         else:
+#             graph.graph["Laterality"] = 2
+
+#         # Impossible accesses
+#         if not math.isnan(patient_configuration["TFA impossible"]):
+#             graph.graph["TFA impossible"] = 1
+#         else:
+#             graph.graph["TFA impossible"] = 0
+            
+#         if not math.isnan(patient_configuration["TRA impossible"]):
+#             graph.graph["TRA impossible"] = 1
+#         else:
+#             graph.graph["TRA impossible"] = 0
+
+#         # Total supersegment length
+#         total_length = 0
+#         for node in graph:
+#             if graph.nodes[node]["is_supersegment"] > 0.5:
+#                 total_length += graph.nodes[node]["features"]["segment length"]    
+#         graph.graph["Total length"] = total_length
+
+#         return graph
+
+#     def make_supersegment_plot(case_dir, supersegment, patient_configuration):
+#         """
+#         Makes plot of supersegment with chosen thrombectomy configuration. Prints 
+#         configuration and time to first angiography series acquisition.
+
+#         Saves image of supersegment of the patient configuration as:
+
+#         >>> case_dir/thrombectomy_configuration/supersegment.png
+
+#         Paremeters
+#         ----------
+#         case_dir : string or path-like object
+#             Path to case directory. 
+#         supersegment : networkx.Graph
+#             Graph containing only the nodes from a supersegment.
+#         patient_configuration : dict
+#             Dictionary with the necessary information to characterize a thrombectomy.
+
+#         Returns
+#         -------
+
+#         """
+#         _ = plt.figure(figsize = [5, 10])
+#         ax = plt.gca()
+
+#         highlight_node = None
+#         for node in supersegment:
+#             if supersegment.nodes[node]["hierarchy"] == 0:
+#                 highlight_node = node
+            
+#         colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
+#         colorMap = [colorPalette[not supersegment.nodes[node]["is_supersegment"]] for node in supersegment] 
+        
+#         if highlight_node is not None:
+#             colorMap[highlight_node] = "chartreuse"
+
+#         # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)
+#         node_pos_dict_P = {}
+#         for n in supersegment.nodes():
+#             node_pos_dict_P[n] = [-supersegment.nodes(data=True)[n]["pos"][0], supersegment.nodes(data=True)[n]["pos"][2]]
+
+#         nx.draw(supersegment, node_pos_dict_P, node_size=10, node_color=colorMap)
+#         ax.set_title(patient_configuration["Access"] + " + " + patient_configuration["Laterality"] + " + " + patient_configuration["Antero-posterior"] + ". time: " + str(patient_configuration["Time first angiography"]), fontsize=12)
+#         ax.set_xlim([-200, 10])
+#         ax.set_ylim([-10, 350])
+            
+#         plt.savefig(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.png"))
+
+#     with open(os.path.join(case_dir, "patient_configuration.json")) as jsonFile:
+#         patient_configuration = json.load(jsonFile)[os.path.basename(case_dir)]
+
+#     # If laterality for thrombectomy is undetermined but it is known that occlusion was vertebrobasilar, choose side with larger VA (mean radius)
+#     if "Vertebrobasilar" in patient_configuration["Laterality"]:
+#         patient_configuration["Laterality"] = select_vertebrobasilar_laterality(local_graph, patient_configuration["Laterality"])
+
+#     if patient_configuration["Laterality"] in ["Right", "Left"]:
+#         configuration_id = 0
+#         if patient_configuration["Access"] == "Femoral":
+#             configuration_id += 0
+#         elif patient_configuration["Access"] == "Radial": 
+#             configuration_id += 4
+            
+#         if patient_configuration["Laterality"] == "Right":
+#             configuration_id += 0
+#         elif patient_configuration["Laterality"] == "Left": 
+#             configuration_id += 2
+            
+#         if patient_configuration["Antero-posterior"] == "Anterior":
+#             configuration_id += 0
+#         elif patient_configuration["Antero-posterior"] == "Posterior": 
+#             configuration_id += 1
+            
+#         print("Access:                  ", patient_configuration["Access"])
+#         print("Laterality:              ", patient_configuration["Laterality"])
+#         print("Antero-posterior:        ", patient_configuration["Antero-posterior"])
+#         print("Configuration selected:  ", configuration_id)
+
+#         if not os.path.isdir(os.path.join(case_dir, "thrombectomy_configuration")): os.mkdir(os.path.join(case_dir, "thrombectomy_configuration"))
+
+#         supersegment_path = "{} + {} + {}.pickle".format(patient_configuration["Access"].lower(), patient_configuration["Laterality"].lower(), patient_configuration["Antero-posterior"].lower())
+#         print("Selecting supersegment:", supersegment_path)
+#         shutil.copyfile(os.path.join(case_dir, "supersegments", supersegment_path), os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"))
+#         with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "rb") as f:
+#             supersegment = pickle.load(f)
+#         make_supersegment_plot(case_dir, supersegment, patient_configuration)
+
+#         supersegment = add_configuration_features(supersegment, patient_configuration)
+
+#         supersegment.graph["features"] = {}
+#         for feature in supersegment.graph.keys():
+#             if feature not in ["time to first series", "features", "DCP"]:                                                      # Should add more!
+#                 supersegment.graph["features"][feature] = supersegment.graph[feature]
+
+#         # Specially added for database preparation
+#         supersegment.graph["time to first series"] = patient_configuration["Time first angiography"]
+#         if patient_configuration["Time first angiography"] <= 15:
+#             supersegment.graph["time to first series over 15 min"] = 0
+#         else:
+#             supersegment.graph["time to first series over 15 min"] = 1
+
+#         with open(os.path.join(case_dir, "thrombectomy_configuration", "supersegment.pickle"), "wb") as f:
+#             pickle.dump(supersegment, f, protocol = 4)
+
+#     else:
+#         print("Laterality is ambiguous:", patient_configuration["Laterality"])
