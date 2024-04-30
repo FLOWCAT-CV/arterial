@@ -6,6 +6,7 @@
 *test_data/
 batch_processing*
 copy_nnunet_models.py
+prova_centerline_extraction.py
 debugging.py
 *__pycache__/
 *.pyc
