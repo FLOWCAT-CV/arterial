@@ -5,25 +5,8 @@ import slicer
 import vtk
 
 import numpy as np
-import nibabel as nib
 
-from utils import aortic_arch_endpoint_check, robust_end_point_detection, ica_endpoint_check, inspect_circular_centerlines, compute_frenet_serret, compute_curvature_and_torsion
-
-import signal
-from contextlib import contextmanager
-
-class TimeoutException(Exception): pass
-
-@contextmanager
-def time_limit(seconds):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-    signal.signal(signal.SIGALRM, signal_handler)
-    signal.alarm(seconds)
-    try:
-        yield
-    finally:
-        signal.alarm(0)
+from utils import aortic_arch_endpoint_check, robust_end_point_detection, compute_frenet_serret, compute_curvature_and_torsion
 
 def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node, masked_volume_array):
     """
@@ -72,80 +55,76 @@ def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node,
     print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
     # Now, we iterate over all segments to perform centerline extraction separately
     for segment_id in range(segmentation_node.GetSegmentation().GetNumberOfSegments()):
-        try:
-            with time_limit(3 * 60):
-                print("Segment {}".format(segment_id))
-                print("Saving segmentations...")
-                # Saving segmentation (undivided)
-                surface_model = vtk.vtkPolyData()
-                segmentation_node.GetClosedSurfaceRepresentation(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id), surface_model)
+        print("Segment {}".format(segment_id))
+        print("Saving segmentations...")
+        # Saving segmentation (undivided)
+        surface_model = vtk.vtkPolyData()
+        segmentation_node.GetClosedSurfaceRepresentation(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id), surface_model)
 
-                # Decimating model
-                decimator = vtk.vtkDecimatePro()
-                decimator.SetTargetReduction(0.7)
-                decimator.AddInputData(surface_model)
-                decimator.Update()
-                surface_model = decimator.GetOutput()
-                # We can to compute the normals_filter for all mesh triangles to ensure correct orientation
-                normals_filter = vtk.vtkPolyDataNormals()
-                normals_filter.SetInputData(surface_model)
-                normals_filter.SetFeatureAngle(80)
-                normals_filter.AutoOrientNormalsOn()
-                normals_filter.UpdateInformation()
-                normals_filter.Update()
-                surface_model = normals_filter.GetOutput()
+        # Decimating model
+        decimator = vtk.vtkDecimatePro()
+        decimator.SetTargetReduction(0.7)
+        decimator.AddInputData(surface_model)
+        decimator.Update()
+        surface_model = decimator.GetOutput()
+        # We can to compute the normals_filter for all mesh triangles to ensure correct orientation
+        normals_filter = vtk.vtkPolyDataNormals()
+        normals_filter.SetInputData(surface_model)
+        normals_filter.SetFeatureAngle(80)
+        normals_filter.AutoOrientNormalsOn()
+        normals_filter.UpdateInformation()
+        normals_filter.Update()
+        surface_model = normals_filter.GetOutput()
 
-                # Saving decimated model
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(surface_model)
-                writer.SetFileName(os.path.join(case_dir, mode, "segmentations", f"segmentation_{segment_id}.vtk"))
-                writer.Write()
+        # Saving decimated model
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputData(surface_model)
+        writer.SetFileName(os.path.join(case_dir, mode, "segmentations", f"segmentation_{segment_id}.vtk"))
+        writer.Write()
 
-                # Extract the centerline of the segment_id segment
-                centerline_poly_data = extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine)
+        # Extract the centerline of the segment_id segment
+        centerline_poly_data = extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine)
 
-                # Saving centerlines separately
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
-                writer.Write()
+        # Saving centerlines separately
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputData(centerline_poly_data)
+        writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
+        writer.Write()
 
-                # For the largest segment, we check the existence of circular centerlines. Needs further testing
-                # if segment_id == 0:
-                #     centerline_poly_data = inspect_circular_centerlines(centerline_poly_data, surface_model, segmentation_node, segment_id, affine)
+        # For the largest segment, we check the existence of circular centerlines. Needs further testing
+        # if segment_id == 0:
+        #     centerline_poly_data = inspect_circular_centerlines(centerline_poly_data, surface_model, segmentation_node, segment_id, affine)
 
-                # Smooth centerline model
-                smoothing_filter = vtk.vtkSmoothPolyDataFilter()
-                smoothing_filter.SetInputData(centerline_poly_data)
-                smoothing_filter.SetNumberOfIterations(50)
-                smoothing_filter.SetRelaxationFactor(0.1)
-                smoothing_filter.FeatureEdgeSmoothingOff()
-                smoothing_filter.BoundarySmoothingOn()
-                smoothing_filter.Update()
-                centerline_poly_data = smoothing_filter.GetOutput()
+        # Smooth centerline model
+        smoothing_filter = vtk.vtkSmoothPolyDataFilter()
+        smoothing_filter.SetInputData(centerline_poly_data)
+        smoothing_filter.SetNumberOfIterations(50)
+        smoothing_filter.SetRelaxationFactor(0.1)
+        smoothing_filter.FeatureEdgeSmoothingOff()
+        smoothing_filter.BoundarySmoothingOn()
+        smoothing_filter.Update()
+        centerline_poly_data = smoothing_filter.GetOutput()
 
-                # # Decimate centerline model
-                # decimator = vtk.vtkDecimatePolylineFilter()
-                # decimator.SetTargetReduction(0.8)
-                # decimator.AddInputData(centerline_poly_data)
-                # decimator.Update()
-                # centerline_poly_data = decimator.GetOutput()
+        # # Decimate centerline model
+        # decimator = vtk.vtkDecimatePolylineFilter()
+        # decimator.SetTargetReduction(0.8)
+        # decimator.AddInputData(centerline_poly_data)
+        # decimator.Update()
+        # centerline_poly_data = decimator.GetOutput()
 
-                # Compute Frenet-Serret frame vectors at each point
-                centerline_poly_data = compute_frenet_serret(centerline_poly_data)
-                # Compute curvature and smoothed curvature
-                centerline_poly_data = compute_curvature_and_torsion(centerline_poly_data)
+        # Compute Frenet-Serret frame vectors at each point
+        centerline_poly_data = compute_frenet_serret(centerline_poly_data)
+        # Compute curvature and smoothed curvature
+        centerline_poly_data = compute_curvature_and_torsion(centerline_poly_data)
 
-                # Overwriting centerlines separately after circular centerline inspection and extraction
-                writer = vtk.vtkPolyDataWriter()
-                writer.SetFileVersion(42)
-                writer.SetInputData(centerline_poly_data)
-                writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
-                writer.Write()
-        except TimeoutException as e:
-            print("Timed out for {}.".format(segment_id))
+        # Overwriting centerlines separately after circular centerline inspection and extraction
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileVersion(42)
+        writer.SetInputData(centerline_poly_data)
+        writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
+        writer.Write()
 
 def extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine):  
     """ 

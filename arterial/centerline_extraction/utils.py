@@ -1,7 +1,6 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
  
-import os
-import slicer
+# import slicer
 import vtk
 
 import numpy as np
