@@ -7,6 +7,7 @@
 batch_processing*
 copy_nnunet_models.py
 debugging.py
+dev
 *__pycache__/
 *.pyc
 .*
