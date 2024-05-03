@@ -4,7 +4,7 @@ import vtk
 
 import numpy as np
 
-from arterial.centerline_extraction.preprocessing.utils import split_segmentation, numpy_array_to_vtk_image_data, add_affine_information, resample_vtk_image_data, extract_segmentation_surface
+from arterial.centerline_extraction.preprocessing.utils import split_segmentation, numpy_array_to_vtk_image_data, add_affine_information, resample_vtk_image_data, extract_surface
 
 def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.5, **surface_extraction_parameters):
     """
@@ -34,8 +34,6 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
     appender = vtk.vtkImageAppend()
     appender.SetAppendAxis(2) 
 
-    segmentation_array = np.transpose(segmentation_array, (2, 1, 0)) 
-
     z_threshold = 300
 
     for idx in range(segmentation_array.shape[0] // z_threshold + 1):
@@ -55,7 +53,7 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
     vtk_image_data = appender.GetOutput()
     
     print("    Extracting segmentation surface...")
-    segmentation_model = extract_segmentation_surface(vtk_image_data,  **surface_extraction_parameters)
+    segmentation_model = extract_surface(vtk_image_data,  **surface_extraction_parameters)
 
     return segmentation_model
 
@@ -83,8 +81,11 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         List of segmentation surfaces.
     
     """
+    segmentation_array = np.transpose(segmentation_array, (2, 1, 0)) 
+
     print("Processing complete array...")
-    segmentation_model = compute_segmentation_model(segmentation_array_, segmentation_affine, reduction_factor, **surface_extraction_parameters)
+    # segmentation_model = compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor, **surface_extraction_parameters)
+    segmentation_model = None
 
     print("Splitting segmentation array into islands...")
     segmentation_array_list = split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size=minimum_island_voxel_size)

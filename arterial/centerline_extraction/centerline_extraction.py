@@ -5,7 +5,7 @@ import numpy as np
 
 from vmtk import vtkvmtk
 
-from utils import compute_network_centerlines, get_endpoints, aortic_arch_endpoint_check, robust_endpoint_detection, multi_robust_endpoint_detection
+from arterial.centerline_extraction.utils import compute_network_centerlines, get_endpoints, aortic_arch_endpoint_check, robust_endpoint_detection, multi_robust_endpoint_detection
 
 def get_robuts_endpoints(segmentation_model, segmentation_array, segmentation_affine):
     """
