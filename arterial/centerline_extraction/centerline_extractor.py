@@ -3,7 +3,8 @@
 import os
 
 from arterial.centerline_extraction.utils import volume_sanity_check
-from arterial.centerline_extraction.run_centerline_extraction_slicer import perform_preprocessing_and_centerline_extraction
+from arterial.centerline_extraction.preprocessing.preprocessing import preprocess_segmentation_for_centerline_extraction
+from arterial.centerline_extraction.centerline_extraction import get_robuts_endpoints, extract_centerlines
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import extract_branch_model, unify_branch_models, extract_clipped_model, unify_clipped_models
 from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array
 from arterial.io.load_and_save_operations import *
@@ -51,7 +52,8 @@ class CenterlineExtractor():
         else:
             self.segmentation_nifti_path = segmentation_nifti_path
         self.segmentation_nifti = None
-        self.affine = None
+        self.segmentation_array = None
+        self.segmentation_affine = None
         self.image_shape = None
 
         self.centerlines_dir_path = os.path.join(self.case_dir, self.mode, "centerlines")
@@ -59,8 +61,10 @@ class CenterlineExtractor():
         self.branch_models_dir_path = os.path.join(self.case_dir, self.mode, "branch_models")
         self.clipped_models_dir_path = os.path.join(self.case_dir, self.mode, "clipped_models")
 
-        self.centerline_model_list = []
         self.segmentation_model_list = []
+        self.endpoints_list = []
+        self.centerline_model_list = []
+        self.voronoi_diagrams_list = []
         self.branch_model_list = []
         self.clipped_model_list = []
 
@@ -68,29 +72,50 @@ class CenterlineExtractor():
         self.branch_model_path = os.path.join(self.case_dir, self.mode, "branch_model.vtk")
         self.clipped_model_path = os.path.join(self.case_dir, self.mode, "clipped_model.vtk")
 
-        self.segmentation = None
+        self.segmentation_model = None
         self.branch_model = None
         self.clipped_model = None
 
+
         self.centerline_segments_array_path = os.path.join(self.case_dir, self.mode, "centerline_segments_array.npy")
         self.centerline_segments_array = None
-    
-    def perform_centerline_extraction(self):
+
+    def perform_preprocessing(self, save=True):
         """
-        Runs preprocessing and centerline extraction, including analysis for circular
-        centerlines, all using Slicer and SlicerVMTK functions. Since PythonSlicer
-        functions and Slicer GUI elements are used to run the analysis, there is a need for an 
-        intermediate script that runs a command line command. We use os.system() to do that.        
+        Performs preprocessing of the segmentation nifti file to generate a vtkpolydata 
+        of the segmentation's surface mode, as well as the segmentation model list (each of the
+        large islands in the segmentation).
 
-        At the end of the execution, the following files should be generated:
+        Parameters
+        ----------
+        save : bool, default = True
+            Boolean variable to determine whether to save the segmentation models in the case directory.
 
-        >>> case_dir/{self.mode}/centerlines/centerlines_{idx}.vtk
-        >>> case_dir/{self.mode}/segmentations/segmentation_{idx}.vtk
-        >>> case_dir/{self.mode}/segmentation.vtk
-        >>> case_dir/{self.mode}/segmentation.stl
+        Returns
+        -------
         
-        Acts as a wrapper for the arterial.centerline_extraction.run_centerline_extraction_slicer.
-            perform_preprocessing_and_centerline_extraction() function.
+        """
+        if self.segmentation_array is None or self.segmentation_affine is None:
+            self.load_segmentation_nifti()
+        volume_sanity_check(self.segmentation_array, self.segmentation_affine)
+        self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine)
+        
+        if save:
+            save_vtkpolydata(self.segmentation_model, self.segmentation_path)
+            for idx, segmentation_model in enumerate(self.segmentation_model_list):
+                save_vtkpolydata(segmentation_model, os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk"))
+    
+    def perform_centerline_extraction(self, save=True):
+        """
+        Given that segmentation models have been previously extracted, this function
+        automatically detects endpoints based on the extraction of the centerline network (VMTK)
+        from the segmentation models and relocates endpoints if needed for robust centerline extraction.
+        Then, it runs the extraction of centerline models using VMTK from the segmentation models.
+
+        This full implementation is based on the VTMK package and the VMTK Slicer extension:
+
+        > https://github.com/vmtk/vmtk
+        > https://github.com/vmtk/SlicerExtension-VMTK/
 
         Parameters
         ----------
@@ -99,28 +124,24 @@ class CenterlineExtractor():
         -------
 
         """
-        os.makedirs(self.centerlines_dir_path, exist_ok=True)
-        os.makedirs(self.segmentations_dir_path, exist_ok=True)
+        if save:
+            os.makedirs(self.centerlines_dir_path, exist_ok=True)
+            os.makedirs(self.segmentations_dir_path, exist_ok=True)
 
-        if not os.path.isfile(self.segmentation_nifti_path): 
-            raise FileNotFoundError(f"Segmentation nifti file not found: {self.segmentation_nifti_path}. \nPlease run segmentation first.")
-    
-        if self.mode == "extracranial_vessels":
+        if self.segmentation_model is None:
+            self.perform_preprocessing()
+        if self.segmentation_array is None or self.segmentation_affine is None:
             self.load_segmentation_nifti()
-            # Perform volume sanity check
-            volume_sanity_check(self.segmentation_nifti)
 
-        # For preprocessing and centerline extraction we have to rely on using Slicer and SlicerVMTK functions
-        # This is due to the fact that the AutoDetectEndpoints functionality from VMTK is only available in the
-        # SlicerVMTK extension, and not in the VMTK library.
-        # Thus, this function is a wrapper for a CLI call to a Python script that runs Slicer to obtain 3D models
-        # resulting from the segementer.
-        print("Performing preprocessing and centerline extraction in Slicer...")
-        perform_preprocessing_and_centerline_extraction(self.case_dir, self.segmentation_nifti_path, self.mode, self.fast_segmentation)
-
-        self.centerline_model_list = load_vtk_list_from_dir(self.centerlines_dir_path)
-        self.segmentation_model_list = load_vtk_list_from_dir(self.segmentations_dir_path)
-        self.segmentation = load_vtkpolydata(self.segmentation_path)
+        for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
+            self.endpoints_list.append(get_robuts_endpoints(segmentation_model_idx, self.segmentation_array, self.segmentation_affine))
+            centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.endpoints_list[idx])
+            self.centerline_model_list.append(centerlines)
+            self.voronoi_diagrams_list.append(voronoi_diagram)
+    
+        if save:
+            for idx, centerline_model in enumerate(self.centerline_model_list):
+                save_vtkpolydata(centerline_model, os.path.join(self.centerlines_dir_path, f"centerlines_{idx}.vtk"))
         
     def perform_branch_model_extraction(self, save=True):
         """
@@ -234,7 +255,8 @@ class CenterlineExtractor():
             raise FileNotFoundError(f"Segmentation nifti file not found: {self.segmentation_nifti_path}. \nPlease run segmentation first.")
 
         self.segmentation_nifti = load_nifti(self.segmentation_nifti_path)
-        self.affine = self.segmentation_nifti.affine
+        self.segmentation_array = self.segmentation_nifti.get_fdata()
+        self.segmentation_affine = self.segmentation_nifti.affine
         self.image_shape = self.segmentation_nifti.shape
 
     def load_centerline_model_list(self):
@@ -256,7 +278,7 @@ class CenterlineExtractor():
     def load_segmentation(self):
         if not os.path.isfile(self.segmentation_path):
             raise FileNotFoundError(f"Segmentation file not found: {self.segmentation_path}. \nPlease run centerline extraction first.")
-        self.segmentation = load_vtkpolydata(self.segmentation_path)
+        self.segmentation_model = load_vtkpolydata(self.segmentation_path)
 
     def load_branch_model_list(self):
         if not os.path.isdir(self.branch_models_dir_path):

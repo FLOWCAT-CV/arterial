@@ -1,106 +1,187 @@
-#   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+#   Copyright 2024 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
+import vtk
 import numpy as np
+from skimage import measure
 
-from scipy.ndimage import gaussian_filter
-
-def get_bounding_box_limits_3d(img):
+# Split segmentation_array in a list of arrays with the different islands
+def split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size):
     """
-    Computes bounding box (only z axis) of a numpy array (expects an array 
-    with zeros as background).
+    Splits binary array into a list of binary arrays with the different islands.
 
     Parameters
     ----------
-    img : numpy.array or array-like object
-        3D numpy binary (0, 1) array.
+    segmentation_array : numpy.array
+        Binary array to be split into islands.
 
     Returns
     -------
-    min_lr : integer
-        Lower bound on axis x, LR (in voxel coordinates).
-    max_lr : integer
-        Upper bound on axis x, LR (in voxel coordinates).
-    min_pa : integer
-        Lower bound on axis y, PA (in voxel coordinates).
-    max_pa : integer
-        Upper bound on axis y, PA (in voxel coordinates).
-    min_is : integer
-        Lower bound on axis z, IS (in voxel coordinates).
-    max_is : integer
-        Upper bound on axis z, IS (in voxel coordinates).
-
-    """
-    axis_left_right = np.any(img, axis=(0, 1))
-    axis_posterior_anterior = np.any(img, axis=(0, 2))
-    axis_inferior_superior = np.any(img, axis=(1, 2))
-
-    min_lr, max_lr = np.where(axis_left_right)[0][[0, -1]]
-    min_pa, max_pa = np.where(axis_posterior_anterior)[0][[0, -1]]
-    min_is, max_is = np.where(axis_inferior_superior)[0][[0, -1]]
-
-    return min_lr, max_lr, min_pa, max_pa, min_is, max_is
-
-def patchwise_smoothing(masked_volume_array, patch_shape = (50, 50, 50), max_sigma = 1):
-    """
-    Applies Gaussian smoothing to a 3D volume in a patchwise manner.
-
-    Parameters
-    ----------
-    masked_volume_array : numpy.array or array-like object
-        3D numpy binary (0, 1) array representing the volume to be smoothed.
-    patch_shape : tuple of integers, optional
-        The shape of the patches to be used for smoothing. Default is (50, 50, 50).
-    max_sigma : float, optional
-        The maximum sigma value to be used for Gaussian smoothing. Default is 1.
-
-    Returns
-    -------
-    smoothed_volume_array : numpy.array
-        The smoothed 3D volume.
-
-    """
+    segmentation_array_list : list
+        List of binary arrays with the different islands.
     
-    # Initialize smoothed_volume_array with the same shape as masked_volume_array
-    smoothed_volume_array = np.zeros_like(masked_volume_array)
-    # Iterate over the volume with strides equal to the patch size
-    for i in range(0, masked_volume_array.shape[0], patch_shape[0]):
-        for j in range(0, masked_volume_array.shape[1], patch_shape[1]):
-            for k in range(0, masked_volume_array.shape[2], patch_shape[2]):
-                # Extract the current patch from the volume
-                patch = masked_volume_array[i:i+patch_shape[0], j:j+patch_shape[1], k:k+patch_shape[2]]
-                # Compute the density of ones in the patch
-                density = np.count_nonzero(patch) / patch.size
-                # Compute the sigma for Gaussian smoothing
-                sigma = max_sigma * density
-                # Apply Gaussian smoothing to the patch
-                smoothed_patch = gaussian_filter(patch.astype(float), sigma)
-                # Binarize the smoothed patch with a threshold of 0.5
-                smoothed_patch = np.where(smoothed_patch > 0.1, 1, 0)
-                # Assign the smoothed patch back to smoothed_volume_array
-                smoothed_volume_array[i:i+patch_shape[0], j:j+patch_shape[1], k:k+patch_shape[2]] = smoothed_patch
-
-    return smoothed_volume_array
-
-def get_compatible_patch_shape(volume_array_shape, desired_patch_shape):
     """
-    Computes a patch shape that is compatible with the volume array shape.
+    label_mask = measure.label(segmentation_array)
+    values, counts = np.unique(label_mask, return_counts=True)
+
+    # Compute minimum island voxel size, taking into account reference voxel size
+    # voxel size of 0.43 * 0.43 * 0.4 mm^3
+    reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
+    # Get voxel size from image
+    voxel_size = np.abs(np.prod([segmentation_affine[idx, idx] for idx in range(3)]))
+    # Compute approximate number of voxels
+    minimum_island_voxel_size_ = round(minimum_island_voxel_size * (reference_voxel_size / voxel_size))
+
+    segmentation_array_list = []
+    for idx in range(len(values)):
+        if values[idx] == 0:
+            continue
+        if counts[idx] >= minimum_island_voxel_size_:
+            segmentation_array_list.append(np.where(label_mask == values[idx], 1., 0.).astype(np.uint8))
+
+    return segmentation_array_list
+
+def numpy_array_to_vtk_image_data(numpy_array):
+    """
+    Convert a numpy array to a VTK ImageData object.
 
     Parameters
     ----------
-    volume_array_shape : tuple of integers
-        The shape of the volume array.
-    desired_patch_shape : tuple of integers
-        The desired patch shape.
+    numpy_array : numpy.array
+        The numpy array to be converted.
 
     Returns
     -------
-    compatible_shape : tuple of integers
-        The computed patch shape that is compatible with the volume array shape.
+    vtkImageData : vtkImageData
+        The converted vtkImageData.
+        
 
     """
-    compatible_shape = []
-    for v, b in zip(volume_array_shape, desired_patch_shape):
-        while v % b != 0:
-            b -= 1
-        compatible_shape.append(b)
-    return tuple(compatible_shape)
+    # Ensure the numpy array is C-contiguous
+    numpy_array = np.ascontiguousarray(numpy_array)
+    # Convert a numpy array to a VTK ImageData object
+    importer = vtk.vtkImageImport()
+    importer.CopyImportVoidPointer(numpy_array, numpy_array.nbytes)
+    importer.SetDataScalarTypeToUnsignedChar()
+    importer.SetNumberOfScalarComponents(1)
+    importer.SetDataExtent(0, numpy_array.shape[2] - 1, 0, numpy_array.shape[1] - 1, 0, numpy_array.shape[0] - 1)
+    importer.SetWholeExtent(0, numpy_array.shape[2] - 1, 0, numpy_array.shape[1] - 1, 0, numpy_array.shape[0] - 1)
+    importer.Update()
+    return importer.GetOutput()
+
+def add_affine_information(vtk_image_data, affine=None):
+    """
+    Add affine information to a vtkImageData object.
+    
+
+    Parameters
+    ----------
+    vtk_image_data : vtkImageData
+        The vtkImageData object to which to add the affine information.
+        
+    affine : numpy.array
+        The affine information to be added.
+
+    Returns
+    -------
+    vtkImageData : vtkImageData
+        The vtkImageData object with the added affine information.
+        
+    
+    """
+    vtk_image_data.SetOrigin(affine[:3, 3])
+    vtk_image_data.SetSpacing(affine[0, 0], affine[1, 1], affine[2, 2])
+    vtk_image_data.SetDirectionMatrix(np.sign(affine[0, 0]) * 1., 0., 0., 0., np.sign(affine[1, 1]) * 1., 0., 0., 0., np.sign(affine[2, 2]) * 1.)
+    return vtk_image_data
+
+def resample_vtk_image_data(vtk_image_data, reduction_factor=0.5):
+    """
+    Resample the vtkImageData to reduce its resolution. Otherwise we would find that
+    
+    for images larger than approximately [512, 512, 600] the process crashes.
+
+    Parameters
+    ----------
+    vtk_image_data : vtkImageData
+        The original image data.
+    reduction_factor : float
+        The factor to which to reduce the resolution. For example, 0.5 will reduce the 
+        number of points to about half along each dimension, while 0.8 will reduce the
+        number of points to about 80% along each dimension.
+
+    Returns
+    -------
+    vtkImageData : vtkImageData
+        The resampled image data.
+
+    """
+    resample = vtk.vtkImageResample()
+    resample.SetInputData(vtk_image_data)
+    resample.SetAxisMagnificationFactor(0, reduction_factor)
+    resample.SetAxisMagnificationFactor(1, reduction_factor)
+    resample.SetAxisMagnificationFactor(2, reduction_factor)
+    resample.SetInterpolationMode(vtk.VTK_RESLICE_NEAREST)
+    resample.Update()
+    return resample.GetOutput()
+
+def extract_surface(vtk_image_data, **surface_extraction_parameters):
+    """
+    Extract the surface vtkPolyData from a vtkImageData object.
+    First caps the holes in the surface, then smooths the surface, 
+    and finally computes the normals.
+
+    Parameters
+    ----------
+    vtk_image_data : vtkImageData
+        The vtkImageData object from which to extract the surface.
+    threshold : float
+        The threshold value for the marching cubes algorithm.
+    n_iteration_smoothing : int
+        The number of iterations for the vtkWindowedSincPolyDataFilter 
+        smoothing algorithm.
+    feature_angle : float
+        The feature angle for the smoothing algorithm.
+    pass_band : float
+        The pass band for the smoothing algorithm.
+
+    Returns
+    -------
+    segmentation_model : vtkPolyData
+        The extracted surface.
+
+    """
+    threshold = surface_extraction_parameters.get('threshold', 0.5)
+    n_iteration_smoothing = surface_extraction_parameters.get('n_iteration_smoothing', 30)
+    feature_angle = surface_extraction_parameters.get('feature_angle', 120.)
+    pass_band = surface_extraction_parameters.get('pass_band', 0.1)
+
+    # Extract surface using the marching cubes algorithm
+    surface_extractor = vtk.vtkMarchingCubes()
+    surface_extractor.SetInputData(vtk_image_data)
+    surface_extractor.SetValue(0, threshold) 
+    surface_extractor.Update()
+
+    fill_holes = vtk.vtkFillHolesFilter()
+    fill_holes.SetInputConnection(surface_extractor.GetOutputPort())
+    fill_holes.SetHoleSize(1000.0)  # Large enough to cover the expected hole size
+    fill_holes.Update()
+    
+    # Smooth the extracted surface
+    smoother = vtk.vtkWindowedSincPolyDataFilter()
+    smoother.SetInputConnection(fill_holes.GetOutputPort())
+    smoother.SetNumberOfIterations(n_iteration_smoothing)  # Adjust based on desired smoothness
+    smoother.BoundarySmoothingOff()
+    smoother.FeatureEdgeSmoothingOff()
+    smoother.SetFeatureAngle(feature_angle)
+    smoother.SetPassBand(pass_band)  # Lower is smoother. It's effect depends on the resolution of the surface
+    smoother.NonManifoldSmoothingOn()
+    smoother.NormalizeCoordinatesOn()
+    smoother.Update()
+
+    normals_generator = vtk.vtkPolyDataNormals()
+    normals_generator.SetInputConnection(smoother.GetOutputPort())
+    normals_generator.ComputePointNormalsOn()  
+    normals_generator.ComputeCellNormalsOn()   
+    normals_generator.SplittingOff()           
+    normals_generator.Update()
+    
+    return normals_generator.GetOutput()
