@@ -1,256 +1,132 @@
-#   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-
-import os
-import slicer
+#   Copyright 2024 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 import vtk
 
 import numpy as np
 
-from utils import aortic_arch_endpoint_check, robust_end_point_detection, compute_frenet_serret, compute_curvature_and_torsion
+from vmtk import vtkvmtk
 
-def centerline_extraction(case_dir, segmentation_nifti, mode, segmentation_node, masked_volume_array):
+from utils import compute_network_centerlines, get_endpoints, aortic_arch_endpoint_check, robust_endpoint_detection, multi_robust_endpoint_detection
+
+def get_robuts_endpoints(segmentation_model, segmentation_array, segmentation_affine):
     """
-    Extracts centerline using Slicer's VMTK module. Processes all segments in the input 
-    segmentation_node individually to generate independent centerline models for each 
-    segmentation. 
+    Computed a set of robust endpoints for a segmentation surface model. It first
+    computes the centerline network of the segmentation and then extracts the endpoints.
+    The endpoints are then checked for the presence of the aortic arch and replaced with
+    more robust endpoints.
 
-    Uses VMTK's auto-endpoint detection optimized for improved robustness.
-    
-    Writes centerlines{idx}.vtk for idx in range(N), where N is the number of independent 
-    segments, containing the vtkPolyData object of the centerline models, for the number 
-    of present segments, as well as a decimated surface model, (decimatedSegmnetation{idx}.vtk) 
-    reduced by 70% from the original amount of triangles for speed.
-
-    Saves centerlines and surface models as:
-
-    >>> case_dir/centerlines/centerlines{idx}.vtk
-    >>> case_dir/segmentations/segmentation{idx}.vtk
-
-    Paremeters
-    ----------
-    case_dir : string or path-like object 
-        Path to the directory containing the binary mask nifti. All segmentations will be 
-        saved in this directory.
-    mode: string, default = "extracranial_vessels"
-            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
-            or `thrombus`. 
-    segmentation_node : slicer segmentation_node
-        Segmentation node containing one or more separate segments.
-    masked_volume_array : numpy.array
-        Binary array of the segmentation mask after removal of the foreground voxels
-        of the upper 80% of the segmentation's bounding box.
-
-    Returns
-    -------
-    
-    """
-    # Create directories to store centerline and segmentation volume models
-    os.makedirs(os.path.join(case_dir, mode), exist_ok=True)
-    os.makedirs(os.path.join(case_dir, mode, "centerlines"), exist_ok=True)
-    os.makedirs(os.path.join(case_dir, mode, "segmentations"), exist_ok=True)
-
-    # Get the affine matrix
-    affine = segmentation_nifti.affine
-
-    print("Beginning centerline extraction. Total number of segments: {}".format(segmentation_node.GetSegmentation().GetNumberOfSegments()))
-    # Now, we iterate over all segments to perform centerline extraction separately
-    for segment_id in range(segmentation_node.GetSegmentation().GetNumberOfSegments()):
-        print("Segment {}".format(segment_id))
-        print("Saving segmentations...")
-        # Saving segmentation (undivided)
-        surface_model = vtk.vtkPolyData()
-        segmentation_node.GetClosedSurfaceRepresentation(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id), surface_model)
-
-        # Decimating model
-        decimator = vtk.vtkDecimatePro()
-        decimator.SetTargetReduction(0.7)
-        decimator.AddInputData(surface_model)
-        decimator.Update()
-        surface_model = decimator.GetOutput()
-        # We can to compute the normals_filter for all mesh triangles to ensure correct orientation
-        normals_filter = vtk.vtkPolyDataNormals()
-        normals_filter.SetInputData(surface_model)
-        normals_filter.SetFeatureAngle(80)
-        normals_filter.AutoOrientNormalsOn()
-        normals_filter.UpdateInformation()
-        normals_filter.Update()
-        surface_model = normals_filter.GetOutput()
-
-        # Saving decimated model
-        writer = vtk.vtkPolyDataWriter()
-        writer.SetFileVersion(42)
-        writer.SetInputData(surface_model)
-        writer.SetFileName(os.path.join(case_dir, mode, "segmentations", f"segmentation_{segment_id}.vtk"))
-        writer.Write()
-
-        # Extract the centerline of the segment_id segment
-        centerline_poly_data = extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine)
-
-        # Saving centerlines separately
-        writer = vtk.vtkPolyDataWriter()
-        writer.SetFileVersion(42)
-        writer.SetInputData(centerline_poly_data)
-        writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
-        writer.Write()
-
-        # For the largest segment, we check the existence of circular centerlines. Needs further testing
-        # if segment_id == 0:
-        #     centerline_poly_data = inspect_circular_centerlines(centerline_poly_data, surface_model, segmentation_node, segment_id, affine)
-
-        # Smooth centerline model
-        smoothing_filter = vtk.vtkSmoothPolyDataFilter()
-        smoothing_filter.SetInputData(centerline_poly_data)
-        smoothing_filter.SetNumberOfIterations(50)
-        smoothing_filter.SetRelaxationFactor(0.1)
-        smoothing_filter.FeatureEdgeSmoothingOff()
-        smoothing_filter.BoundarySmoothingOn()
-        smoothing_filter.Update()
-        centerline_poly_data = smoothing_filter.GetOutput()
-
-        # # Decimate centerline model
-        # decimator = vtk.vtkDecimatePolylineFilter()
-        # decimator.SetTargetReduction(0.8)
-        # decimator.AddInputData(centerline_poly_data)
-        # decimator.Update()
-        # centerline_poly_data = decimator.GetOutput()
-
-        # Compute Frenet-Serret frame vectors at each point
-        centerline_poly_data = compute_frenet_serret(centerline_poly_data)
-        # Compute curvature and smoothed curvature
-        centerline_poly_data = compute_curvature_and_torsion(centerline_poly_data)
-
-        # Overwriting centerlines separately after circular centerline inspection and extraction
-        writer = vtk.vtkPolyDataWriter()
-        writer.SetFileVersion(42)
-        writer.SetInputData(centerline_poly_data)
-        writer.SetFileName(os.path.join(case_dir, mode, "centerlines", f"centerlines_{segment_id}.vtk"))
-        writer.Write()
-
-def extract_centerline(segmentation_node, mode, segment_id, masked_volume_array, affine):  
-    """ 
-    Extracts the centerline model node from the segmentation_node for the corresponding 
-    segment_id using Slicer's VMTK extension.
+    These functions intend to replicate the behiavior of the auto-detect endpoints function
+    from the VKTK Slicer extension. 
 
     Parameters
-    ---------- 
-    segmentation_node : vtkMRMLSegmentationNode
-        MRML segmentation node.
-    mode: string, default = "extracranial_vessels"
-            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
-            or `thrombus`. 
-    segment_id : integer
-        Segment identifier in the segmentation_node.
-    masked_volume_array : numpy.array
-        Binary array of the segmentation mask after removal of the foreground voxels
-        of the upper 80% of the segmentation's bounding box.
-    affine : numpy.array or array-like object. Shape: 4 x 4
-        Affine matrix corresponding to the nifti file. RAS to ijk transformation.
-    intracranial: bool, default: False
-        If not intracranial, checks that the AA endpoints are well-placed. If intracranial, 
-        it checks that both ICAs have endpoints and that the startpoint is the left ICA.
+    ----------
+    segmentation_model : vtkPolyData
+        The segmentation surface model.
+    segmentation_array : numpy.array
+        Binary array to be segmented.
+    segmentation_affine : numpy.array
+        Affine transformation of the binary array.
 
     Returns
     -------
-    centerline_poly_data : vtk.vtkPolyData
-        Centerline model in vtkPolyData form for segment_id segment.
+    endpoints : list
+        A list of 3D ijk coordinates of the robust endpoints.
 
     """
-    # Set up extract centerline widget
-    extract_centerline_widget = None
-    parameter_node = None
-    # Instance Extract Centerline Widget
-    extract_centerline_widget = slicer.modules.extractcenterline.widgetRepresentation().self()
-    # Set up parameter node
-    parameter_node = slicer.mrmlScene.GetSingletonNode("ExtractCenterline", "vtkMRMLScriptedModuleNode")
-    extract_centerline_widget.setParameterNode(parameter_node)
-    extract_centerline_widget.setup()
+    # Computes the centerline network of the segmentation
+    network_centerlines = compute_network_centerlines(segmentation_model)
+    # Extracts the endpoints (direct implementation of the getEndPoints function of the VKTK Slicer extension)
+    endpoints = get_endpoints(network_centerlines, None)
+    # Converts the endpoints to numpy arrays
+    for idx, endpoint in enumerate(endpoints):
+        endpoints[idx] = np.array(endpoint)
+    # Checks the presence of the aortic arch endpoints
+    endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
+    # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
+    endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10)
+    # endpoints = multi_robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10, max_workers=10)
 
-    # Update from GUI to get segmentation_node as inputSurfaceNode
-    extract_centerline_widget.updateParameterNodeFromGUI()
-    # Set network node reference to new empty node
-    extract_centerline_widget._parameterNode.SetNodeReferenceID("InputSurface", segmentation_node.GetID())
-    extract_centerline_widget.ui.inputSegmentSelectorWidget.setCurrentSegmentID(segmentation_node.GetSegmentation().GetNthSegmentID(segment_id))
+    return endpoints
 
-    print("Automatic endpoint extraction...")
-    # Autodetect endpoints
-    extract_centerline_widget.onAutoDetectEndPoints()
-    extract_centerline_widget.updateGUIFromParameterNode()
+def extract_centerlines(segmentation_model, endpoints):
+    """
+    Compute centerline.
+    This is more robust and accurate but takes longer than the network extraction.
+    :param segmentation_model:
+    :param endPointsMarkupsNode:
+    :return:
+    """
+    # Cap all the holes that are in the mesh that are not marked as endpoints
+    # Maybe this is not needed.
+    cap_displacement = 0.0
+    surface_capper = vtkvmtk.vtkvmtkCapPolyData()
+    surface_capper.SetInputData(segmentation_model)
+    surface_capper.SetDisplacement(cap_displacement)
+    surface_capper.SetInPlaneDisplacement(cap_displacement)
+    surface_capper.Update()
 
-    # Get volume node array from segmentation node
-    label_map_volume_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
-    slicer.modules.segmentations.logic().ExportAllSegmentsToLabelmapNode(segmentation_node, label_map_volume_node)
-    segmentation_array = slicer.util.arrayFromVolume(label_map_volume_node)
+    if len(endpoints) < 2:
+        raise ValueError("At least two endpoints are needed for centerline extraction")
 
-    # Get affine matrix from segmentation label_map_volume_node
-    vtk_aff = vtk.vtkMatrix4x4()
-    aff_eye = np.eye(4)
-    label_map_volume_node.GetIJKToRASMatrix(vtk_aff)
-    vtk_aff.DeepCopy(aff_eye.ravel(), vtk_aff)
+    tube_poly_data = surface_capper.GetOutput()
+    pos = [0.0, 0.0, 0.0]
+    # It seems that vtkvmtkComputationalGeometry does not need holes (unlike network extraction, which does need one hole)
+    # # Punch holes at surface endpoints to have tubular structure
+    # tube_poly_data = surface_capper.GetOutput()
+    # numberOfEndpoints = endPointsMarkupsNode.GetNumberOfControlPoints()
+    # for pointIndex in range(numberOfEndpoints):
+    #     endPointsMarkupsNode.GetNthControlPointPosition(pointIndex, pos)
+    #     self.openSurfaceAtPoint(tube_poly_data, pos)
 
-    # Get endpoints node
-    endpoints_node = slicer.util.getNode(extract_centerline_widget._parameterNode.GetNodeReferenceID("EndPoints"))
+    number_of_control_points = len(endpoints)
+    found_start_point = False # Startpoint at index 0
 
-    if mode == "intracranial_vessels":
-        if segment_id == 0:
-            pass
-            # endpoints_node = ica_endpoint_check(endpoints_node, masked_volume_array, affine)
-    elif mode == "extracranial_vessels":
-        # Check if both ends of the aortic arch have at least one endpoint
-        if segment_id == 0:
-            endpoints_node = aortic_arch_endpoint_check(endpoints_node, masked_volume_array, affine)
+    source_id_list = vtk.vtkIdList()
+    target_id_list = vtk.vtkIdList()
 
-    print("Relocating endpoints for robust centerline extraction...")
-    # Relocate endpoints for robust centerline extraction 
-    for idx in range(endpoints_node.GetNumberOfControlPoints()):
-        endpoint = np.array(endpoints_node.GetCurvePoints().GetPoint(idx))
-        if idx == 0:
-            new_endpoint = robust_end_point_detection(endpoint, segmentation_array, aff_eye, n = 30) # Center of mass of closest component method
+    point_locator = vtk.vtkPointLocator()
+    point_locator.SetDataSet(tube_poly_data)
+    point_locator.BuildLocator()
+
+    for control_point_index in range(number_of_control_points):
+        is_target = True
+        if not found_start_point and control_point_index == 0:
+            # If no start point found then use the first point as source
+            is_target = False
+        pos = endpoints[control_point_index]
+        # locate the point on the surface
+        point_id = point_locator.FindClosestPoint(pos)
+        if is_target:
+            target_id_list.InsertNextId(point_id)
         else:
-            new_endpoint = robust_end_point_detection(endpoint, segmentation_array, aff_eye) # Center of mass of closest component method
-        endpoints_node.SetNthControlPointPosition(idx, new_endpoint[0],
-                                                       new_endpoint[1],
-                                                       new_endpoint[2])
+            source_id_list.InsertNextId(point_id)
 
-    print("Extracting centerline...")
-    # Create new Surface model node for the centerline model
-    centerline_model_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
-    # Set centerline node reference to new empty node
-    extract_centerline_widget._parameterNode.SetNodeReferenceID("CenterlineModel", centerline_model_node.GetID())
-    extract_centerline_widget.onApplyButton()
+    centerline_filter = vtkvmtk.vtkvmtkPolyDataCenterlines()
+    centerline_filter.SetInputData(tube_poly_data)
+    centerline_filter.SetSourceSeedIds(source_id_list)
+    centerline_filter.SetTargetSeedIds(target_id_list)
+    centerline_filter.SetRadiusArrayName("MaximumInscribedSphereRadius")
+    centerline_filter.SetCostFunction('1/R')  # this makes path search prefer go through points with large radius
+    centerline_filter.SetFlipNormals(False)
+    centerline_filter.SetAppendEndPointsToCenterlines(0)
 
-    print("Checking for floating centerlines (errors)...")
-    # Check if all centerlines depart from the same origin. Dismiss the ones that don't, they are most likely floating
-    centerline_poly_data = centerline_model_node.GetPolyData()
+    # Voronoi smoothing slightly improves connectivity
+    # Unfortunately, Voronoi smoothing is broken if VMTK is used with VTK9, therefore
+    # disable this feature for now (https://github.com/vmtk/SlicerExtension-VMTK/issues/34)
+    enable_voronoi_smoothing = False
+    centerline_filter.SetSimplifyVoronoi(enable_voronoi_smoothing)
 
-    # Declare empty arrays
-    cells_id_array = np.ndarray([centerline_poly_data.GetNumberOfCells()], dtype=int)
-    cell_first_coordinate_array = np.ndarray([centerline_poly_data.GetNumberOfCells(), 3])
+    centerline_filter.SetCenterlineResampling(0)
+    centerline_filter.SetResamplingStepLength(1.0)
+    centerline_filter.Update()
 
-    # Iterate over cells to extract cell IDs, positions and radii. Store lengths of cells
-    for cell_id in range(centerline_poly_data.GetNumberOfCells()):
-        cells_id_array[cell_id] = cell_id
-        cell = vtk.vtkGenericCell()
-        centerline_poly_data.GetCell(cell_id, cell)
-        cell_first_coordinate_array[cell_id] = np.matmul(affine, np.append(cell.GetPoints().GetPoint(0), 1.0))[:3]
+    if not centerline_filter.GetOutput():
+        raise ValueError("Failed to compute centerline (no output was generated)")
+    centerlines = vtk.vtkPolyData()
+    centerlines.DeepCopy(centerline_filter.GetOutput())
 
-    unique_cell_first_coordinate_array, counts = np.unique(cell_first_coordinate_array, return_counts=True, axis=0)
+    if not centerline_filter.GetVoronoiDiagram():
+        raise ValueError("Failed to compute centerline (no Voronoi diagram was generated)")
+    voronoi_diagram = vtk.vtkPolyData()
+    voronoi_diagram.DeepCopy(centerline_filter.GetVoronoiDiagram())
 
-    # Get all those that do not start at the startpoint
-    remove_floating = []
-    for idx in range(len(unique_cell_first_coordinate_array)):
-        if idx != np.argmax(counts):
-            for idx2 in range(centerline_poly_data.GetNumberOfCells()):
-                if (unique_cell_first_coordinate_array[idx] == cell_first_coordinate_array[idx2]).all(): remove_floating.append(idx2)
-
-    # Finally, check if there are any floating centerlines
-    if len(remove_floating) > 0:
-        print("Found floating centerlines:", remove_floating)
-    else:
-        print("No errors found")
-
-    for idx in remove_floating:
-        centerline_poly_data.DeleteCell(idx)
-
-    centerline_poly_data.RemoveDeletedCells()
-    
-    return centerline_poly_data
+    return centerlines, voronoi_diagram
