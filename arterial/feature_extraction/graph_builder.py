@@ -158,7 +158,7 @@ def build_local_graph(centerline_segments_array, segments_graph_pred, sampling_d
                     if np.linalg.norm(coordinate_1 - coordinate_2) < 1e-2:
                         local_graph = nx.contracted_nodes(local_graph, node, node2)
                         contracted_nodes.append(node2)
-                        local_graph.nodes[node].pop("contraction")           
+                        local_graph.nodes[node].pop("contraction")
                         
         # If any nodes with degree == 0 are present, remove them
         remove_nodes = []

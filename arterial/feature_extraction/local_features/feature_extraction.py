@@ -54,7 +54,7 @@ def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_
     # Pool branch_model point points. Get blanking for each point
     branch_model_coordinates = np.ndarray([branch_model.GetNumberOfPoints(), 3])
     blanking = np.ndarray([branch_model.GetNumberOfPoints()])
-    radius_branch_model = vtk_to_numpy(branch_model.GetPointData().GetArray("Radius"))
+    radius_branch_model = vtk_to_numpy(branch_model.GetPointData().GetArray("MaximumInscribedSphereRadius"))
     accumulated_number_of_points = 0
     for idx in range(branch_model.GetNumberOfCells()):         
         for idx2 in range(branch_model.GetCell(idx).GetNumberOfPoints()):

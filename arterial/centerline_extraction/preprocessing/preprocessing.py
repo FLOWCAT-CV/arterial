@@ -34,13 +34,14 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
     appender = vtk.vtkImageAppend()
     appender.SetAppendAxis(2) 
 
-    z_threshold = 300
+    z_threshold = 350
 
     for idx in range(segmentation_array.shape[0] // z_threshold + 1):
         # Cut the segmentation_array in chunks and append them to the appender
         array = segmentation_array[idx * z_threshold:min(len(segmentation_array), (idx + 1) * z_threshold), :, :]
         if array.shape[0] == 0:
             continue
+        print(f"    Chunk {idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}:", array.shape)
         print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Converting island to VTK ImageData...")
         vtk_image_data = numpy_array_to_vtk_image_data(array)
         print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Adding affine information to VTK ImageData...")
@@ -81,13 +82,12 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         List of segmentation surfaces.
     
     """
-    segmentation_array = np.transpose(segmentation_array, (2, 1, 0)) 
+    segmentation_array = np.transpose(segmentation_array, (2, 1, 0))
 
     print("Processing complete array...")
-    # segmentation_model = compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor, **surface_extraction_parameters)
-    segmentation_model = None
+    segmentation_model = compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor, **surface_extraction_parameters)
 
-    print("Splitting segmentation array into islands...")
+    print("\nSplitting segmentation array into islands...")
     segmentation_array_list = split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size=minimum_island_voxel_size)
     print("Number of islands found:", len(segmentation_array_list))
     segmentation_model_list = []

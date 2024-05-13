@@ -1,7 +1,9 @@
 #   Copyright 2024 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
 import vtk
+
 import numpy as np
+
 from skimage import measure
 
 # Split segmentation_array in a list of arrays with the different islands
@@ -36,7 +38,7 @@ def split_segmentation(segmentation_array, segmentation_affine, minimum_island_v
         if values[idx] == 0:
             continue
         if counts[idx] >= minimum_island_voxel_size_:
-            segmentation_array_list.append(np.where(label_mask == values[idx], 1., 0.).astype(np.uint8))
+            segmentation_array_list.append(np.where(label_mask == values[idx], 1., 0.))
 
     return segmentation_array_list
 
@@ -57,7 +59,7 @@ def numpy_array_to_vtk_image_data(numpy_array):
 
     """
     # Ensure the numpy array is C-contiguous
-    numpy_array = np.ascontiguousarray(numpy_array)
+    numpy_array = np.ascontiguousarray(numpy_array).astype(np.uint8)
     # Convert a numpy array to a VTK ImageData object
     importer = vtk.vtkImageImport()
     importer.CopyImportVoidPointer(numpy_array, numpy_array.nbytes)
@@ -72,12 +74,10 @@ def add_affine_information(vtk_image_data, affine=None):
     """
     Add affine information to a vtkImageData object.
     
-
     Parameters
     ----------
     vtk_image_data : vtkImageData
         The vtkImageData object to which to add the affine information.
-        
     affine : numpy.array
         The affine information to be added.
 
@@ -86,7 +86,6 @@ def add_affine_information(vtk_image_data, affine=None):
     vtkImageData : vtkImageData
         The vtkImageData object with the added affine information.
         
-    
     """
     vtk_image_data.SetOrigin(affine[:3, 3])
     vtk_image_data.SetSpacing(affine[0, 0], affine[1, 1], affine[2, 2])
@@ -150,7 +149,7 @@ def extract_surface(vtk_image_data, **surface_extraction_parameters):
 
     """
     threshold = surface_extraction_parameters.get('threshold', 0.5)
-    n_iteration_smoothing = surface_extraction_parameters.get('n_iteration_smoothing', 30)
+    n_iteration_smoothing = surface_extraction_parameters.get('n_iteration_smoothing', 20)
     feature_angle = surface_extraction_parameters.get('feature_angle', 120.)
     pass_band = surface_extraction_parameters.get('pass_band', 0.1)
 
@@ -164,13 +163,23 @@ def extract_surface(vtk_image_data, **surface_extraction_parameters):
     fill_holes.SetInputConnection(surface_extractor.GetOutputPort())
     fill_holes.SetHoleSize(1000.0)  # Large enough to cover the expected hole size
     fill_holes.Update()
+
+    # Clean vtkpolydata
+    cleaner = vtk.vtkCleanPolyData()
+    cleaner.SetInputConnection(fill_holes.GetOutputPort())
+    cleaner.Update()
+
+    surface_triangulator = vtk.vtkTriangleFilter()
+    surface_triangulator.SetInputData(cleaner.GetOutput())
+    surface_triangulator.PassLinesOff()
+    surface_triangulator.PassVertsOff()
+    surface_triangulator.Update()
     
     # Smooth the extracted surface
     smoother = vtk.vtkWindowedSincPolyDataFilter()
-    smoother.SetInputConnection(fill_holes.GetOutputPort())
+    smoother.SetInputConnection(surface_triangulator.GetOutputPort())
     smoother.SetNumberOfIterations(n_iteration_smoothing)  # Adjust based on desired smoothness
-    smoother.BoundarySmoothingOff()
-    smoother.FeatureEdgeSmoothingOff()
+    smoother.SetBoundarySmoothing(1)
     smoother.SetFeatureAngle(feature_angle)
     smoother.SetPassBand(pass_band)  # Lower is smoother. It's effect depends on the resolution of the surface
     smoother.NonManifoldSmoothingOn()
@@ -179,9 +188,10 @@ def extract_surface(vtk_image_data, **surface_extraction_parameters):
 
     normals_generator = vtk.vtkPolyDataNormals()
     normals_generator.SetInputConnection(smoother.GetOutputPort())
-    normals_generator.ComputePointNormalsOn()  
-    normals_generator.ComputeCellNormalsOn()   
-    normals_generator.SplittingOff()           
+    normals_generator.SetAutoOrientNormals(1)
+    normals_generator.SetFlipNormals(0)
+    normals_generator.SetConsistency(1)
+    normals_generator.SplittingOff()
     normals_generator.Update()
     
     return normals_generator.GetOutput()
