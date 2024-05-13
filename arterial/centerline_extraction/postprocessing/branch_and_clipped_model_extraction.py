@@ -2,13 +2,11 @@
 
 import vtk
 
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
-
 from vmtk import vtkvmtk
 
 import numpy as np
 
-def extract_branch_model(centerlines_model, BlankingArrayName="Blanking", RadiusArrayName="Radius", GroupIdsArrayName="GroupIds", CenterlineIdsArrayName="CenterlineIds", TractIdsArrayName="TractIds"):
+def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds", centerline_ids_array_name="CenterlineIds", tract_ids_array_name="TractIds"):
     """
     Performs centerline branching over centerline models. This allows division
     of the centerline tree in segments corresponding to the individual arteries.
@@ -20,15 +18,15 @@ def extract_branch_model(centerlines_model, BlankingArrayName="Blanking", Radius
     ----------
     centerlines_model : string or path-like object
         Path to centerlines model. 
-    BlankingArrayName : string, optional
+    blanking_array_name : string, optional
         Name of the blanking array. The default is "Blanking".
-    RadiusArrayName : string, optional
-        Name of the radius array. The default is "Radius".
-    GroupIdsArrayName : string, optional
+    radius_array_name : string, optional
+        Name of the radius array. The default is "MaximumInscribedSphereRadius".
+    group_ids_array_name : string, optional
         Name of the group ids array. The default is "GroupIds".
-    CenterlineIdsArrayName : string, optional
+    centerline_ids_array_name : string, optional
         Name of the centerline ids array. The default is "CenterlineIds".
-    TractIdsArrayName : string, optional
+    tract_ids_array_name : string, optional
         Name of the tract ids array. The default is "TractIds".
 
     Returns
@@ -40,11 +38,11 @@ def extract_branch_model(centerlines_model, BlankingArrayName="Blanking", Radius
     # Initialize the vtkvmtkCenterlineBranchExtractor object
     branchExtractor = vtkvmtk.vtkvmtkCenterlineBranchExtractor()
     branchExtractor.SetInputData(centerlines_model)
-    branchExtractor.SetBlankingArrayName(BlankingArrayName)
-    branchExtractor.SetRadiusArrayName(RadiusArrayName)
-    branchExtractor.SetGroupIdsArrayName(GroupIdsArrayName)
-    branchExtractor.SetCenterlineIdsArrayName(CenterlineIdsArrayName)
-    branchExtractor.SetTractIdsArrayName(TractIdsArrayName)
+    branchExtractor.SetBlankingArrayName(blanking_array_name)
+    branchExtractor.SetRadiusArrayName(radius_array_name)
+    branchExtractor.SetGroupIdsArrayName(group_ids_array_name)
+    branchExtractor.SetCenterlineIdsArrayName(centerline_ids_array_name)
+    branchExtractor.SetTractIdsArrayName(tract_ids_array_name)
 
     # Execute the branch extraction
     try:
@@ -58,7 +56,7 @@ def extract_branch_model(centerlines_model, BlankingArrayName="Blanking", Radius
 
     return branch_model
 
-def unify_branch_models(branch_model_list):
+def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSphereRadius"):
     """
     Unifies all branch models in a single vtkPolyData object.
 
@@ -72,6 +70,8 @@ def unify_branch_models(branch_model_list):
     ----------
     branch_model_list : list
         List of branch models.  
+    radius_array_name : string, optional
+        Name of the radius array. The default is "MaximumInscribedSphereRadius".
 
     Returns
     -------
@@ -102,7 +102,7 @@ def unify_branch_models(branch_model_list):
                     # Get cell data array name
                     cell_data_name = branch_model.GetCellData().GetArrayName(idx)
                     # Add to cell data array
-                    cell_data_array[idx] = vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
+                    cell_data_array[idx] = vtk.util.numpy_support.vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
                     if cell_data_name == "CenterlineIds":
                         # Add accumulated centerline id
                         cell_data_array[idx] += acc_centerline_id
@@ -118,7 +118,7 @@ def unify_branch_models(branch_model_list):
                 final_cell_data_array_branch_model = np.append(final_cell_data_array_branch_model, cell_data_array, axis=1)
                 
                 # Get point data (we only get radius)
-                radius_array = vtk_to_numpy(branch_model.GetPointData().GetArray("Radius"))
+                radius_array = vtk.util.numpy_support.vtk_to_numpy(branch_model.GetPointData().GetArray(radius_array_name))
 
                 # On rare occasions, there is a mismatch (a gap) between the number of points of the vtkPolyData and the sum of the number of points from each cell
                 # These should be restarted for each branch_modelIdx
@@ -171,15 +171,15 @@ def unify_branch_models(branch_model_list):
         unified_branch_model.SetLines(cell_array_branch_model)
 
         for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
-            unified_branch_model.GetCellData().AddArray(numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
+            unified_branch_model.GetCellData().AddArray(vtk.util.numpy_support.numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
             unified_branch_model.GetCellData().GetArray(idx).SetName(branch_model.GetCellData().GetArrayName(idx))
 
-        unified_branch_model.GetPointData().AddArray(numpy_to_vtk(final_radius_array))
-        unified_branch_model.GetPointData().GetArray(0).SetName("Radius")
+        unified_branch_model.GetPointData().AddArray(vtk.util.numpy_support.numpy_to_vtk(final_radius_array))
+        unified_branch_model.GetPointData().GetArray(0).SetName(radius_array_name)
 
         return unified_branch_model
     
-def extract_clipped_model(surface_model, branch_model, BlankingArrayName="Blanking", RadiusArrayName="Radius", GroupIdsArrayName="GroupIds"):
+def extract_clipped_model(surface_model, branch_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds"):
     """
     Performs clipping over surface models. This allows division
     of the volume model in segments corresponding to the individual arteries.
@@ -196,11 +196,11 @@ def extract_clipped_model(surface_model, branch_model, BlankingArrayName="Blanki
         Path to surface model. 
     branch_model : string or path-like object
         Path to branch model. 
-    BlankingArrayName : string, optional
+    blanking_array_name : string, optional
         Name of the blanking array. The default is "Blanking".
-    RadiusArrayName : string, optional
-        Name of the radius array. The default is "Radius".
-    GroupIdsArrayName : string, optional
+    radius_array_name : string, optional
+        Name of the radius array. The default is "MaximumInscribedSphereRadius".
+    group_ids_array_name : string, optional
         Name of the group ids array. The default is "GroupIds".
 
     Returns
@@ -213,10 +213,10 @@ def extract_clipped_model(surface_model, branch_model, BlankingArrayName="Blanki
     branchClipper = vtkvmtk.vtkvmtkPolyDataCenterlineGroupsClipper()
     branchClipper.SetInputData(surface_model)
     branchClipper.SetCenterlines(branch_model)
-    branchClipper.SetBlankingArrayName(BlankingArrayName)
-    branchClipper.SetCenterlineRadiusArrayName(RadiusArrayName)
-    branchClipper.SetCenterlineGroupIdsArrayName(GroupIdsArrayName)
-    branchClipper.SetGroupIdsArrayName(GroupIdsArrayName)
+    branchClipper.SetBlankingArrayName(blanking_array_name)
+    branchClipper.SetCenterlineRadiusArrayName(radius_array_name)
+    branchClipper.SetCenterlineGroupIdsArrayName(group_ids_array_name)
+    branchClipper.SetGroupIdsArrayName(group_ids_array_name)
     branchClipper.SetCutoffRadiusFactor(0.)
     branchClipper.SetClipValue(1.)
     branchClipper.SetUseRadiusInformation(True)
@@ -266,7 +266,7 @@ def unify_clipped_models(clipped_model_list):
             else:
                 print("Processing clipped model {}...".format(clipped_model_idx))
                 # Get point data (we only get groupId)
-                group_id_point_array_clipped_model = vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
+                group_id_point_array_clipped_model = vtk.numpy_support.vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
                 # Update groupIds of current clipped_model
                 group_id_point_array_clipped_model = group_id_point_array_clipped_model + acc_group_id_clipped_model
                 # Update accumulated groupId

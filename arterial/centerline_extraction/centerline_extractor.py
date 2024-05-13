@@ -4,7 +4,7 @@ import os
 
 from arterial.centerline_extraction.utils import volume_sanity_check
 from arterial.centerline_extraction.preprocessing.preprocessing import preprocess_segmentation_for_centerline_extraction
-from arterial.centerline_extraction.centerline_extraction import get_robuts_endpoints, extract_centerlines
+from arterial.centerline_extraction.centerline_extraction import extract_centerlines
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import extract_branch_model, unify_branch_models, extract_clipped_model, unify_clipped_models
 from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array
 from arterial.io.load_and_save_operations import *
@@ -76,7 +76,6 @@ class CenterlineExtractor():
         self.branch_model = None
         self.clipped_model = None
 
-
         self.centerline_segments_array_path = os.path.join(self.case_dir, self.mode, "centerline_segments_array.npy")
         self.centerline_segments_array = None
 
@@ -134,11 +133,12 @@ class CenterlineExtractor():
             self.load_segmentation_nifti()
 
         for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
-            self.endpoints_list.append(get_robuts_endpoints(segmentation_model_idx, self.segmentation_array, self.segmentation_affine))
-            centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.endpoints_list[idx])
+            # self.endpoints_list.append(get_robuts_endpoints(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False))
+            # centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.endpoints_list[idx])
+            centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
             self.centerline_model_list.append(centerlines)
             self.voronoi_diagrams_list.append(voronoi_diagram)
-    
+
         if save:
             for idx, centerline_model in enumerate(self.centerline_model_list):
                 save_vtkpolydata(centerline_model, os.path.join(self.centerlines_dir_path, f"centerlines_{idx}.vtk"))
@@ -161,7 +161,7 @@ class CenterlineExtractor():
 
         """
         if len(self.centerline_model_list) == 0: 
-            raise ValueError("Centerline model list is empty. Please run self.perform_centerline_extraction() first.")
+            self.load_centerline_model_list()
         
         if save: os.makedirs(self.branch_models_dir_path, exist_ok=True)
 
@@ -199,9 +199,9 @@ class CenterlineExtractor():
 
         """
         if len(self.segmentation_model_list) == 0: 
-            raise ValueError("Segmentation model list is empty. Please run self.perform_centerline_extraction() first.")
+            self.load_segmentation_model_list()
         if len(self.branch_model_list) == 0: 
-            raise ValueError("Branch model is empty. Please run perform_branch_model_extraction() first.")
+            self.load_branch_model_list()
 
         if save: os.makedirs(self.clipped_models_dir_path, exist_ok=True)
 
@@ -234,15 +234,15 @@ class CenterlineExtractor():
         
         """
         if len(self.centerline_model_list) == 0: 
-            raise ValueError("Centerline model list is empty. Please run self.perform_centerline_extraction() first.")
+            self.load_centerline_model_list()
         
-        if self.segmentation_nifti is None or self.affine is None or self.image_shape is None:
+        if self.segmentation_nifti is None or self.segmentation_affine is None or self.image_shape is None:
             self.load_segmentation_nifti()
 
         print("Computing centerline segments array...")
         self.centerline_segments_array = compute_centerline_segments_array(
             self.centerline_model_list, 
-            self.affine, 
+            self.segmentation_affine, 
             self.image_shape, 
             self.mode
             )

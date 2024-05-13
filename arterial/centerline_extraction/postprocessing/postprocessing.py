@@ -1,13 +1,12 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import os, shutil
 import vtk
 
 import numpy as np
 import nibabel as nib
 
-def compute_centerline_segments_array(centerline_model_list, affine, image_shape, mode = "extracranial_vessels"):
-    ''' 
+def compute_centerline_segments_array(centerline_model_list, affine, image_shape, mode="extracranial_vessels", radius_array_name="MaximumInscribedSphereRadius"):
+    """
     Loads a vtkPolyData object containing the centerline model and generates
     centerline_segments_array, spliting the centerline cells into individual 
     segments between bifurcations, associating a new identifyier to them. From 
@@ -15,23 +14,26 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
     sphere radius. Coordinates in the resulting array are in mm, subtracting the
     tranlation for each case.
 
-    The output is piped to the generation of the corresponding graph. Saves centerline_segments_array as a 
-    .npy file:
-
-    >>> case_dir/centerline_segments_array.npy
-
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory.
-    mode: string, default = "extracranial_vessels"
-            Determines whether the centerline is extracted from `extracranial_vessels`, `intracranial_vessels` 
-            or `thrombus`. 
+    centerline_model_list : list
+        List of vtkPolyData objects containing the centerline model.
+    affine : numpy.array
+        Affine transformation of the image.
+    image_shape : tuple
+        Shape of the image.
+    mode : str, optional
+        Mode of the analysis. The default is "extracranial_vessels".
+    radius_array_name : str, optional
+        Name of the array containing the maximal inscribed sphere radius. The default is "MaximumInscribedSphereRadius".
 
     Returns
     -------
+    final_centerline_segments_array : numpy.array
+        Array containing centerline segments without overlapping cells. Contains
+        centerline point coordinates and maximal inscribed sphere radius.
         
-    '''
+    """
     final_centerline_segments_array = np.ndarray([0, 2])
 
     # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
@@ -58,7 +60,7 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
         length_coordinate_array = np.ndarray([number_of_cells], dtype=int)
 
         # Centerline point data for maximal inscribed sphere radius
-        radius_array = vtk.util.numpy_support.vtk_to_numpy(centerline_model.GetPointData().GetArray("Radius"))
+        radius_array = vtk.util.numpy_support.vtk_to_numpy(centerline_model.GetPointData().GetArray(radius_array_name))
 
         # Iterate over cells to extract cell_ids, positions and radii. We also store lengths of cells (number of points, not distance)
         for cell_id in range(number_of_cells):
@@ -67,11 +69,7 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
             centerline_model.GetCell(cell_id, cell)
             number_of_cell_points = cell.GetNumberOfPoints()
             cells_coordinate_array[cell_id] = np.ndarray([number_of_cell_points, 3])
-            # In some cases the pointIds of the centerline points are reversed
-            if cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1) < cell.GetPointId(0):
-                cells_radius_array[cell_id] = np.flip(radius_array[cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1):cell.GetPointId(0) + 1])
-            else:
-                cells_radius_array[cell_id] = np.flip(radius_array[cell.GetPointId(0) - 1:cell.GetPointId(cell.GetPointIds().GetNumberOfIds() - 1)])
+            cells_radius_array[cell_id] = np.array([radius_array[cell.GetPointId(idx)] for idx in range(cell.GetPointIds().GetNumberOfIds())])
             # We subtract the lpi corner coordinates to get the coordinates from a reference point which is independent from the original 
             # tranlation of the image, and in case the original orientation was different from RAS, we change the sign of the coordinates
             for idx in range(number_of_cell_points):
@@ -79,6 +77,18 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
                 cells_coordinate_array[cell_id][idx] = cell.GetPoints().GetPoint(idx) - lpi_corner_coordinates
                 
             length_coordinate_array[cell_id] = number_of_cell_points
+
+        # At this point, we can filter out those cells that do not originate from the same startpoint (these are centerline extraction errors)
+        startpoint = cells_coordinate_array[0][0]
+        delete_idx = []
+        for idx in range(len(cells_coordinate_array)):
+            if np.linalg.norm(startpoint - cells_coordinate_array[idx][0]) > 1e-3:
+                delete_idx.append(idx)
+
+        cells_id_array = np.delete(cells_id_array, delete_idx)
+        cells_coordinate_array = np.delete(cells_coordinate_array, delete_idx)
+        cells_radius_array = np.delete(cells_radius_array, delete_idx)
+        length_coordinate_array = np.delete(length_coordinate_array, delete_idx)
 
         # Now, we start analyzing each centerline starting from the shortest to the longest. Here we want to analyze overlap between
         # the different centerline cells to generate arrays that only contain centerline points from independent segments, without overlap
@@ -101,7 +111,7 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
                 cell_id = aux_from_shortest_to_longest[idx1]
                 # cell_id indicates cell_id of an alternative cell
                 aux_array_2 = aux_array # We generate a second copy of the auxiliar array that we delete iteratively
-                # We iterate over coordinates of each cell with a lenght longer or equal than
+                # We iterate over coordinates of each cell with a length longer or equal than
                 # the current shortest cell, searching for bifurcation points
                 for coord_idx in range(shortest_length):
                     # coord_idx indicates point position on the current cell

@@ -1,17 +1,553 @@
 #   Copyright 2024 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import vtk
-import vmtk
-import random
+import vtk, math, random
+
+from vmtk import vtkvmtk
+from vmtk import vmtkcenterlines, vmtkcenterlinestonumpy, vmtknetworkextraction, vmtkdelaunayvoronoi, vmtknumpytocenterlines, vmtksurfacecapper
 
 import numpy as np
 import nibabel as nib
 
 from skimage import measure
 from scipy import ndimage
+from scipy.spatial import cKDTree
 
 from joblib import Parallel, delayed
 from concurrent.futures import ProcessPoolExecutor
+
+class CenterlineComputationLogic(object):
+    """
+    Centerline computation logic class from Slicer's VMTK extension. This class is 
+    an adapted version of the class defined in 
+        https://github.com/vmtk/SlicerExtension-VMTK/blob/e9aa8e7e532299c10cfae5746e9c7ef06a4314b1/CenterlineComputation/CenterlineComputation.py#L293
+
+    Additional functionality has been added to ensure robust endpoint detection and aortic arch endpoint check.
+
+    """
+    def __init__(self):
+        """
+        Class constructor. Initializes the array names for the centerline computation.
+        
+        """
+        self.blanking_array_name = "Blanking"
+        self.radius_array_name = "MaximumInscribedSphereRadius"
+        self.group_ids_array_name = "GroupIds"
+        self.centerline_ids_array_name = "CenterlineIds"
+        self.tract_ids_array_name = "TractIds"
+        self.topology_array_name = "Topology"
+        self.marks_array_name = "Marks"
+        self.length_array_name = "Length"
+        self.curvature_array_name = "Curvature"
+        self.torsion_array_name = "Torsion"
+        self.tortuosity_array_name = "Tortuosity"
+
+    def extract_centerline(self, surface_model, segmentation_array, segmentation_affine, is_first_model=True):
+        """
+        Extracts the centerline from the given surface model. The pipeline comprises the following steps:
+        1. Prepare the model
+        2. Decimate the model
+        3. Open the model at the seed
+        4. Extract the network
+        5. Clip the surface at the endpoints
+        6. Compute the centerlines
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface model.
+        segmentation_array : numpy.array
+            The segmentation array.
+        segmentation_affine : numpy.array
+            The segmentation affine.
+        is_first_model : bool, optional
+            Whether the model is the first one. The default is True.
+
+        Returns
+        -------
+        centerlines : vtkPolyData
+            The centerlines.
+        voronoi : vtkPolyData
+            The Voronoi diagram.
+        network : vtkPolyData   
+            The network.
+        decimated_surface_model : vtkPolyData
+            The decimated surface model.
+        prepared_surface_model : vtkPolyData
+            The prepared surface model.
+        
+        """
+        # Define the output models
+        prepared_surface_model = vtk.vtkPolyData()
+        decimated_surface_model = vtk.vtkPolyData()
+        network = vtk.vtkPolyData()
+        centerlines = vtk.vtkPolyData()
+        voronoi = vtk.vtkPolyData()
+
+        # Get the seed point in RAS coordinates close to the distal AA
+        current_coordinates_ras = self.get_seed_ras(segmentation_array, segmentation_affine)
+
+        print("Setting endpoint seed at", current_coordinates_ras)
+
+        # Prepare the model (cleaning, triangulation, smoothing, normal recalculation, capping)
+        print("Preparing model...")
+        prepared_surface_model.DeepCopy(self.prepare_model(surface_model, subdivide=True, non_manifold_edges=None))
+
+        if prepared_surface_model.GetNumberOfPoints() == 0:
+            raise ValueError("Input model preparation failed. It probably has surface errors.")
+
+        # Decimate the model for faster processing
+        print("Decimating model...")
+        # Decimate the model (only for network extraction)
+        decimated_surface_model.DeepCopy(self.decimate_surface(prepared_surface_model))
+        # Open the model at the seed (only for network extraction)
+        self.open_surface_at_point(decimated_surface_model, current_coordinates_ras)
+
+        print("Extracting network...")
+        # extract Network
+        network.DeepCopy(self.extract_network(decimated_surface_model))
+
+        # here we start the actual centerline computation which is mathematically more robust and accurate but takes longer than the network extraction
+
+        print("Clipping surface at endpoints...")
+        # clip surface at endpoints identified by the network extraction
+        prepared_surface_model = self.decimate_surface(prepared_surface_model, 0.75)
+        clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
+        print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
+        # for idx in range(endpoints.GetNumberOfPoints()):
+        #     print(f"Endpoint {idx}: {endpoints.GetPoint(idx)}")
+
+        if is_first_model:
+            # Check the presence of the aortic arch endpoints
+            endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
+        # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
+        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10)
+
+        # now find the one endpoint which is closest to the seed and use it as the source point for centerline computation
+        # all other endpoints are the target points
+        source_point = current_coordinates_ras
+
+        # the following arrays have the same indexes and are synchronized at all times
+        distances_to_seed = []
+        target_points = []
+
+        # Get distances of points from source point
+        for i in range(endpoints.GetNumberOfPoints()):
+            current_point = endpoints.GetPoint(i)
+            # get the euclidean distance
+            current_distance_to_seed = math.sqrt(math.pow((current_point[0] - source_point[0]), 2) +
+                                                 math.pow((current_point[1] - source_point[1]), 2) +
+                                                 math.pow((current_point[2] - source_point[2]), 2))
+
+            target_points.append(current_point)
+            distances_to_seed.append(current_distance_to_seed)
+
+        # the index with minimal distance is the point closest to the seed, we want to set it as sourcepoint
+        # all other points are the targetpoints
+        source_point_index = 0
+        # .. and remove it after saving it as the source_point
+        source_point = target_points[source_point_index]
+        distances_to_seed.pop(source_point_index)
+        target_points.pop(source_point_index)
+
+        # at this point we have the source_point and a list of real target_points
+
+        # now create the source_id_list and target_id_list for the actual centerline computation
+        source_id_list = vtk.vtkIdList()
+        target_id_list = vtk.vtkIdList()
+
+        point_locator = vtk.vtkPointLocator()
+        point_locator.SetDataSet(clipped_surface)
+        point_locator.BuildLocator()
+
+        # locate the source on the surface
+        source_id = point_locator.FindClosestPoint(source_point)
+        source_id_list.InsertNextId(source_id)
+
+        # locate the endpoints on the surface
+        for p in target_points:
+            id = point_locator.FindClosestPoint(p)
+            target_id_list.InsertNextId(id)
+
+        print("Computing centerlines...")
+        new_centerlines, new_voronoi = self.compute_centerlines(clipped_surface, source_id_list, target_id_list)
+
+        centerlines.DeepCopy(new_centerlines)
+        voronoi.DeepCopy(new_voronoi)
+
+        return centerlines, voronoi
+    
+    def get_seed_ras(self, segmentation_array, segmentation_affine):
+        """
+        Given a segmentation array and its affine, returns the seed point in RAS coordinates.
+        The reference point is close to the distal AA.
+
+        Parameters
+        ----------
+        segmentation_array : numpy.array
+            The segmentation array.
+        segmentation_affine : numpy.array
+            The segmentation affine.
+
+        Returns
+        -------
+        seed_ras : numpy.array
+            The seed point in RAS coordinates.
+
+        """
+        # Select startpoint (seed) near the distal AA
+        factor = abs(0.43 / segmentation_affine[0, 0])
+        if nib.orientations.aff2axcodes(segmentation_affine) == ("R", "A", "S"):
+            seed_ijk = np.array([150.0 * factor, 0.0, 0.0])
+        elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "A", "S"):
+            seed_ijk = np.array([350.0 * factor, 0.0, 0.0])
+        elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
+            seed_ijk = np.array([350.0 * factor, segmentation_array.shape[1], 0.0])
+
+        seed_ras = np.dot(segmentation_affine, np.append(seed_ijk, 1))[:3]
+
+        return seed_ras
+
+    def prepare_model(self, surface_model, subdivide=True, non_manifold_edges=None):
+        """
+        Prepares the given surface for centerline extraction. Basically, it cleans the surface, triangulates it, applies
+        smoothing, recalculates normals, caps the surface, and checks for non-manifold edges.
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface to be prepared.
+        subdivide : bool, optional
+            Whether to subdivide the surface. The default is True.
+        non_manifold_edges : vtkPolyData, optional
+            The non-manifold edges. The default is None.
+
+        Returns
+        -------
+        prepared_surface_model : vtkPolyData
+            The prepared surface.
+            
+        """
+        # Clean the surface
+        surface_cleaner = vtk.vtkCleanPolyData()
+        surface_cleaner.SetInputData(surface_model)
+        surface_cleaner.Update()
+
+        # Triangulate the surface
+        surface_triangulator = vtk.vtkTriangleFilter()
+        surface_triangulator.SetInputData(surface_cleaner.GetOutput())
+        surface_triangulator.PassLinesOff()
+        surface_triangulator.PassVertsOff()
+        surface_triangulator.Update()
+
+        # New steps for preparation to avoid problems because of slim models (f.e. at stenosis)
+        if subdivide:
+            subdiv = vtk.vtkLinearSubdivisionFilter()
+            subdiv.SetInputData(surface_triangulator.GetOutput())
+            subdiv.SetNumberOfSubdivisions(1)
+            subdiv.Update()
+            if subdiv.GetOutput().GetNumberOfPoints() == 0:
+                subdivide = False
+
+        # Apply smoothing
+        smooth = vtk.vtkWindowedSincPolyDataFilter()
+        if subdivide:
+            smooth.SetInputData(subdiv.GetOutput())
+        else:
+            smooth.SetInputData(surface_triangulator.GetOutput())
+        smooth.SetNumberOfIterations(20)
+        smooth.SetPassBand(0.1)
+        smooth.SetBoundarySmoothing(1)
+        smooth.Update()
+
+        # Recompute normals
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(smooth.GetOutput())
+        normals.SetAutoOrientNormals(1)
+        normals.SetFlipNormals(0)
+        normals.SetConsistency(1)
+        normals.SplittingOff()
+        normals.Update()
+
+        # Cap the surface
+        surface_capper = vtkvmtk.vtkvmtkCapPolyData()
+        surface_capper.SetInputData(normals.GetOutput())
+        surface_capper.SetDisplacement(0.0)
+        surface_capper.SetInPlaneDisplacement(0.0)
+        surface_capper.Update()
+
+        prepared_surface_model = vtk.vtkPolyData()
+        prepared_surface_model.DeepCopy(surface_capper.GetOutput())
+
+        # Check for non-manifold edges
+        if non_manifold_edges:
+            self.check_non_manifold_surface(prepared_surface_model, non_manifold_edges)
+
+        return prepared_surface_model
+
+    def check_non_manifold_surface(self, surface_model, non_manifold_edges):
+        """
+        Returns pairs of point IDs with endpoints of non-manifold edgesin non_manifold_edges.
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface to be checked.
+        non_manifold_edges : vtkPolyData
+            The non-manifold edges.
+
+        Returns
+        -------
+
+        """
+        neighborhoods = vtkvmtk.vtkvmtkNeighborhoods()
+        neighborhoods.SetNeighborhoodTypeToPolyDataManifoldNeighborhood()
+        neighborhoods.SetDataSet(surface_model)
+        neighborhoods.Build()
+
+        surface_model.BuildCells()
+        surface_model.BuildLinks(0)
+
+        neighborCellIds = vtk.vtkIdList()
+        nonManifoldEdgeLines = vtk.vtkCellArray()
+        for i in range(neighborhoods.GetNumberOfNeighborhoods()):
+            neighborhood = neighborhoods.GetNeighborhood(i)
+            for j in range(neighborhood.GetNumberOfPoints()):
+                neighborId = neighborhood.GetPointId(j)
+                if i < neighborId:
+                    neighborCellIds.Initialize()
+                    surface_model.GetCellEdgeNeighbors(-1,i,neighborId,neighborCellIds)
+                    if neighborCellIds.GetNumberOfIds() > 2:
+                        nonManifoldEdgeLines.InsertNextCell(2)
+                        nonManifoldEdgeLines.InsertCellPoint(i)
+                        nonManifoldEdgeLines.InsertCellPoint(neighborId)
+
+        non_manifold_edges.Initialize()
+        points = vtk.vtkPoints()
+        points.DeepCopy(surface_model.GetPoints())
+        non_manifold_edges.SetPoints(points)
+        non_manifold_edges.SetLines(nonManifoldEdgeLines)
+
+    def decimate_surface(self, surface_model, decimation_factor=0.75):
+        """
+        Decimates the given surface by the given factor.
+
+        Parameters
+        ----------  
+        surface_model : vtkPolyData
+            The surface to be decimated.
+        decimation_factor : float, optional
+            The factor by which to decimate the surface. The default is 0.75.
+
+        Returns
+        -------
+        decimated_surface_model : vtkPolyData
+            The decimated surface.
+
+        """
+        decimation_filter = vtk.vtkDecimatePro()
+        decimation_filter.SetInputData(surface_model)
+        decimation_filter.SetTargetReduction(decimation_factor)
+        decimation_filter.SetBoundaryVertexDeletion(0)
+        decimation_filter.PreserveTopologyOn()
+        decimation_filter.Update()
+
+        cleaner = vtk.vtkCleanPolyData()
+        cleaner.SetInputData(decimation_filter.GetOutput())
+        cleaner.Update()
+
+        triangle_filter = vtk.vtkTriangleFilter()
+        triangle_filter.SetInputData(cleaner.GetOutput())
+        triangle_filter.Update()
+
+        decimated_surface_model = vtk.vtkPolyData()
+        decimated_surface_model.DeepCopy(triangle_filter.GetOutput())
+
+        return decimated_surface_model
+
+    def open_surface_at_point(self, surface_model, seed):
+        """
+        Returns a new surface with an opening at the given seed.
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface to be opened.
+        seed : vtkPoint
+            The seed point.
+
+        Returns
+        -------
+
+        """
+        point_locator = vtk.vtkPointLocator()
+        point_locator.SetDataSet(surface_model)
+        point_locator.BuildLocator()
+
+        # find the closest point next to the seed on the surface
+        id = point_locator.FindClosestPoint(seed)
+
+        if id<0:
+            # Calling GetPoint(-1) would crash the application
+            raise ValueError("open_surface_at_point failed: empty input polydata")
+
+        # Tell the polydata to build "upward" links from points to cells
+        surface_model.BuildLinks()
+        # Mark cells as deleted
+        cell_ids = vtk.vtkIdList()
+        surface_model.GetPointCells(id, cell_ids)
+        for cell_id_index in range(cell_ids.GetNumberOfIds()):
+            surface_model.DeleteCell(cell_ids.GetId(cell_id_index))
+        # Remove the marked cells
+        surface_model.RemoveDeletedCells()
+
+    def extract_network(self, surface_model):
+        """
+        Returns the network of the given surface.
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface from which to extract the network.
+
+        Returns
+        -------
+        network : vtkPolyData
+            The network of the surface.
+        """
+        network_extraction = vtkvmtk.vtkvmtkPolyDataNetworkExtraction()
+        network_extraction.SetInputData(surface_model)
+        network_extraction.SetAdvancementRatio(1.05)
+        network_extraction.SetRadiusArrayName(self.radius_array_name)
+        network_extraction.SetTopologyArrayName(self.topology_array_name)
+        network_extraction.SetMarksArrayName(self.marks_array_name)
+        network_extraction.Update()
+
+        network = vtk.vtkPolyData()
+        network.DeepCopy(network_extraction.GetOutput())
+
+        return network
+
+    def clip_surface_at_end_points(self, network, surface_model):
+        """
+        Clips the surface_poly_data on the endpoints identified using the network_poly_data.
+
+        Returns a tupel of the form [clippedPolyData, endpoints_points]
+
+        Parameters
+        ----------
+        network : vtkPolyData
+            The network of the surface.
+        surface_model : vtkPolyData
+            The surface to be clipped.
+
+        Returns
+        -------
+        clipped_surface_model : vtkPolyData
+            The clipped surface.
+        endpoints_points : vtkPoints
+            The endpoints of the clipped surface.
+
+        """
+        cleaner = vtk.vtkCleanPolyData()
+        cleaner.SetInputData(network)
+        cleaner.Update()
+        network = cleaner.GetOutput()
+        network.BuildCells()
+        network.BuildLinks(0)
+        endpoint_ids = vtk.vtkIdList()
+
+        radius_array = network.GetPointData().GetArray(self.radius_array_name)
+
+        endpoints = vtk.vtkPolyData()
+        endpoints_points = vtk.vtkPoints()
+        endpoints_radius = vtk.vtkDoubleArray()
+        endpoints_radius.SetName(self.radius_array_name)
+        endpoints.SetPoints(endpoints_points)
+        endpoints.GetPointData().AddArray(endpoints_radius)
+
+        radius_factor = 1.2
+        min_radius = 0.01
+        for i in range(network.GetNumberOfCells()):
+            number_of_cell_points = network.GetCell(i).GetNumberOfPoints()
+            point_id_0 = network.GetCell(i).GetPointId(0)
+            point_id_1 = network.GetCell(i).GetPointId(number_of_cell_points - 1)
+
+            point_cells = vtk.vtkIdList()
+            network.GetPointCells(point_id_0, point_cells)
+            number_of_endpoints = endpoint_ids.GetNumberOfIds()
+            if point_cells.GetNumberOfIds() == 1:
+                point_id = endpoint_ids.InsertUniqueId(point_id_0)
+                if point_id == number_of_endpoints:
+                    point = network.GetPoint(point_id_0)
+                    radius = radius_array.GetValue(point_id_0)
+                    radius = max(radius, min_radius)
+                    endpoints_points.InsertNextPoint(point)
+                    endpoints_radius.InsertNextValue(radius_factor * radius)
+
+            point_cells = vtk.vtkIdList()
+            network.GetPointCells(point_id_1, point_cells)
+            number_of_endpoints = endpoint_ids.GetNumberOfIds()
+            if point_cells.GetNumberOfIds() == 1:
+                point_id = endpoint_ids.InsertUniqueId(point_id_1)
+                if point_id == number_of_endpoints:
+                    point = network.GetPoint(point_id_1)
+                    radius = radius_array.GetValue(point_id_1)
+                    radius = max(radius, min_radius)
+                    endpoints_points.InsertNextPoint(point)
+                    endpoints_radius.InsertNextValue(radius_factor * radius)
+
+        clipped_surface_model = vtk.vtkPolyData()
+        clipped_surface_model.DeepCopy(surface_model)
+        number_of_endpoints = endpoints_points.GetNumberOfPoints()
+        for point_index in range(number_of_endpoints):
+            self.open_surface_at_point(clipped_surface_model, endpoints_points.GetPoint(point_index))
+
+        return [clipped_surface_model, endpoints_points]
+
+    def compute_centerlines(self, surface_model, inlet_seed_ids, outlet_seed_ids):
+        """
+        Computes the centerlines of the given surface, using the given inlet and outlet seed IDs.
+
+        Returns a tupel of two vtkPolyData objects.
+        The first are the centerlines, the second is the corresponding Voronoi diagram.
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface from which to compute the centerlines.
+        inlet_seed_ids : vtkIdList
+            The seed IDs of the inlet.
+        outlet_seed_ids : vtkIdList
+            The seed IDs of the outlet.
+
+        Returns
+        -------
+        centerlines : vtkPolyData
+            The centerlines model.
+        voronoi : vtkPolyData
+            The Voronoi diagram.
+
+        """
+        centerline_filter = vtkvmtk.vtkvmtkPolyDataCenterlines()
+        centerline_filter.SetInputData(surface_model)
+        centerline_filter.SetSourceSeedIds(inlet_seed_ids)
+        centerline_filter.SetTargetSeedIds(outlet_seed_ids)
+        centerline_filter.SetRadiusArrayName(self.radius_array_name)
+        centerline_filter.SetCostFunction("1/R")
+        centerline_filter.SetFlipNormals(False)
+        centerline_filter.SetAppendEndPointsToCenterlines(0)
+        centerline_filter.SetSimplifyVoronoi(0)
+        centerline_filter.SetCenterlineResampling(0)
+        centerline_filter.SetResamplingStepLength(1.0)
+        centerline_filter.Update()
+
+        centerlines = vtk.vtkPolyData()
+        centerlines.DeepCopy(centerline_filter.GetOutput())
+
+        voronoi = vtk.vtkPolyData()
+        voronoi.DeepCopy(centerline_filter.GetVoronoiDiagram())
+
+        return [centerlines, voronoi]
 
 def get_bounding_box_limits_3d(array):
     """
@@ -80,328 +616,82 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     if segmentation_volume < 5e4 and bouding_box_volume < 6e6: # Empirically tested
         raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
-def _compute_centerlines_network(surface_address, delaunay_address, voronoi_address, pole_ids_address, cell, points):
+def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 15):
     """
-    Compute the centerline of a single branch of the network.
+    Relocates automatically detected endpoints to the center of mass of the closest component
+    inside a local region around the endpoint (defined by n).
 
-    Adapted from https://github.com/vmtk/vmtk/blob/6211af00372d099454acaf5d90520ddfcdf6cf96/vmtkScripts/vmtkcenterlinesnetwork.py#L29.
+    Takes the endpoint position, converts it to voxel coordinates with the affine matrix, then defines a region  
+    of (2 * n) ^ 3 voxels centered around the endpoint. Then components inside the local region are treated 
+    as separate objects. The minimum distance from these objects to the endpoint is computed, and from 
+    these, the object with the smallest distance to the endpoint is chosen to compute the centroid, which
+    is converted back to RAS with the affine matrix.
 
     Parameters
     ----------
-    surface_address : str
-        Memory address of the vtkPolyData object representing the surface.
-    delaunay_address : str
-        Memory address of the vtkUnstructuredGrid object representing the delaunay tessellation.
-    voronoi_address : str
-        Memory address of the vtkPolyData object representing the voronoi diagram.
-    pole_ids_address : str
-        Memory address of the vtkIdList object representing the pole ids.
-    cell : list
-        List of integers representing the cell connectivity.
-    points : numpy.array
-        Array of points.
+    endpoint : numpy.array or array-like object 
+        Position of the endpoint in RAS coordinates.
+    segmentation_array : numpy.array or array-like object
+        Numpy array corresponding to the masked_volume_node.
+    segmentation_affine : numpy.array or array-like object. Shape: 4 x 4
+        Affine matrix corresponding to the nifti file. RAS to ijk transformation.
+    window_size : int 
+        Defines the size of the region around the endpoint that is analyzed for this method.
+        New endpoint location will be searched within a cubic box of size 2 * n around the 
+        originial endpoint location.
 
     Returns
     -------
-    clConvert.ArrayDict : dict
-        Dictionary containing the centerline data.
-    
-    """
-
-    surface = vtk.vtkPolyData(surface_address)
-    delaunay = vtk.vtkUnstructuredGrid(delaunay_address)
-    voronoi = vtk.vtkPolyData(voronoi_address)
-    pole_ids = vtk.vtkIdList(pole_ids_address)
-
-    cl = _compute_centerline_branch(surface, delaunay, voronoi, pole_ids, cell, points)
-
-    clConvert = vmtk.vmtkcenterlinestonumpy.vmtkCenterlinesToNumpy()
-    clConvert.Centerlines = cl
-    clConvert.LogOn = 0
-    clConvert.Execute()
-    
-    return clConvert.ArrayDict
-
-def _compute_centerline_branch(surface, delaunay, voronoi, pole_ids, cell, points):
-    """
-    Compute the centerline of a single branch of the network.
-    
-    Adapted from https://github.com/vmtk/vmtk/blob/6211af00372d099454acaf5d90520ddfcdf6cf96/vmtkScripts/vmtkcenterlinesnetwork.py#L55.
-
-    Parameters
-    ----------
-    surface : vtkPolyData
-        The surface model.
-    delaunay : vtkUnstructuredGrid
-        The delaunay tessellation.
-    voronoi : vtkPolyData
-        The voronoi diagram.
-    pole_ids : vtkIdList
-        The pole ids.
-    cell : list
-        List of integers representing the cell connectivity.
-    points : numpy.array
-        Array of points.
-
-    Returns
-    -------
-    cl.Centerlines : vtkPolyData
-        The centerline of the branch.
+    new_endpoint : numpy.array or array-like object
+        New position of the endpoint.
 
     """
-    cell_startidx = cell[0]
-    cell_end_idx = cell[-1]
-    cell_startpoint = points[cell_startidx].tolist()
-    cell_end_point = points[cell_end_idx].tolist()
-    cl = vmtk.vmtkcenterlines.vmtkCenterlines()
-    cl.Surface = surface
-    cl.DelaunayTessellation = delaunay
-    cl.VoronoiDiagram = voronoi
-    cl.pole_ids = pole_ids
-    cl.SeedSelectorName = 'pointlist'
-    # since we only set one target seed at a time, setting StopFastMarchingOnReachingTarget
-    # greatly speeds up algorithm execution time.
-    cl.StopFastMarchingOnReachingTarget = 1
-    cl.SourcePoints = cell_startpoint
-    cl.TargetPoints = cell_end_point
-    cl.LogOn = 0
-    cl.Execute()
+    # Invert the affine matrix
+    segmentation_affine_inv = np.linalg.inv(segmentation_affine)
+    for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
+        endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
+        # Compute endpoint ijk coordinates with affine matrix
+        i, j, k = np.round(np.matmul(segmentation_affine_inv, np.append(endpoint, 1.0))[:3]).astype(int)
+        # if segmentation_array[i, j, k] == 0:
+        # if np.sum(segmentation_array[i-1:i+1, j-1:j+1, k-1:k+1]) < 9:
+        if True:
+            # print("Relocating endpoint {}: {}".format(endpoint_idx, endpoint))
 
-    return cl.Centerlines
+            # Define limits of the region of interest
+            i_min, i_max = np.clip([i - window_size, i + window_size], 0, segmentation_array.shape[0])
+            j_min, j_max = np.clip([j - window_size, j + window_size], 0, segmentation_array.shape[1])
+            k_min, k_max = np.clip([k - window_size, k + window_size], 0, segmentation_array.shape[2])
 
-def compute_network_centerlines(segmentation_model):
-    """
-    Compute the centerlines of a network of approximated centerlines.
+            # Mask the segmentation_array (only region of interest)
+            masked_segmentation = segmentation_array[i_min:i_max, j_min:j_max, k_min:k_max]
+            # Divide into different connected components
+            label_mask = measure.label(masked_segmentation, connectivity=1)
+            unique_labels = np.unique(label_mask)[1:] 
 
-    Adapted from https://github.com/vmtk/vmtk/blob/6211af00372d099454acaf5d90520ddfcdf6cf96/vmtkScripts/vmtkcenterlinesnetwork.py#L129.
+            if unique_labels.size > 1:
+                # Only perform distance transformation when necessary
+                distances = ndimage.distance_transform_edt(label_mask == 0, return_distances=True, return_indices=False)
+                nearest_label = unique_labels[np.argmin([np.min(distances[label_mask == lbl]) for lbl in unique_labels])]
+                properties = measure.regionprops((label_mask == nearest_label).astype(int))
+                centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
+            elif unique_labels.size == 1:
+                # If only one label, use its centroid directly
+                properties = measure.regionprops(label_mask.astype(int), label_mask == unique_labels[0])
+                centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
+            else:
+                # Default to the original coordinates if no labels were found
+                centroid = [i, j ,k]
 
-    Parameters
-    ----------
-    segmentation_model : vtkPolyData
-        The surface model of the vascular segmentation.
-
-    Returns
-    -------
-    network_centerlines : vtkPolyData
-        The network centerlines.
-
-    """
-    # feature edges are used to find any holes in the surface.
-    fedges = vtk.vtkFeatureEdges()
-    fedges.BoundaryEdgesOn()
-    fedges.FeatureEdgesOff()
-    fedges.ManifoldEdgesOff()
-    fedges.SetInputData(segmentation_model)
-    fedges.Update()
-    ofedges = fedges.GetOutput()
-
-    # if num_edges is not 0, then there are holes which need to be capped
-    num_edges = ofedges.GetNumberOfPoints()
-    if num_edges != 0:
-        tempcapper = vmtk.vmtksurfacecapper.vmtkSurfaceCapper()
-        tempcapper.Surface = segmentation_model
-        tempcapper.Interactive = 0
-        tempcapper.Execute()
-
-        network_surface = tempcapper.Surface
-    else:
-        network_surface = segmentation_model
-
-    # randomly select one cell to delete so that there is an opening for
-    # vmtkNetworkExtraction to use.
-    num_cells = network_surface.GetNumberOfCells()
-    random_generator = random.Random()
-    random_generator.seed(42)
-    cell_to_delete = random_generator.randrange(0, num_cells-1)
-    network_surface.BuildLinks()
-    network_surface.DeleteCell(cell_to_delete)
-    network_surface.RemoveDeletedCells()
-
-    # extract the network of approximated centerlines
-    net = vmtk.vmtknetworkextraction.vmtkNetworkExtraction()
-    net.Surface = network_surface
-    net.AdvancementRatio = 1.001
-    net.Execute()
-    network = net.Network
-
-    convert = vmtk.vmtkcenterlinestonumpy.vmtkCenterlinesToNumpy()
-    convert.Centerlines = network
-    convert.LogOn = False
-    convert.Execute()
-    ad = convert.ArrayDict
-    cell_data_topology = ad['CellData']['Topology']
-
-    # the network topology identifies an the input segment with the "0" id.
-    # since we artificially created this segment, we don't want to use the
-    # ends of the segment as source/target points of the centerline calculation
-    try:
-        node_index_to_ignore = np.where(cell_data_topology[:,0] == 0)[0][0]
-    except:
-        node_index_to_ignore = None
-    keep_cell_connectivity_list = []
-    point_idx_to_keep = np.array([])
-    remove_cell_length = 0
-    # we remove the cell, points, and point data which are associated with the
-    # segment we want to ignore
-    for loop_idx, cell_connectivity_list in enumerate(ad['CellData']['CellPointIds']):
-        if loop_idx == node_index_to_ignore:
-            remove_cell_startidx = cell_connectivity_list[0]
-            remove_cell_end_idx = cell_connectivity_list[-1]
-            remove_cell_length = cell_connectivity_list.size
-            if (remove_cell_end_idx + 1) - remove_cell_startidx != remove_cell_length:
-                raise(ValueError)
-            continue
+            # Return the new position of the endpoint in RAS coordinates
+            endpoint_vtk_points.SetPoint(endpoint_idx, np.matmul(segmentation_affine, np.append(centroid, 1.0))[:3])
+            # print("New endpoint position: {}".format(endpoint_vtk_points.GetPoint(endpoint_idx)))
         else:
-            rescaled_cell_connectivity = np.subtract(cell_connectivity_list, remove_cell_length, where=cell_connectivity_list >= remove_cell_length)
-            keep_cell_connectivity_list.append(rescaled_cell_connectivity)
-            point_idx_to_keep = np.concatenate((point_idx_to_keep, cell_connectivity_list)).astype(int)
-    new_points = ad['Points'][point_idx_to_keep]
+            # print("Endpoint {} is already inside the segmentation".format(endpoint_idx))
+            pass
+    
+    return endpoint_vtk_points
 
-    # precompute the delaunay tessellation for the whole surface.
-    tessalation = vmtk.vmtkdelaunayvoronoi.vmtkDelaunayVoronoi()
-    tessalation.Surface = network_surface
-    tessalation.Execute()
-
-    out = []
-    import sys
-    if (sys.platform == 'win32') or (sys.platform == 'win64') or (sys.platform == 'cygwin') or (sys.platform == 'darwin'):
-        use_joblib = False
-    else:
-        use_joblib = True
-    if use_joblib:
-        # vtk objects cannot be serialized in python. Instead of converting the inputs to numpy arrays and having
-        # to reconstruct the vtk object each time the loop executes (a slow process), we can just pass in the
-        # memory address of the data objects as a string, and use the vtk python bindings to create a python name
-        # referring to the data residing at that memory address. This works because joblib executes each loop
-        # iteration in a fork of the original process, providing access to the original memory space.
-        # However, the process does not work for return arguments, since the original process will not have access to
-        # the memory space of the fork. To return results we use the vmtkCenterlinesToNumpy converter.
-        network_surface_memory_address = network_surface.__this__
-        delaunay_memory_address = tessalation.DelaunayTessellation.__this__
-        voronoi_memory_address = tessalation.VoronoiDiagram.__this__
-        pole_ids_memory_address = tessalation.pole_ids.__this__
-        num_parallel_jobs = -1
-        
-        # note about the verbose function: while Joblib can print a progress bar output (set verbose = 20),
-        # it does not implement a callback function as of version 0.11, so we cannot report progress to the user
-        # if we are redirecting standard out with the self.PrintLog method.
-        outlist = Parallel(n_jobs=num_parallel_jobs, backend='multiprocessing', verbose=0)(
-            delayed(_compute_centerlines_network)(network_surface_memory_address,
-                                            delaunay_memory_address,
-                                            voronoi_memory_address,
-                                            pole_ids_memory_address,
-                                            cell,
-                                            new_points) for cell in keep_cell_connectivity_list)
-        for item in outlist:
-            np_convert = vmtk.vmtknumpytocenterlines.vmtkNumpyToCenterlines()
-            np_convert.ArrayDict = item
-            np_convert.LogOn = 0
-            np_convert.Execute()
-            out.append(np_convert.Centerlines)
-    else:
-        for cell in keep_cell_connectivity_list:
-                cl = _compute_centerline_branch(network_surface, tessalation.DelaunayTessellation, tessalation.VoronoiDiagram,
-                                                tessalation.pole_ids, cell, new_points)
-                out.append(cl)
-                
-
-    # Append each segment's polydata into a single polydata object
-    centerline_appender = vtk.vtkAppendPolyData()
-    for data in out:
-        centerline_appender.AddInputData(data)
-    centerline_appender.Update()
-
-    # clean and strip the output centerlines so that redundant points are merged and tracts are combined
-    centerline_cleaner = vtk.vtkCleanPolyData()
-    centerline_cleaner.SetInputData(centerline_appender.GetOutput())
-    centerline_cleaner.Update()
-
-    centerline_stripper = vtk.vtkStripper()
-    centerline_stripper.SetInputData(centerline_cleaner.GetOutput())
-    centerline_stripper.JoinContiguousSegmentsOn()
-    centerline_stripper.Update()
-
-    network_centerlines = centerline_stripper.GetOutput()
-
-    return network_centerlines
-
-def get_endpoints(network_centerlines, startpoint_position):
-    """ 
-    Adapted from https://github.com/vmtk/SlicerExtension-VMTK/blob/3787ea4a300da28ec5f0824f0715f2713b631155/ExtractCenterline/ExtractCenterline.py#L746
-    Clips the surfacePolyData on the endpoints identified using the networkPolyData.
-    If startpoint_position is specified then start point will be the closest point to that position.
-    Returns list of endpoint positions. Largest radius point is be the first in the list.
-
-    Parameters
-    ----------
-    network_centerlines : vtkPolyData
-        The network poly data.
-    startpoint_position : numpy.array
-        The start point position.
-
-    Returns
-    -------
-    endpoint_positions : list
-        List of endpoint positions.
-
-    """
-    cleaner = vtk.vtkCleanPolyData()
-    cleaner.SetInputData(network_centerlines)
-    cleaner.Update()
-    network = cleaner.GetOutput()
-    network.BuildCells()
-    network.BuildLinks(0)
-
-    network_points = network.GetPoints()
-    radius_array = network.GetPointData().GetArray("MaximumInscribedSphereRadius")
-
-    startpoint_id = -1
-    max_radius = 0
-    min_distance_2 = 0
-
-    endpoint_ids = vtk.vtkIdList()
-    for idx in range(network.GetNumberOfCells()):
-        number_of_cell_points = network.GetCell(idx).GetNumberOfPoints()
-        if number_of_cell_points < 2:
-            continue
-
-        for point_index in [0, number_of_cell_points - 1]:
-            point_id = network.GetCell(idx).GetPointId(point_index)
-            point_cells = vtk.vtkIdList()
-            network.GetPointCells(point_id, point_cells)
-            if point_cells.GetNumberOfIds() == 1:
-                endpoint_ids.InsertUniqueId(point_id)
-                if startpoint_position is not None:
-                    # find start point based on position
-                    position = network_points.GetPoint(point_id)
-                    distance_2 = vtk.vtkMath.Distance2BetweenPoints(position, startpoint_position)
-                    if startpoint_id < 0 or distance_2 < min_distance_2:
-                        min_distance_2 = distance_2
-                        startpoint_id = point_id
-                else:
-                    # find start point based on radius
-                    radius = radius_array.GetValue(point_id)
-                    if startpoint_id < 0 or radius > max_radius:
-                        max_radius = radius
-                        startpoint_id = point_id
-
-    endpoint_positions = []
-    number_of_endpoint_ids = endpoint_ids.GetNumberOfIds()
-    if number_of_endpoint_ids == 0:
-        return endpoint_positions
-    # add the largest radius point first
-    endpoint_positions.append(network_points.GetPoint(startpoint_id))
-    # add all the other points
-    for point_id_index in range(number_of_endpoint_ids):
-        point_id = endpoint_ids.GetId(point_id_index)
-        if point_id == startpoint_id:
-            # already added
-            continue
-        endpoint_positions.append(network_points.GetPoint(point_id))
-
-    return endpoint_positions
-
-def aortic_arch_endpoint_check(endpoints_list, segmentation_array, segmentation_affine):
+def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmentation_affine):
     """
     Checks that both ens of the aortic arch (AA), if present, have one associated endpoint.
     To do that, it looks at the bottom slice of the volume and analyzes the presence 
@@ -460,7 +750,8 @@ def aortic_arch_endpoint_check(endpoints_list, segmentation_array, segmentation_
     # Compute distance from each endpoint to all centroids of components in the bottom slice
     # The goal is to check that each component (generallly there should be 2) has one endpoint
     # nearby
-    for idx, endpoint in enumerate(endpoints_list):
+    for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
+        endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
         delete_idx = None
         for idx_centroids, centroid in enumerate(centroids):
             # If a connnected component is found close to an endpoint, we accept it as correctly placed
@@ -476,7 +767,7 @@ def aortic_arch_endpoint_check(endpoints_list, segmentation_array, segmentation_
         for centroid in centroids:
             print("Adding endpoint at", centroid)
             print()
-            endpoints_list.append(np.array(centroid))
+            endpoint_vtk_points.InsertNextPoint(centroid)
 
     # Now all that's left is to ensure that the startpoint is placed at the descending aorta
     # (most proximal point from femoral access in endovascular interventions)
@@ -485,7 +776,8 @@ def aortic_arch_endpoint_check(endpoints_list, segmentation_array, segmentation_
     # The criteria will be to choose the AA endpoint (at < 50 mm from bottom slice) that is closest to the reference point
     # Check every other point's distance to origin (ijk)
     distance_to_reference = []
-    for idx, endpoint in enumerate(endpoints_list):
+    for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
+        endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
         endpoint = np.matmul(np.linalg.inv(segmentation_affine), np.append(endpoint, 1.0))[:3]
         # Reference point set at [350, 0, 0] in LAS coordinates
         if nib.orientations.aff2axcodes(segmentation_affine) == ("R", "A", "S"):
@@ -498,7 +790,7 @@ def aortic_arch_endpoint_check(endpoints_list, segmentation_array, segmentation_
     # Get order from closest to furthest
     sorted_distance_idx = np.argsort(distance_to_reference)
     for idx in sorted_distance_idx:
-        startpoint = endpoints_list[idx]
+        startpoint = endpoint_vtk_points.GetPoint(idx)
         if np.matmul(np.linalg.inv(segmentation_affine), np.append(startpoint, 1.0))[2] > threshold_distance:
             print("Startpoint {} found is not in the AA region".format(idx))
             pass
@@ -510,193 +802,141 @@ def aortic_arch_endpoint_check(endpoints_list, segmentation_array, segmentation_
             # If it is not, set next closest endpoint to reference as startpoint if it is closer to bottom slice
             elif np.matmul(np.linalg.inv(segmentation_affine), np.append(startpoint, 1.0))[2] < threshold_distance and idx != 0:
                 print("New startpoint ({}): {}".format(idx, startpoint))
-                endpoints_list[idx] = endpoints_list[0]
-                endpoints_list[0] = startpoint
+                endpoint_vtk_points.SetPoint(idx, endpoint_vtk_points.GetPoint(0))
+                endpoint_vtk_points.SetPoint(0, startpoint)
                 break
             else: 
                 pass
     
-    return endpoints_list
+    return endpoint_vtk_points
 
-def robust_endpoint_detection(endpoint_list, segmentation_array, segmentation_affine, window_size = 15):
+def consolidate_points(polydata, threshold=1e-3):
     """
-    Relocates automatically detected endpoints to the center of mass of the closest component
-    inside a local region around the endpoint (defined by n).
-
-    Takes the endpoint position, converts it to voxel coordinates with the affine matrix, then defines a region  
-    of (2 * n) ^ 3 voxels centered around the endpoint. Then components inside the local region are treated 
-    as separate objects. The minimum distance from these objects to the endpoint is computed, and from 
-    these, the object with the smallest distance to the endpoint is chosen to compute the centroid, which
-    is converted back to RAS with the affine matrix.
+    Maps all points that are within a threshold distance of each other to a single reference
+    point, so that centerlines that overlap actually overlap (i.e. share the same points).
 
     Parameters
     ----------
-    endpoint : numpy.array or array-like object 
-        Position of the endpoint in RAS coordinates.
-    segmentation_array : numpy.array or array-like object
-        Numpy array corresponding to the masked_volume_node.
-    segmentation_affine : numpy.array or array-like object. Shape: 4 x 4
-        Affine matrix corresponding to the nifti file. RAS to ijk transformation.
-    window_size : int 
-        Defines the size of the region around the endpoint that is analyzed for this method.
-        New endpoint location will be searched within a cubic box of size 2 * n around the 
-        originial endpoint location.
+    polydata : vtk.vtkPolyData
+        Centerline model.
+    threshold : float, optional
+        Threshold distance for grouping points. The default is 1e-3.
 
     Returns
     -------
-    new_endpoint : numpy.array or array-like object
-        New position of the endpoint.
+    index_map : dict
+        Dictionary that maps original point indices to the representative point index.
 
     """
-    # Invert the affine matrix
-    segmentation_affine_inv = np.linalg.inv(segmentation_affine)
-    for endpoint_idx, endpoint in enumerate(endpoint_list):
-        # Compute endpoint ijk coordinates with affine matrix
-        i, j, k = np.round(np.matmul(segmentation_affine_inv, np.append(endpoint, 1.0))[:3]).astype(int)
-        if segmentation_array[i, j, k] == 0:
-            print("Relocating endpoint {}: {}".format(endpoint_idx, endpoint))
-            # Mask the segmentation_array (only region of interest)
-            masked_segmentation = segmentation_array[
-                np.max([0, i - window_size]): np.min([segmentation_array.shape[0], i + window_size]), 
-                np.max([0, j - window_size]): np.min([segmentation_array.shape[1], j + window_size]),
-                np.max([0, k - window_size]): np.min([segmentation_array.shape[2], k + window_size])
-                ]
-            
-            # Divide into different connected components
-            label_mask = measure.label(masked_segmentation)
-            # We sort label values and ignore the background
-            labels = np.sort(np.unique(label_mask))
-            labels = np.delete(labels, np.where([labels == 0]))
+    points = np.array([polydata.GetPoint(i) for i in range(polydata.GetNumberOfPoints())])
+    tree = cKDTree(points)
+    groups = tree.query_ball_tree(tree, r=threshold)
 
-            # Pass masked groups to one-hot encoding
-            label_mask_one_hot = np.zeros([len(labels), label_mask.shape[0], label_mask.shape[1], label_mask.shape[2]], dtype=np.uint8)
-            for idx, label in enumerate(labels):
-                label_mask_one_hot[idx][label_mask == label] = 1
+    # groups is a nested list containing groups of centerline point ids that are within threshold distance of each other
+    # Each entry idx (a list of point ids) represents all the point ids that are grouped with that point
 
-            # Invert the masks
-            inverted_label_mask_one_hot = np.ones_like(label_mask_one_hot) - label_mask_one_hot
-            
-            # Get distance transform for each and get only closest component of the inverted masks
-            # Distance transforms encode the distance of all foreground voxels
-            # to the closest background element
-            distance_labels = np.empty_like(labels, dtype=float)
-            for idx in range(len(labels)):
-                distance_labels[idx] = ndimage.distance_transform_edt(inverted_label_mask_one_hot[idx])[inverted_label_mask_one_hot.shape[1] // 2][inverted_label_mask_one_hot.shape[2] // 2][inverted_label_mask_one_hot.shape[3] // 2]
-            # We keep only the closest component to the original endpoint
-            mask = np.zeros_like(segmentation_array)
-            mask[
-                np.max([0, i - window_size]): np.min([segmentation_array.shape[0], i + window_size]), 
-                np.max([0, j - window_size]): np.min([segmentation_array.shape[1], j + window_size]),
-                np.max([0, k - window_size]): np.min([segmentation_array.shape[2], k + window_size])
-                ] = label_mask_one_hot[np.argmin(distance_labels)]
-            
-            # Get the centroid of the foregroud region and turn it into the new endpoint
-            properties = measure.regionprops(mask.astype(int), mask.astype(int))
-            center_of_mass = np.array(properties[0].centroid)
+    # Map original indices to new consolidated indices
+    index_map = {}
+    for idx, group in enumerate(groups):
+        if not group:
+            print(f"Empty group ({idx})")
+        representative_index = group[0]  # Take the first point in group as representative. It will be the smallest index of the group, because they are always sorted
+        for index in group:
+            index_map[index] = representative_index # index_map is a dictionary that related point_ids with the representative point_id
 
-            # Return the new position of the endpoint in RAS coordinates
-            endpoint_list[endpoint_idx] = np.matmul(segmentation_affine, np.append(center_of_mass, 1.0))[:3]
-            print("New endpoint position: {}".format(endpoint_list[endpoint_idx]))
-        else:
-            print("Endpoint {} is already inside the segmentation".format(endpoint_idx))
-    
-    return endpoint_list
+    return index_map
 
-def _robust_endpoint_detection(endpoint_data):
+def update_polydata(polydata, index_map):
     """
-    Same as robust_endpoint_detection but adapted to be used in parallel processing.
+    Updates the polydata structure by consolidating points that are within a 
+    threshold distance of each other. Basically assigns the same position and point data values
+    exactly to all points within the threshold distance, keeping the original number of points 
+    and cell connectivity.
 
     Parameters
     ----------
-    endpoint_data : tuple
-        Tuple containing the endpoint, segmentation_array, segmentation_affine, and window_size.
+    polydata : vtk.vtkPolyData
+        Centerline model.
+    index_map : dict
+        Dictionary that maps original point indices to the representative point index.
 
     Returns
     -------
-    new_endpoint : numpy.array or array-like object
-        New position of the endpoint.
-
+    new_polydata : vtk.vtkPolyData
+        Updated centerline model with consolidated points.
+        
     """
-    endpoint, segmentation_array, segmentation_affine, window_size = endpoint_data
-    # All the steps remain the same as in your function until the `distance_transform_edt` call
-    print("Relocating endpoint: {}".format(endpoint))
-    # Compute endpoint ijk coordinates with affine matrix
-    i, j, k = np.round(np.matmul(np.linalg.inv(segmentation_affine), np.append(endpoint, 1.0))[:3]).astype(int)
-    # Mask the segmentation_array (only region of interest)
-    masked_segmentation = segmentation_array[
-        np.max([0, i - window_size]): np.min([segmentation_array.shape[0], i + window_size]), 
-        np.max([0, j - window_size]): np.min([segmentation_array.shape[1], j + window_size]),
-        np.max([0, k - window_size]): np.min([segmentation_array.shape[2], k + window_size])
-        ]
+    # Get original points and point data arrays
+    original_points = polydata.GetPoints()
+    num_point_arrays = polydata.GetPointData().GetNumberOfArrays()
     
-    # Divide into different connected components
-    label_mask = measure.label(masked_segmentation)
-    # We sort label values and ignore the background
-    labels = np.sort(np.unique(label_mask))
-    labels = np.delete(labels, np.where([labels == 0]))
-
-    # Pass masked groups to one-hot encoding
-    label_mask_one_hot = np.zeros([len(labels), label_mask.shape[0], label_mask.shape[1], label_mask.shape[2]], dtype=np.uint8)
-    for idx, label in enumerate(labels):
-        label_mask_one_hot[idx][label_mask == label] = 1
-
-    # Invert the masks
-    inverted_label_mask_one_hot = np.ones_like(label_mask_one_hot) - label_mask_one_hot
+    # Create new points and point data structures
+    new_points = vtk.vtkPoints()
+    new_point_arrays = [vtk.vtkDoubleArray() for _ in range(num_point_arrays)]
     
-    # Get distance transform for each and get only closest component of the inverted masks
-    # Distance transforms encode the distance of all foreground voxels
-    # to the closest background element
-    distance_labels = np.empty_like(labels, dtype=float)
-    for idx in range(len(labels)):
-        distance_labels[idx] = ndimage.distance_transform_edt(inverted_label_mask_one_hot[idx])[inverted_label_mask_one_hot.shape[1] // 2][inverted_label_mask_one_hot.shape[2] // 2][inverted_label_mask_one_hot.shape[3] // 2]
-    # We keep only the closest component to the original endpoint
-    mask = np.zeros_like(segmentation_array)
-    mask[
-        np.max([0, i - window_size]): np.min([segmentation_array.shape[0], i + window_size]), 
-        np.max([0, j - window_size]): np.min([segmentation_array.shape[1], j + window_size]),
-        np.max([0, k - window_size]): np.min([segmentation_array.shape[2], k + window_size])
-        ] = label_mask_one_hot[np.argmin(distance_labels)]
+    # Copy the attributes and names of the original point data arrays
+    for i in range(num_point_arrays):
+        array = polydata.GetPointData().GetArray(i)
+        new_point_arrays[i].SetName(array.GetName())
+        new_point_arrays[i].SetNumberOfComponents(array.GetNumberOfComponents())
+
+    # Mapping of old indices to new indices after consolidation
+    new_index_map = {}
+
+    # Ensure that each representative index has a new index
+    for representative_index in index_map.values():
+        if representative_index not in new_index_map:
+            # Add point to new_points, and save the new index
+            new_point_idx = new_points.InsertNextPoint(original_points.GetPoint(representative_index))
+            new_index_map[representative_index] = new_point_idx
+            # Copy data for this point
+            for i in range(num_point_arrays):
+                original_array = polydata.GetPointData().GetArray(i)
+                value = [original_array.GetComponent(representative_index, j) for j in range(original_array.GetNumberOfComponents())]
+                new_point_arrays[i].InsertNextTuple(value)
+
+    new_polydata = vtk.vtkPolyData()
+    new_polydata.SetPoints(new_points)
+    for new_array in new_point_arrays:
+        new_polydata.GetPointData().AddArray(new_array)
+
+    # Remap the cells
+    new_cells = vtk.vtkCellArray()
+    for i in range(polydata.GetNumberOfCells()):
+        cell = polydata.GetCell(i)
+        new_cell_points = vtk.vtkIdList()
+        for j in range(cell.GetNumberOfPoints()):
+            original_index = cell.GetPointId(j)
+            representative_index = index_map[original_index]
+            new_index = new_index_map[representative_index]
+            new_cell_points.InsertNextId(new_index)
+        new_cells.InsertNextCell(new_cell_points)
     
-    # Get the centroid of the foregroud region and turn it into the new endpoint
-    properties = measure.regionprops(mask.astype(int), mask.astype(int))
-    center_of_mass = np.array(properties[0].centroid)
-    # Return the new position of the endpoint in RAS coordinates
-    new_endpoint = np.matmul(segmentation_affine, np.append(center_of_mass, 1.0))[:3]
+    new_polydata.SetLines(new_cells)
 
-    return new_endpoint
+    return new_polydata
 
-def multi_robust_endpoint_detection(endpoint_list, segmentation_array, segmentation_affine, window_size=15, max_workers=8):
+def clean_centerline(polydata, threshold=1e-3):
     """
-    Multi-threaded version of the robust_endpoint_detection function.
+    Applies the consolidate_points and update_polydata functions to clean the centerline model.
+    The result is a centerline model with consolidated points, i.e., centerlines that overlap with
+    points that share the exact position and data values. This helps simplify postprocessing steps.
 
     Parameters
     ----------
-    endpoint_list : list
-        List of endpoints to be processed.
-    segmentation_array : numpy.array
-        Binary array to be segmented.
-    segmentation_affine : numpy.array
-        Affine transformation of the binary array.
-    window_size : int
-        Defines the size of the region around the endpoint that is analyzed for this method.
-        New endpoint location will be searched within a cubic box of size 2 * n around the 
-        originial endpoint location.
-    max_workers : int
-        Maximum number of workers to be used in the parallel processing.
+    polydata : vtk.vtkPolyData
+        Centerline model.
+    threshold : float, optional
+        Threshold distance for grouping points. The default is 1e-3.
 
     Returns
     -------
-    new_endpoints : list
-        List of new positions of the endpoints.
+    new_polydata : vtk.vtkPolyData
+        Updated centerline model with consolidated points.
+        
     """
-    # Prepare data for parallel processing
-    data_for_processing = [(endpoint, segmentation_array, segmentation_affine, window_size) for endpoint in endpoint_list]
-    
-    # Process endpoints in parallel
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        new_endpoints = list(executor.map(_robust_endpoint_detection, data_for_processing))
-    
-    return new_endpoints
+    index_map = consolidate_points(polydata, threshold)
+    return update_polydata(polydata, index_map)
 
 # def compute_frenet_serret(centerline_poly_data):
 #     """
