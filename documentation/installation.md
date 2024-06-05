@@ -14,7 +14,7 @@ pip install --upgrade pip
 pip install torch
 pip install torch_geometric pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
 
-git clone https://github.com/perecanals/arterial.git
+git clone https://github.com/FLOWCAT-CV/arterial.git
 cd arterial
 pip install -e .
 ```
