@@ -94,9 +94,13 @@ class CenterlineExtractor():
         -------
         
         """
+        if save:
+            os.makedirs(self.segmentations_dir_path, exist_ok=True)
+
         if self.segmentation_array is None or self.segmentation_affine is None:
             self.load_segmentation_nifti()
-        volume_sanity_check(self.segmentation_array, self.segmentation_affine)
+        if self.mode == "extracranial_vessels":
+            volume_sanity_check(self.segmentation_array, self.segmentation_affine)
         self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine)
         
         if save:

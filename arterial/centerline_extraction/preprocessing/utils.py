@@ -119,6 +119,7 @@ def resample_vtk_image_data(vtk_image_data, reduction_factor=0.5):
     resample.SetAxisMagnificationFactor(1, reduction_factor)
     resample.SetAxisMagnificationFactor(2, reduction_factor)
     resample.SetInterpolationMode(vtk.VTK_RESLICE_NEAREST)
+    print(resample)
     resample.Update()
     return resample.GetOutput()
 

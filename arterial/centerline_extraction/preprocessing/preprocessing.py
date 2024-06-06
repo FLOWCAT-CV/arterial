@@ -47,13 +47,14 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
         print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Adding affine information to VTK ImageData...")
         vtk_image_data = add_affine_information(vtk_image_data, segmentation_affine)
         print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Resampling VTK ImageData...")
+        print(vtk_image_data)
         vtk_image_data = resample_vtk_image_data(vtk_image_data, reduction_factor)
         appender.AddInputData(vtk_image_data)
 
     appender.Update()
     vtk_image_data = appender.GetOutput()
     
-    print("    Extracting segmentation surface...")
+    print("Extracting segmentation surface...")
     segmentation_model = extract_surface(vtk_image_data,  **surface_extraction_parameters)
 
     return segmentation_model

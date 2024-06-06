@@ -30,7 +30,7 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertEqual(self.centerline_extractor.segmentation_path, os.path.join(self.case_dir, self.mode, "segmentation.vtk"))
         self.assertEqual(self.centerline_extractor.branch_model_path, os.path.join(self.case_dir, self.mode, "branch_model.vtk"))
         self.assertEqual(self.centerline_extractor.clipped_model_path, os.path.join(self.case_dir, self.mode, "clipped_model.vtk"))
-        self.assertIsNone(self.centerline_extractor.segmentation)
+        self.assertIsNone(self.centerline_extractor.segmentation_model)
         self.assertIsNone(self.centerline_extractor.branch_model)
         self.assertIsNone(self.centerline_extractor.clipped_model)
         self.assertEqual(self.centerline_extractor.centerline_segments_array_path, os.path.join(self.case_dir, self.mode, "centerline_segments_array.npy"))
@@ -66,11 +66,11 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertIsNotNone(self.centerline_extractor.centerline_segments_array)
 
         self.centerline_extractor.segmentation_nifti = None
-        self.centerline_extractor.affine = None
+        self.centerline_extractor.segmentation_affine = None
         self.centerline_extractor.image_shape = None
         self.centerline_extractor.centerline_model_list = []
         self.centerline_extractor.segmentation_model_list = []
-        self.centerline_extractor.segmentation = None
+        self.centerline_extractor.segmentation_model = None
         self.centerline_extractor.branch_model_list = []
         self.centerline_extractor.branch_model = None
         self.centerline_extractor.clipped_model_list = []
