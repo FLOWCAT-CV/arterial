@@ -4,7 +4,7 @@ import vtk
 
 import numpy as np
 
-from arterial.centerline_extraction.preprocessing.utils import split_segmentation, numpy_array_to_vtk_image_data, add_affine_information, resample_vtk_image_data, extract_surface
+from arterial.centerline_extraction.preprocessing.utils import get_bounding_box_and_adjust_affine, split_segmentation, numpy_array_to_vtk_image_data, add_affine_information, resample_vtk_image_data, extract_surface
 
 def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.5, **surface_extraction_parameters):
     """
@@ -34,20 +34,25 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
     appender = vtk.vtkImageAppend()
     appender.SetAppendAxis(2) 
 
-    z_threshold = 350
+    z_threshold = 300
+    bounding_box, adjusted_affine = get_bounding_box_and_adjust_affine(segmentation_array, segmentation_affine)
+    segmentation_array_ = segmentation_array[bounding_box[2, 0]:bounding_box[2, 1], bounding_box[1, 0]:bounding_box[1, 1], bounding_box[0, 0]:bounding_box[0, 1]]
+    print("Segmentation array shape (after bounding box):", segmentation_array_.shape)
 
-    for idx in range(segmentation_array.shape[0] // z_threshold + 1):
+    for idx in range(segmentation_array_.shape[0] // z_threshold + 1):
         # Cut the segmentation_array in chunks and append them to the appender
-        array = segmentation_array[idx * z_threshold:min(len(segmentation_array), (idx + 1) * z_threshold), :, :]
+        array = segmentation_array_[idx * z_threshold:min(len(segmentation_array_), (idx + 1) * z_threshold), :, :]
+        # Add z translation to affine
+        adjusted_affine_ = np.copy(adjusted_affine)
+        adjusted_affine_[:3, 3] = adjusted_affine[:3, 3] + adjusted_affine[2, 2] * idx * z_threshold
         if array.shape[0] == 0:
             continue
-        print(f"    Chunk {idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}:", array.shape)
-        print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Converting island to VTK ImageData...")
+        print(f"    Chunk {idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}:", array.shape)
+        print(f"    ({idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}) Converting island to VTK ImageData...")
         vtk_image_data = numpy_array_to_vtk_image_data(array)
-        print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Adding affine information to VTK ImageData...")
-        vtk_image_data = add_affine_information(vtk_image_data, segmentation_affine)
-        print(f"    ({idx + 1}/{segmentation_array.shape[0] // z_threshold + 1}) Resampling VTK ImageData...")
-        print(vtk_image_data)
+        print(f"    ({idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}) Adding affine information to VTK ImageData...")
+        vtk_image_data = add_affine_information(vtk_image_data, adjusted_affine_)
+        print(f"    ({idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}) Resampling VTK ImageData...")
         vtk_image_data = resample_vtk_image_data(vtk_image_data, reduction_factor)
         appender.AddInputData(vtk_image_data)
 

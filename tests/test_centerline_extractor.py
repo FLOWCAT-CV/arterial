@@ -40,7 +40,7 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.centerline_extractor.perform_centerline_extraction()
         self.assertNotEqual(self.centerline_extractor.centerline_model_list, [])
         self.assertNotEqual(self.centerline_extractor.segmentation_model_list, [])
-        self.assertIsNotNone(self.centerline_extractor.segmentation)
+        self.assertIsNotNone(self.centerline_extractor.segmentation_model)
         for idx in range(len(self.centerline_extractor.centerline_model_list)):
             self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.centerlines_dir_path, f"centerlines_{idx}.vtk")))
             self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.segmentations_dir_path, f"segmentation_{idx}.vtk")))
