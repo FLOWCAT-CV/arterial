@@ -6,6 +6,36 @@ import numpy as np
 
 from skimage import measure
 
+def get_bounding_box_and_adjust_affine(segmentation_array, segmentation_affine):
+    """
+    Get the bounding box of the segmentation array and adjust the affine transformation accordingly.
+
+    Parameters
+    ----------
+    segmentation_array : numpy.array
+        Binary array to be segmented.
+    segmentation_affine : numpy.array
+        Affine transformation of the binary array.
+
+    Returns
+    -------
+    bounding_box : numpy.array
+        Bounding box of the segmentation array.
+    adjusted_affine : numpy.array
+        Adjusted affine transformation.
+
+    """
+    bounding_box_args = np.argwhere(segmentation_array)
+    min_z, min_y, min_x = bounding_box_args.min(axis=0)
+    max_z, max_y, max_x = bounding_box_args.max(axis=0)
+
+    adjusted_affine = np.copy(segmentation_affine)
+    print("IJK origin displacement:", min_x, min_y, min_z)
+    print("RAS origin displacement:", segmentation_affine[:3, :3] @ [min_x, min_y, min_z])
+    adjusted_affine[:3, 3] = segmentation_affine[:3, 3] + segmentation_affine[:3, :3] @ [min_x, min_y, min_z]
+
+    return np.array([[min_x, max_x], [min_y, max_y], [min_z, max_z]]), adjusted_affine
+
 # Split segmentation_array in a list of arrays with the different islands
 def split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size):
     """
@@ -119,7 +149,6 @@ def resample_vtk_image_data(vtk_image_data, reduction_factor=0.5):
     resample.SetAxisMagnificationFactor(1, reduction_factor)
     resample.SetAxisMagnificationFactor(2, reduction_factor)
     resample.SetInterpolationMode(vtk.VTK_RESLICE_NEAREST)
-    print(resample)
     resample.Update()
     return resample.GetOutput()
 
