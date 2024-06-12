@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings("ignore") # There is a warning that is wrong with nnunet 
                                   # (something about the version of trained model)
     
-def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres"):
+def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True):
     """
     Performs inference of the CTA in img_array with a trained nnunet models. The combination of
     mode and nnunet_mode should be consistent with the trained model that is going to be used. 
@@ -56,7 +56,8 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     # Initializes the network architecture, loads the checkpoint
     predictor.initialize_from_trained_model_folder(
         os.path.join(os.environ["arterial_dir"], f'segmentation/models/{mode}/nnUNetTrainer__nnUNetPlans__{nnunet_mode}'),
-        use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer
+        use_folds=("all" if use_vanilla_nnunet else "0",), # Models set by use_vanilla_nnunet. "0" is model trained with nnUNetClDiceLossTrainer, "all" is trained with vanilla nnUNetTrainer
+        # use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer
         # use_folds=("all",), # Models trained with vanilla nnUNetTrainer
         checkpoint_name='checkpoint_final.pth',
     )

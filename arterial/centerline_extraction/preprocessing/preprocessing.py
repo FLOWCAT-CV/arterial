@@ -34,7 +34,7 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
     appender = vtk.vtkImageAppend()
     appender.SetAppendAxis(2) 
 
-    z_threshold = 300
+    z_threshold = 250
     bounding_box, adjusted_affine = get_bounding_box_and_adjust_affine(segmentation_array, segmentation_affine)
     segmentation_array_ = segmentation_array[bounding_box[2, 0]:bounding_box[2, 1], bounding_box[1, 0]:bounding_box[1, 1], bounding_box[0, 0]:bounding_box[0, 1]]
     print("Segmentation array shape (after bounding box):", segmentation_array_.shape)
