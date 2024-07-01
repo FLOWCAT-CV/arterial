@@ -28,8 +28,8 @@ conda activate foo
 conda install -c conda-forge vmtk
 
 pip install --upgrade pip
-pip install 'torch<2.2' torch_geometric
-pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.1.0+cpu.html
+pip install torch==2.2.2 torch_geometric
+pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
 ```
 
 To clone repo and install arterial as a Python package:
@@ -49,3 +49,7 @@ nano ~/.bashrc
 ```bash
 export arterial_dir="/path/to/arterial/arterial"
 ```
+
+## Copy models
+
+This step is currently performed manually.
