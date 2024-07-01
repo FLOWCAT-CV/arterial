@@ -29,7 +29,8 @@ class VesselSegmenter():
                  case_dir,
                  mode = "extracranial_vesslels",
                  cta_nifti_path = None,
-                 fast_segmentation = False
+                 fast_segmentation = False,
+                 use_vanilla_nnunet = True
                  ):
         """
         Initializes object of the Segmenter class.
@@ -47,6 +48,9 @@ class VesselSegmenter():
             Boolean variable to be used when running analysis derived from fast segmentation (lowres).
             In this case, segmentation of the cerebral arteries is less reliable, so a higher fraction
             of intracranial slices is ignored, facilitating centerline extraction.
+        use_vanilla_nnunet : bool, default = True
+            Boolean variable to determine whether the vanilla nnunet model is used. If False, the nnunet model
+            trained with the nnunetClDiceLossTrainer is used.
         
         """
         assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
@@ -73,6 +77,8 @@ class VesselSegmenter():
         self.cta_head_affine = None
         self.segmentation_head_array = None
         self.segmentation_neck_array = None
+
+        self.use_vanilla_nnunet = use_vanilla_nnunet
 
     def segment_vessels_from_cta(self, save=True):
         """
@@ -102,14 +108,14 @@ class VesselSegmenter():
         if self.mode == "extracranial_vessels":
             if self.fast_segmentation:
                 print("Performing fast segmentation...")
-                self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres")
+                self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
             else:
                 print("Slicing CTA into head and neck...")
                 self.slice_cta()
                 print("Performing segmentation (head)...")
-                _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres")
+                _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet)
                 print("Performing segmentation (neck)...")
-                _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres")
+                _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
                 print("Joining segmentations...")
                 self.segmentation_nifti, self.segmentation_array = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
             
@@ -118,7 +124,7 @@ class VesselSegmenter():
             self.slice_cta()
             self.save_head_cta_nifti()
             print("Performing segmentation...")
-            self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres")
+            self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet)
         
         if save:
             print("Saving segmentation...")
