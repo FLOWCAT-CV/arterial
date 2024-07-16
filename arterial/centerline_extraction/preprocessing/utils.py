@@ -6,6 +6,42 @@ import numpy as np
 
 from skimage import measure
 
+def get_bounding_box_limits_3d(img):
+    """
+    Computes bounding box (only z axis) of a numpy array (expects an array 
+    with zeros as background).
+
+    Parameters
+    ----------
+    img : numpy.array or array-like object
+        3D numpy binary (0, 1) array.
+
+    Returns
+    -------
+    min_lr : integer
+        Lower bound on axis x, LR (in voxel coordinates).
+    max_lr : integer
+        Upper bound on axis x, LR (in voxel coordinates).
+    min_pa : integer
+        Lower bound on axis y, PA (in voxel coordinates).
+    max_pa : integer
+        Upper bound on axis y, PA (in voxel coordinates).
+    min_is : integer
+        Lower bound on axis z, IS (in voxel coordinates).
+    max_is : integer
+        Upper bound on axis z, IS (in voxel coordinates).
+
+    """
+    axis_left_right = np.any(img, axis=(0, 1))
+    axis_posterior_anterior = np.any(img, axis=(0, 2))
+    axis_inferior_superior = np.any(img, axis=(1, 2))
+
+    min_lr, max_lr = np.where(axis_left_right)[0][[0, -1]]
+    min_pa, max_pa = np.where(axis_posterior_anterior)[0][[0, -1]]
+    min_is, max_is = np.where(axis_inferior_superior)[0][[0, -1]]
+
+    return min_lr, max_lr, min_pa, max_pa, min_is, max_is
+
 # Split segmentation_array in a list of arrays with the different islands
 def split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size):
     """
@@ -41,36 +77,6 @@ def split_segmentation(segmentation_array, segmentation_affine, minimum_island_v
             segmentation_array_list.append(np.where(label_mask == values[idx], 1., 0.))
 
     return segmentation_array_list
-
-# def get_bounding_box_and_adjust_affine(segmentation_array, segmentation_affine):
-#     """
-#     Get the bounding box of the segmentation array and adjust the affine transformation accordingly.
-
-#     Parameters
-#     ----------
-#     segmentation_array : numpy.array
-#         Binary array to be segmented.
-#     segmentation_affine : numpy.array
-#         Affine transformation of the binary array.
-
-#     Returns
-#     -------
-#     bounding_box : numpy.array
-#         Bounding box of the segmentation array.
-#     adjusted_affine : numpy.array
-#         Adjusted affine transformation.
-
-#     """
-#     bounding_box_args = np.argwhere(segmentation_array)
-#     min_z, min_y, min_x = bounding_box_args.min(axis=0)
-#     max_z, max_y, max_x = bounding_box_args.max(axis=0)
-
-#     adjusted_affine = np.copy(segmentation_affine)
-#     print("IJK origin displacement:", min_x, min_y, min_z)
-#     print("RAS origin displacement:", segmentation_affine[:3, :3] @ [min_x, min_y, min_z])
-#     adjusted_affine[:3, 3] = segmentation_affine[:3, 3] + segmentation_affine[:3, :3] @ [min_x, min_y, min_z]
-
-#     return np.array([[min_x, max_x], [min_y, max_y], [min_z, max_z]]), adjusted_affine
 
 def numpy_array_to_vtk_image_data(numpy_array):
     """
@@ -120,36 +126,6 @@ def add_affine_information(vtk_image_data, affine=None):
     vtk_image_data.SetDirectionMatrix(1., 0., 0., 0., 1., 0., 0., 0., 1.)
     return vtk_image_data
 
-# def resample_vtk_image_data(vtk_image_data, reduction_factor=0.5):
-#     """
-#     Resample the vtkImageData to reduce its resolution. Otherwise we would find that
-    
-#     for images larger than approximately [512, 512, 600] the process crashes.
-
-#     Parameters
-#     ----------
-#     vtk_image_data : vtkImageData
-#         The original image data.
-#     reduction_factor : float
-#         The factor to which to reduce the resolution. For example, 0.5 will reduce the 
-#         number of points to about half along each dimension, while 0.8 will reduce the
-#         number of points to about 80% along each dimension.
-
-#     Returns
-#     -------
-#     vtkImageData : vtkImageData
-#         The resampled image data.
-
-#     """
-#     resample = vtk.vtkImageResample()
-#     resample.SetInputData(vtk_image_data)
-#     resample.SetAxisMagnificationFactor(0, reduction_factor)
-#     resample.SetAxisMagnificationFactor(1, reduction_factor)
-#     resample.SetAxisMagnificationFactor(2, reduction_factor)
-#     resample.SetInterpolationMode(vtk.VTK_RESLICE_NEAREST)
-#     resample.Update()
-#     return resample.GetOutput()
-
 def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_parameters):
     """
     Extract the surface vtkPolyData from a vtkImageData object.
@@ -180,9 +156,9 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
 
     # Extract surface using the marching cubes algorithm
     print("    Applying marching cubes...")
-    surface_extractor = vtk.vtkDiscreteMarchingCubes()
+    surface_extractor = vtk.vtkMarchingCubes()
     surface_extractor.SetInputData(vtk_image_data)
-    surface_extractor.SetValue(0, 1) 
+    surface_extractor.SetValue(0, 0.5) 
     surface_extractor.Update()
 
     # Ensure that the mesh is formed by triangular cells
@@ -212,7 +188,7 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
     fill_holes.SetHoleSize(1000.0)  # Large enough to cover the expected hole size
     fill_holes.Update()
 
-    # COmpute normal components for all mesh triangles
+    # Compute normal components for all mesh triangles
     print("    Computing normals...")
     normals_generator = vtk.vtkPolyDataNormals()
     normals_generator.SetInputConnection(fill_holes.GetOutputPort())
@@ -231,10 +207,17 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
     decimate.BoundaryVertexDeletionOn()
     decimate.Update()
 
+    # Apply a connectivity filter to remove disconnected parts 
+    print("    Applying connectivity filter...")
+    connectivity_filter = vtk.vtkConnectivityFilter()
+    connectivity_filter.SetInputConnection(decimate.GetOutputPort())
+    connectivity_filter.SetExtractionModeToLargestRegion()
+    connectivity_filter.Update()
+
     # Clean the decimated surface
     print("    Cleaning mesh...")
     cleaner = vtk.vtkCleanPolyData()
-    cleaner.SetInputConnection(decimate.GetOutputPort())
+    cleaner.SetInputConnection(connectivity_filter.GetOutputPort())
     cleaner.Update()
     
     return cleaner.GetOutput()

@@ -1,9 +1,8 @@
 #   Copyright 2024 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import vtk, math, random
+import vtk, math
 
 from vmtk import vtkvmtk
-from vmtk import vmtkcenterlines, vmtkcenterlinestonumpy, vmtknetworkextraction, vmtkdelaunayvoronoi, vmtknumpytocenterlines, vmtksurfacecapper
 
 import numpy as np
 import nibabel as nib
@@ -11,9 +10,6 @@ import nibabel as nib
 from skimage import measure
 from scipy import ndimage
 from scipy.spatial import cKDTree
-
-from joblib import Parallel, delayed
-from concurrent.futures import ProcessPoolExecutor
 
 class CenterlineComputationLogic(object):
     """
@@ -110,19 +106,21 @@ class CenterlineComputationLogic(object):
 
         print("Clipping surface at endpoints...")
         # clip surface at endpoints identified by the network extraction
-        prepared_surface_model = self.decimate_surface(prepared_surface_model, 0.75)
+        # prepared_surface_model = self.decimate_surface(prepared_surface_model, 0.7)
         clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
+
         print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
-        # for idx in range(endpoints.GetNumberOfPoints()):
-        #     print(f"Endpoint {idx}: {endpoints.GetPoint(idx)}")
 
         if is_first_model:
             # Check the presence of the aortic arch endpoints
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
         endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10)
+        # if is_first_model:
+        #     # Save the endpoints in a json file
+        #     build_endpoints_json(endpoints)
 
-        # now find the one endpoint which is closest to the seed and use it as the source point for centerline computation
+        # Now find the one endpoint which is closest to the seed and use it as the source point for centerline computation
         # all other endpoints are the target points
         source_point = current_coordinates_ras
 
@@ -234,34 +232,14 @@ class CenterlineComputationLogic(object):
 
         # Triangulate the surface
         surface_triangulator = vtk.vtkTriangleFilter()
-        surface_triangulator.SetInputData(surface_cleaner.GetOutput())
+        surface_triangulator.SetInputConnection(surface_cleaner.GetOutputPort())
         surface_triangulator.PassLinesOff()
         surface_triangulator.PassVertsOff()
         surface_triangulator.Update()
 
-        # New steps for preparation to avoid problems because of slim models (f.e. at stenosis)
-        if subdivide:
-            subdiv = vtk.vtkLinearSubdivisionFilter()
-            subdiv.SetInputData(surface_triangulator.GetOutput())
-            subdiv.SetNumberOfSubdivisions(1)
-            subdiv.Update()
-            if subdiv.GetOutput().GetNumberOfPoints() == 0:
-                subdivide = False
-
-        # Apply smoothing
-        smooth = vtk.vtkWindowedSincPolyDataFilter()
-        if subdivide:
-            smooth.SetInputData(subdiv.GetOutput())
-        else:
-            smooth.SetInputData(surface_triangulator.GetOutput())
-        smooth.SetNumberOfIterations(20)
-        smooth.SetPassBand(0.1)
-        smooth.SetBoundarySmoothing(1)
-        smooth.Update()
-
         # Recompute normals
         normals = vtk.vtkPolyDataNormals()
-        normals.SetInputData(smooth.GetOutput())
+        normals.SetInputConnection(surface_triangulator.GetOutputPort())
         normals.SetAutoOrientNormals(1)
         normals.SetFlipNormals(0)
         normals.SetConsistency(1)
@@ -270,10 +248,16 @@ class CenterlineComputationLogic(object):
 
         # Cap the surface
         surface_capper = vtkvmtk.vtkvmtkCapPolyData()
-        surface_capper.SetInputData(normals.GetOutput())
+        surface_capper.SetInputConnection(normals.GetOutputPort())
         surface_capper.SetDisplacement(0.0)
         surface_capper.SetInPlaneDisplacement(0.0)
         surface_capper.Update()
+
+        # Apply a connectivity filter to remove disconnected parts 
+        connectivity_filter = vtk.vtkConnectivityFilter()
+        connectivity_filter.SetInputConnection(surface_capper.GetOutputPort())
+        connectivity_filter.SetExtractionModeToLargestRegion()
+        connectivity_filter.Update()
 
         prepared_surface_model = vtk.vtkPolyData()
         prepared_surface_model.DeepCopy(surface_capper.GetOutput())
@@ -548,6 +532,77 @@ class CenterlineComputationLogic(object):
         voronoi.DeepCopy(centerline_filter.GetVoronoiDiagram())
 
         return [centerlines, voronoi]
+    
+# def build_endpoints_json(endpoint_list):
+#     endpoints_json = {
+#         "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
+#         "markups": [
+#             {
+#                 "type": "Fiducial",
+#                 "coordinateSystem": "LPS",
+#                 "coordinateUnits": "mm",
+#                 "locked": "false",
+#                 "fixedNumberOfControlPoints": "false",
+#                 "labelFormat": "%N-%d",
+#                 "lastUsedControlPointNumber": 45,
+#                 "controlPoints": [],
+#                 "measurements": [],
+#                 "display": {
+#                     "visibility": "true",
+#                     "opacity": 1.0,
+#                     "color": [0.4, 1.0, 1.0],
+#                     "selectedColor": [1.0, 0.5000076295109483, 0.5000076295109483],
+#                     "activeColor": [0.4, 1.0, 0.0],
+#                     "propertiesLabelVisibility": "false",
+#                     "pointLabelsVisibility": "false",
+#                     "textScale": 3.0,
+#                     "glyphType": "Sphere3D",
+#                     "glyphScale": 3.0,
+#                     "glyphSize": 5.0,
+#                     "useGlyphScale": "true",
+#                     "sliceProjection": "false",
+#                     "sliceProjectionUseFiducialColor": "true",
+#                     "sliceProjectionOutlinedBehindSlicePlane": "false",
+#                     "sliceProjectionColor": [1.0, 1.0, 1.0],
+#                     "sliceProjectionOpacity": 0.6,
+#                     "lineThickness": 0.2,
+#                     "lineColorFadingStart": 1.0,
+#                     "lineColorFadingEnd": 10.0,
+#                     "lineColorFadingSaturation": 1.0,
+#                     "lineColorFadingHueOffset": 0.0,
+#                     "handlesInteractive": "false",
+#                     "translationHandleVisibility": "true",
+#                     "rotationHandleVisibility": "true",
+#                     "scaleHandleVisibility": "true",
+#                     "interactionHandleScale": 3.0,
+#                     "snapMode": "toVisibleSurface"
+#                 }
+#             }
+#         ]
+#     }
+
+#     # Pass from vtkPoints to list
+#     endpoint_list_ = [list(endpoint_list.GetPoint(idx)) for idx in range(endpoint_list.GetNumberOfPoints())]
+
+#     for idx, endpoint in enumerate(endpoint_list_):
+#         print(endpoint)
+#         endpoints_json["markups"][0]["controlPoints"].append(
+#             {
+#                 "id": str(idx + 1),
+#                 "label": "Endpoints-1",
+#                 "description": "",
+#                 "associatedNodeID": "",
+#                 "position": list(endpoint),
+#                 "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+#                 "selected": "false",
+#                 "locked": "false",
+#                 "visibility": "true",
+#                 "positionStatus": "defined"
+#             }
+#         )
+#     endpoints_json["markups"][0]["lastUsedControlPointNumber"] = idx + 1
+
+#     save_json(endpoints_json, "/Users/pere/Downloads/endpoints.json")
 
 def get_bounding_box_limits_3d(array):
     """
@@ -936,6 +991,18 @@ def clean_centerline(polydata, threshold=1e-3):
         
     """
     index_map = consolidate_points(polydata, threshold)
+
+    # Remove cells with less than 3 points
+    number_of_removed_cells = 0
+    for cell_idx in range(polydata.GetNumberOfCells()):
+        cell = polydata.GetCell(cell_idx)
+        if cell.GetNumberOfPoints() <= 2:
+            polydata.DeleteCell(cell_idx)
+            number_of_removed_cells += 1
+
+    polydata.RemoveDeletedCells()
+    print(f"Removed {number_of_removed_cells} cells (less than 3 points)")
+
     return update_polydata(polydata, index_map)
 
 # def compute_frenet_serret(centerline_poly_data):
