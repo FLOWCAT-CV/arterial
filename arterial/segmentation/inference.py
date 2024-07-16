@@ -42,13 +42,23 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     img = np.expand_dims(img_array.transpose([2, 1, 0]), axis=0).astype(np.float32)  # reverse axis order to match SITK (from nnunetv2 repo)
     props = {"spacing": tuple(np.abs(np.diag(img_affine, k=0)[:3][::-1]))}
 
+    # Read device
+    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    # elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    #     device = torch.device("mps")
+
+    print(f"Using device: {device}")
+
     # Instantiate the nnUNetPredictor
     predictor = nnUNetPredictor(
         tile_step_size=0.75,
         use_gaussian=True,
         use_mirroring=True,
         perform_everything_on_device=True,
-        device=torch.device('cuda', 0),
+        device=device,
         verbose=True,
         verbose_preprocessing=False,
         allow_tqdm=True
