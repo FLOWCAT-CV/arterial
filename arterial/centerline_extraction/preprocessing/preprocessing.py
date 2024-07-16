@@ -4,9 +4,9 @@ import vtk
 
 import numpy as np
 
-from arterial.centerline_extraction.preprocessing.utils import get_bounding_box_and_adjust_affine, split_segmentation, numpy_array_to_vtk_image_data, add_affine_information, resample_vtk_image_data, extract_surface
+from arterial.centerline_extraction.preprocessing.utils import split_segmentation, extract_surface, numpy_array_to_vtk_image_data, add_affine_information
 
-def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.5, **surface_extraction_parameters):
+def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.8, **surface_extraction_parameters):
     """
     Computes the segmentation surface of a binary array. The binary array is first converted to
     a VTK ImageData object. The VTK ImageData object is then resampled to reduce its resolution,
@@ -31,40 +31,17 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
         Segmentation surface.
 
     """
-    appender = vtk.vtkImageAppend()
-    appender.SetAppendAxis(2) 
+    # Create VTK image
+    vtk_image = numpy_array_to_vtk_image_data(segmentation_array, segmentation_affine)
+    # Add affine information
+    vtk_image = add_affine_information(vtk_image, segmentation_affine)
 
-    z_threshold = 250
-    bounding_box, adjusted_affine = get_bounding_box_and_adjust_affine(segmentation_array, segmentation_affine)
-    segmentation_array_ = segmentation_array[bounding_box[2, 0]:bounding_box[2, 1], bounding_box[1, 0]:bounding_box[1, 1], bounding_box[0, 0]:bounding_box[0, 1]]
-    print("Segmentation array shape (after bounding box):", segmentation_array_.shape)
-
-    for idx in range(segmentation_array_.shape[0] // z_threshold + 1):
-        # Cut the segmentation_array in chunks and append them to the appender
-        array = segmentation_array_[idx * z_threshold:min(len(segmentation_array_), (idx + 1) * z_threshold), :, :]
-        # Add z translation to affine
-        adjusted_affine_ = np.copy(adjusted_affine)
-        adjusted_affine_[:3, 3] = adjusted_affine[:3, 3] + adjusted_affine[2, 2] * idx * z_threshold
-        if array.shape[0] == 0:
-            continue
-        print(f"    Chunk {idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}:", array.shape)
-        print(f"    ({idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}) Converting island to VTK ImageData...")
-        vtk_image_data = numpy_array_to_vtk_image_data(array)
-        print(f"    ({idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}) Adding affine information to VTK ImageData...")
-        vtk_image_data = add_affine_information(vtk_image_data, adjusted_affine_)
-        print(f"    ({idx + 1}/{segmentation_array_.shape[0] // z_threshold + 1}) Resampling VTK ImageData...")
-        vtk_image_data = resample_vtk_image_data(vtk_image_data, reduction_factor)
-        appender.AddInputData(vtk_image_data)
-
-    appender.Update()
-    vtk_image_data = appender.GetOutput()
-    
     print("Extracting segmentation surface...")
-    segmentation_model = extract_surface(vtk_image_data,  **surface_extraction_parameters)
+    segmentation_model = extract_surface(vtk_image, reduction_factor=reduction_factor, **surface_extraction_parameters)
 
     return segmentation_model
 
-def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, reduction_factor=0.5, minimum_island_voxel_size=8000, **surface_extraction_parameters):
+def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, reduction_factor=0.8, minimum_island_voxel_size=8000, **surface_extraction_parameters):
     """
     Computes the segmentation surfaces of a binary array. The binary array is first split into
     different islands, and then each island is converted to a VTK ImageData object. The VTK ImageData
