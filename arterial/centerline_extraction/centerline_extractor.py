@@ -101,7 +101,7 @@ class CenterlineExtractor():
             self.load_segmentation_nifti()
         if self.mode == "extracranial_vessels":
             volume_sanity_check(self.segmentation_array, self.segmentation_affine)
-        self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine)
+        self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine, self.fast_segmentation)
         
         if save:
             save_vtkpolydata(self.segmentation_model, self.segmentation_path)
@@ -173,7 +173,7 @@ class CenterlineExtractor():
             print(f"Extracting branch model from centerline model {idx}...")
             branch_model_ = extract_branch_model(centerline_model)
             if branch_model_ is None and idx == 0:
-                raise ValueError("Branch model could not be extracted for first model. Interrupting computation, as this"\
+                raise ValueError("Branch model could not be extracted for first model. Interrupting computation, as this "\
                                  "is a critical error for all the posterior pipeline.")
             if branch_model_ is not None:
                 self.branch_model_list.append(branch_model_)

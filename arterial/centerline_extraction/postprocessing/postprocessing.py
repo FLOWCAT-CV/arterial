@@ -5,6 +5,8 @@ import vtk
 import numpy as np
 import nibabel as nib
 
+from vtk.util.numpy_support import vtk_to_numpy
+
 def compute_centerline_segments_array(centerline_model_list, affine, image_shape, mode="extracranial_vessels", radius_array_name="MaximumInscribedSphereRadius"):
     """
     Loads a vtkPolyData object containing the centerline model and generates
@@ -60,7 +62,7 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
         length_coordinate_array = np.ndarray([number_of_cells], dtype=int)
 
         # Centerline point data for maximal inscribed sphere radius
-        radius_array = vtk.util.numpy_support.vtk_to_numpy(centerline_model.GetPointData().GetArray(radius_array_name))
+        radius_array = vtk_to_numpy(centerline_model.GetPointData().GetArray(radius_array_name))
 
         # Iterate over cells to extract cell_ids, positions and radii. We also store lengths of cells (number of points, not distance)
         for cell_id in range(number_of_cells):

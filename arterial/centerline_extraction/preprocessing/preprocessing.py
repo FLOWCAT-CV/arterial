@@ -1,12 +1,10 @@
 #   Copyright 2024 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-import vtk
-
 import numpy as np
 
-from arterial.centerline_extraction.preprocessing.utils import split_segmentation, extract_surface, numpy_array_to_vtk_image_data, add_affine_information
+from arterial.centerline_extraction.preprocessing.utils import get_bounding_box_limits_3d, numpy_array_to_vtk_image_data, add_affine_information, split_segmentation, extract_surface
 
-def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.8, **surface_extraction_parameters):
+def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.9, **surface_extraction_parameters):
     """
     Computes the segmentation surface of a binary array. The binary array is first converted to
     a VTK ImageData object. The VTK ImageData object is then resampled to reduce its resolution,
@@ -32,7 +30,7 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
 
     """
     # Create VTK image
-    vtk_image = numpy_array_to_vtk_image_data(segmentation_array, segmentation_affine)
+    vtk_image = numpy_array_to_vtk_image_data(segmentation_array)
     # Add affine information
     vtk_image = add_affine_information(vtk_image, segmentation_affine)
 
@@ -41,7 +39,7 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
 
     return segmentation_model
 
-def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, reduction_factor=0.8, minimum_island_voxel_size=8000, **surface_extraction_parameters):
+def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, fast_segmentation=False, reduction_factor=0.8, minimum_island_voxel_size=8000, **surface_extraction_parameters):
     """
     Computes the segmentation surfaces of a binary array. The binary array is first split into
     different islands, and then each island is converted to a VTK ImageData object. The VTK ImageData
@@ -54,6 +52,11 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         Binary array to be segmented.
     segmentation_affine : numpy.array
         Affine transformation of the binary array.
+    fast_segmentation : bool, optional
+        Flag to indicate if fast processing pipeline should be chosen. Basically all voxels in the
+        upper 15% of the segmentation's bounding box will be set to 0. This reduces the burden for the 
+        branch model extraction and only affects centerlines in the intracranial region. This can be desired if
+        the analysis is focused on the extracranial region. The default is False.
     reduction_factor : float, optional
         The factor by which to reduce the resolution of the segmentation surfaces. The default is 0.5.
     surface_extraction_parameters : dict
@@ -65,6 +68,13 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         List of segmentation surfaces.
     
     """
+    if fast_segmentation:
+        min_lr, max_lr, min_pa, max_pa, min_is, max_is = get_bounding_box_limits_3d(segmentation_array)
+        print(segmentation_array.shape)
+        print(max_is, min_is, int(np.round(max_is * 0.85)))
+        print(sum(segmentation_array))
+        segmentation_array[:, :, int(np.round(max_is * 0.85)):] = 0
+        print(sum(segmentation_array))
     segmentation_array = np.transpose(segmentation_array, (2, 1, 0))
 
     print("Processing complete array...")
