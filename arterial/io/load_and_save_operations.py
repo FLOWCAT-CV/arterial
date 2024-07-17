@@ -204,3 +204,48 @@ def load_nifti(path):
 
     """
     return nib.load(path)
+
+def serialize_vtk_polydata(polydata):
+    """
+    Serializes vtkPolyData to binary string. This
+    is used for example to input a vtlPolyData object
+    to a remote function.
+
+    Parameters
+    ----------
+    polydata : vtk.vtkPolyData
+        vtkPolyData object to be serialized.
+
+    Returns
+    -------
+    str
+        Binary string representation of the vtkPolyData object.
+
+    """
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetInputData(polydata)
+    writer.WriteToOutputStringOn()
+    writer.Update()
+    return writer.GetOutputString()
+
+def deserialize_vtk_polydata(data):
+    """
+    Deserializes binary string to vtkPolyData. This is used
+    to retrieve a vtkPolyData object from a remote function.
+
+    Parameters
+    ----------
+    data : str
+        Binary string representation of a vtkPolyData object.
+
+    Returns
+    -------
+    vtk.vtkPolyData
+        vtkPolyData object deserialized from the binary string.
+
+    """
+    reader = vtk.vtkPolyDataReader()
+    reader.ReadFromInputStringOn()
+    reader.SetInputString(data)
+    reader.Update()
+    return reader.GetOutput()
