@@ -103,6 +103,37 @@ class TestCenterlineExtractor(unittest.TestCase):
         # self.centerline_extractor.load_clipped_model()
         # self.assertIsNotNone(self.centerline_extractor.clipped_model)
 
+    def test_fast_pipeline(self):
+        self.centerline_extractor.centerline_model_list = []
+        self.centerline_extractor.segmentation_model_list = []
+        self.centerline_extractor.segmentation_model = None
+        self.centerline_extractor.branch_model_list = []
+        self.centerline_extractor.branch_model = None
+        self.centerline_extractor.clipped_model_list = []
+        self.centerline_extractor.clipped_model = None
+        self.centerline_extractor.centerline_segments_array = None
+        self.centerline_extractor.set_fast_segmentation(True)
+
+        self.centerline_extractor.perform_centerline_extraction()
+        self.assertNotEqual(self.centerline_extractor.centerline_model_list, [])
+        self.assertNotEqual(self.centerline_extractor.segmentation_model_list, [])
+        self.assertIsNotNone(self.centerline_extractor.segmentation_model)
+        for idx in range(len(self.centerline_extractor.centerline_model_list)):
+            self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.centerlines_dir_path, f"centerlines_{idx}.vtk")))
+            self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.segmentations_dir_path, f"segmentation_{idx}.vtk")))
+        self.assertTrue(os.path.exists(self.centerline_extractor.segmentation_path))
+
+        self.centerline_extractor.perform_branch_model_extraction()
+        self.assertNotEqual(self.centerline_extractor.branch_model_list, [])
+        self.assertIsNotNone(self.centerline_extractor.branch_model)
+        for idx, branch_model in enumerate(self.centerline_extractor.branch_model_list):
+            if branch_model is not None:
+                self.assertTrue(os.path.exists(os.path.join(self.centerline_extractor.branch_models_dir_path, f"branch_model_{idx}.vtk")))
+        self.assertTrue(os.path.exists(self.centerline_extractor.branch_model_path))
+
+        self.centerline_extractor.perform_centerline_postprocessing()
+        self.assertIsNotNone(self.centerline_extractor.centerline_segments_array)
+
     @classmethod
     def tearDownClass(cls):
         # Remove all the files generated during the tests
