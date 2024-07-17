@@ -137,8 +137,6 @@ class CenterlineExtractor():
             self.load_segmentation_nifti()
 
         for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
-            # self.endpoints_list.append(get_robuts_endpoints(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False))
-            # centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.endpoints_list[idx])
             centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
             self.centerline_model_list.append(centerlines)
             self.voronoi_diagrams_list.append(voronoi_diagram)
