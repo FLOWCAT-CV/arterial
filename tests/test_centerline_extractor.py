@@ -79,7 +79,7 @@ class TestCenterlineExtractor(unittest.TestCase):
 
         self.centerline_extractor.load_segmentation_nifti()
         self.assertIsNotNone(self.centerline_extractor.segmentation_nifti)
-        self.assertIsNotNone(self.centerline_extractor.affine)
+        self.assertIsNotNone(self.centerline_extractor.segmentation_affine)
         self.assertIsNotNone(self.centerline_extractor.image_shape)
 
         self.centerline_extractor.load_centerline_model_list()
@@ -89,7 +89,7 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.assertNotEqual(self.centerline_extractor.segmentation_model_list, [])
 
         self.centerline_extractor.load_segmentation()
-        self.assertIsNotNone(self.centerline_extractor.segmentation)
+        self.assertIsNotNone(self.centerline_extractor.segmentation_model)
 
         self.centerline_extractor.load_branch_model_list()
         self.assertNotEqual(self.centerline_extractor.branch_model_list, [])
