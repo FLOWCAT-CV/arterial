@@ -1,10 +1,5 @@
 import unittest
-
 import os, shutil
-
-import numpy as np
-import nibabel as nib
-
 from arterial.segmentation.segmenter import VesselSegmenter
 
 class TestVesselSegmenter(unittest.TestCase):
