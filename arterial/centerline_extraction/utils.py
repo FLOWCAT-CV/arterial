@@ -115,7 +115,7 @@ class CenterlineComputationLogic(object):
             # Check the presence of the aortic arch endpoints
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
-        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10)
+        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=5)
         # if is_first_model:
         #     # Save the endpoints in a json file
         #     build_endpoints_json(endpoints)
@@ -671,7 +671,7 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     if segmentation_volume < 5e4 and bouding_box_volume < 6e6: # Empirically tested
         raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
-def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 15):
+def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5):
     """
     Relocates automatically detected endpoints to the center of mass of the closest component
     inside a local region around the endpoint (defined by n).
