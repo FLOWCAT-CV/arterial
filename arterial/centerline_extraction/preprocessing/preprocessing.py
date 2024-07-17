@@ -68,14 +68,15 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         List of segmentation surfaces.
     
     """
-    if fast_segmentation:
-        _, _, _, _, _, max_is = get_bounding_box_limits_3d(segmentation_array)
-        segmentation_array[:, :, int(np.round(max_is * 0.9)):] = 0
     segmentation_array = np.transpose(segmentation_array, (2, 1, 0))
 
     print("Processing complete array...")
     segmentation_model = compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.8, **surface_extraction_parameters)
 
+    if fast_segmentation:
+        _, max_is, _, _, _, _ = get_bounding_box_limits_3d(segmentation_array)
+        segmentation_array[int(np.round(max_is * 0.9)):, :, :] = 0
+    
     print("\nSplitting segmentation array into islands...")
     segmentation_array_list = split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size=minimum_island_voxel_size)
     print("Number of islands found:", len(segmentation_array_list))
