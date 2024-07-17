@@ -32,9 +32,9 @@ def get_bounding_box_limits_3d(img):
         Upper bound on axis z, IS (in voxel coordinates).
 
     """
-    axis_left_right = np.any(img, axis=(0, 1))
+    axis_left_right = np.any(img, axis=(1, 2))
     axis_posterior_anterior = np.any(img, axis=(0, 2))
-    axis_inferior_superior = np.any(img, axis=(1, 2))
+    axis_inferior_superior = np.any(img, axis=(0, 1))
 
     min_lr, max_lr = np.where(axis_left_right)[0][[0, -1]]
     min_pa, max_pa = np.where(axis_posterior_anterior)[0][[0, -1]]
@@ -150,9 +150,9 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
         The extracted surface.
 
     """
-    n_iteration_smoothing = surface_extraction_parameters.get('n_iteration_smoothing', 50)
+    n_iteration_smoothing = surface_extraction_parameters.get('n_iteration_smoothing', 60)
     feature_angle = surface_extraction_parameters.get('feature_angle', 120.)
-    pass_band = surface_extraction_parameters.get('pass_band', 0.1)
+    pass_band = surface_extraction_parameters.get('pass_band', 0.05)
 
     # Extract surface using the marching cubes algorithm
     print("    Applying marching cubes...")
