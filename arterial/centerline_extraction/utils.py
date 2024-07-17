@@ -533,6 +533,7 @@ class CenterlineComputationLogic(object):
 
         return [centerlines, voronoi]
     
+# from arterial.io.load_and_save_operations import save_json
 # def build_endpoints_json(endpoint_list):
 #     endpoints_json = {
 #         "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
