@@ -10,10 +10,6 @@ def main():
         help="Path to directory containing the nifti image (assumes that the nifti file has the basename of the dir). Required.")
     parser.add_argument("-cnp", "--cta_nifti_path", type=str, required=False, default=None,
         help="Path to the nifti image. Not required (assumes is case_dir/cta.nii.gz).")
-    # parser.add_argument("-no_display", "--no_display", type=bool, required=False, default=False, 
-    #     help="If using a remote Linux, this should be used following correct Slicer installation, and should be coulpled "
-    #     "with the use of `xvfb-run --auto-servernum --server-num=1` upon use before calling this script (prior to the python command). "
-    #     "Not required, default = False.")
     parser.add_argument('-m', '--mode', type=str, required=False, default='extracranial_vessels',
         help='Determines whether the analysis is performed for extracranial_vessels, intracranial_vessels or thrombus. Not required.')
     parser.add_argument("-fast", "--fast_segmentation", action="store_true",
@@ -35,6 +31,8 @@ def main():
         help="Boolean argument to determine if vessel labelling should be skipped or not. Not required, default = False.")
     parser.add_argument("-sfe", "--skip_feature_extraction", action="store_true",
         help="Boolean argument to determine if feature extraction should be skipped or not. Not required, default = False.")
+    parser.add_argument("-clnn", "--cl_dice_nnunet", action="store_true",
+        help="Boolean argument to determine if nnunet trained with centerline dice should be used or not. Not required, default = False.")
     
     parser = parser.parse_args()
 

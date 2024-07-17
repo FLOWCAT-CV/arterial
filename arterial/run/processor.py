@@ -61,12 +61,14 @@ class ArterialProcessor():
         self.skip_clipping = args.skip_clipping
         self.skip_vessel_labelling = args.skip_vessel_labelling
         self.skip_feature_extraction = args.skip_feature_extraction
+        self.use_vanilla_nnunet = not args.cl_dice_nnunet
 
         # Initialize module classes
         self.vessel_segmenter = VesselSegmenter(self.case_dir,
                                                 self.mode,
                                                 self.cta_nifti_path,
-                                                self.fast_segmentation)
+                                                self.fast_segmentation,
+                                                self.use_vanilla_nnunet)
         self.centerline_extractor = CenterlineExtractor(self.case_dir, 
                                                         self.mode, 
                                                         None, 

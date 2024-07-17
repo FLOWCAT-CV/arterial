@@ -64,6 +64,7 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
         allow_tqdm=True
     )
     # Initializes the network architecture, loads the checkpoint
+    print("Using vanilla nnunet:", use_vanilla_nnunet)
     predictor.initialize_from_trained_model_folder(
         os.path.join(os.environ["arterial_dir"], f'segmentation/models/{mode}/nnUNetTrainer__nnUNetPlans__{nnunet_mode}'),
         use_folds=("all" if use_vanilla_nnunet else "0",), # Models set by use_vanilla_nnunet. "0" is model trained with nnUNetClDiceLossTrainer, "all" is trained with vanilla nnUNetTrainer
