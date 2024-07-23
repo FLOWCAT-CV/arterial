@@ -774,7 +774,7 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     voxel_size = np.prod([segmentation_affine[idx, idx] for idx in range(3)])
     threshold_counts = abs(round(500 * (reference_voxel_size / voxel_size)))
     # For AA endpoints check (distance from bottom slice in mm)
-    threshold_distance = 50 * 0.4 / segmentation_affine[2, 2]
+    threshold_distance = 50 # mm
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(segmentation_array[:, :, 0])
@@ -794,21 +794,21 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     # Notice that we set the S coordinate to 1.0 for all centroids
     aa_centroids_to_be_found = np.zeros(shape = (len(properties), 3))
     for idx, prop in enumerate(properties):
-        aa_centroids_to_be_found[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid)[[1, 0]], [1.0, 1.0]))[:3]
+        aa_centroids_to_be_found[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid), [1.0, 1.0]))[:3] # result in RAS coordinates
 
     # Compute distance from each endpoint to all centroids of components in the bottom slice
     # The goal is to check that each component (generallly there should be 2) has one endpoint
     # nearby
+    delete_indices = []
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
-        delete_indices = []
         for idx_centroids, centroid in enumerate(aa_centroids_to_be_found):
             # If a connnected component is found close to an endpoint, we accept it as correctly placed
             # We remove the AA centroid from the list of aa_centroids as a way of saying "this one is found" 
             if np.linalg.norm(centroid - endpoint) < threshold_distance: # Threshold at 50 mm
                 delete_indices.append(idx_centroids)
-        if len(delete_indices) > 0:
-            aa_centroids_to_be_found = np.delete(aa_centroids_to_be_found, delete_idx, axis=0)
+    if len(delete_indices) > 0:
+        aa_centroids_to_be_found = np.delete(aa_centroids_to_be_found, delete_indices, axis=0)
 
     # If any aa_centroids_to_be_found survive, it means that no enpoints were found close by
     if len(aa_centroids_to_be_found) > 0:
@@ -839,26 +839,18 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
         distance_to_reference.append(np.linalg.norm(endpoint - aa_reference_ras_coordinates))
-        # print(f"Endpoint {endpoint_idx}: {endpoint} ({distance_to_reference[-1]})")
 
     # Get order from closest to furthest
     sorted_distance_idx = np.argsort(distance_to_reference)
-    for idx in sorted_distance_idx:
-        startpoint_candidate = endpoint_vtk_points.GetPoint(idx)
-        if distance_to_reference[idx] > threshold_distance:
-            print("Startpoint {} found is not in the AA region".format(idx))
-            pass
-        else:
-            # Check if the endpoint at 0 is at the distal AA
-            if idx == 0:
-                print("Original startpoint is at distal AA")
-                break
-            # If it is not, set next closest endpoint to reference as startpoint if it is closer to bottom slice
-            else:
-                print("New startpoint ({}): {}".format(idx, startpoint_candidate))
-                endpoint_vtk_points.SetPoint(idx, endpoint_vtk_points.GetPoint(0))
-                endpoint_vtk_points.SetPoint(0, startpoint_candidate)
-                break
+    startpoint_candidate = endpoint_vtk_points.GetPoint(sorted_distance_idx[0])
+    # Check if the endpoint at 0 is at the distal AA
+    if sorted_distance_idx[0] == 0:
+        print("Original startpoint is at distal AA")
+    # If it is not, set next closest endpoint to reference as startpoint if it is closer to bottom slice
+    else:
+        print("New startpoint ({}): {}".format(sorted_distance_idx[0], startpoint_candidate))
+        endpoint_vtk_points.SetPoint(sorted_distance_idx[0], endpoint_vtk_points.GetPoint(0))
+        endpoint_vtk_points.SetPoint(0, startpoint_candidate)
     
     return endpoint_vtk_points
 
