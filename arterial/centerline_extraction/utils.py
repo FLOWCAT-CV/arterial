@@ -108,8 +108,6 @@ class CenterlineComputationLogic(object):
         # clip surface at endpoints identified by the network extraction
         clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
 
-        original_endpoints_json = build_endpoints_json(endpoints)
-
         print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
 
         if is_first_model:
@@ -174,7 +172,7 @@ class CenterlineComputationLogic(object):
         centerlines.DeepCopy(new_centerlines)
         voronoi.DeepCopy(new_voronoi)
 
-        return centerlines, voronoi, endpoints_json, original_endpoints_json
+        return centerlines, voronoi, endpoints_json
     
     def get_seed_ras(self, segmentation_array, segmentation_affine):
         """
@@ -832,7 +830,6 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
         aa_reference_voxel_coordinates = np.array([350.0 * factor, label_mask.shape[1], 0.0])
     aa_reference_ras_coordinates = np.dot(segmentation_affine, np.append(aa_reference_voxel_coordinates, 1))[:3]
-    print("AA reference point in RAS coordinates: ", aa_reference_ras_coordinates)
 
     # We store the distance to the reference point for each endpoint (in mm)
     distance_to_reference = []
