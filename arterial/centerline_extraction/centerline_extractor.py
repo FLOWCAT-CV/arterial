@@ -141,12 +141,12 @@ class CenterlineExtractor():
 
         segmentation_idx_to_remove = []
 
+        original_endpoints_json_list = []
+
         print("\nNumber of segmentation models:", len(self.segmentation_model_list))
         for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
             print(f"\nExtracting centerline ({idx + 1}/{len(self.segmentation_model_list)})")
-            print("Number of cells:", segmentation_model_idx.GetNumberOfCells())
-            print("Number of points:", segmentation_model_idx.GetNumberOfPoints())
-            centerlines, voronoi_diagram, endpoints_json = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
+            centerlines, voronoi_diagram, endpoints_json, original_endpoints_json = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
             if centerlines is None:
                 print(f"Centerline could not be extracted for segmentation model {idx}. Skipping...")
                 segmentation_idx_to_remove.append(idx)
@@ -155,6 +155,7 @@ class CenterlineExtractor():
                 self.centerline_model_list.append(centerlines)
                 self.voronoi_diagrams_list.append(voronoi_diagram)
                 self.endpoints_json_list.append(endpoints_json)
+                original_endpoints_json_list.append(original_endpoints_json)
         
         for idx in segmentation_idx_to_remove:
             self.tidy_up_segmentation_upon_centerline_extraction_failure(idx)
@@ -163,7 +164,7 @@ class CenterlineExtractor():
             for idx, centerline_model in enumerate(self.centerline_model_list):
                 save_vtkpolydata(centerline_model, os.path.join(self.centerlines_dir_path, f"centerlines_{idx}.vtk"))
                 save_json(self.endpoints_json_list[idx], os.path.join(self.endpoints_dir_path, f"endpoints_{idx}.json"))
-                save_json(self.endpoints_json_list[idx], os.path.join(self.endpoints_dir_path, f"original_endpoints_{idx}.json"))
+                save_json(original_endpoints_json_list[idx], os.path.join(self.endpoints_dir_path, f"original_endpoints_{idx}.json"))
         
     def perform_branch_model_extraction(self, save=True):
         """

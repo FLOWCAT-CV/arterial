@@ -174,10 +174,17 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
     surface_triangulator.PassVertsOff()
     surface_triangulator.Update()
 
+    # Fill holes of the mesh
+    print("    Filling mesh holes...")
+    fill_holes = vtk.vtkFillHolesFilter()
+    fill_holes.SetInputConnection(surface_triangulator.GetOutputPort())
+    fill_holes.SetHoleSize(1000.0)  # Large enough to cover the expected hole size
+    fill_holes.Update()
+
     # Smooth the extracted surface
     print("    Applying smoothing...")
     smoother = vtk.vtkWindowedSincPolyDataFilter()
-    smoother.SetInputConnection(surface_triangulator.GetOutputPort())
+    smoother.SetInputConnection(fill_holes.GetOutputPort())
     smoother.SetNumberOfIterations(n_iteration_smoothing)  # Adjust based on desired smoothness
     smoother.SetBoundarySmoothing(1)
     smoother.SetFeatureAngle(feature_angle)
@@ -186,17 +193,10 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
     smoother.NormalizeCoordinatesOn()
     smoother.Update()
 
-    # Fill holes of the mesh
-    print("    Filling mesh holes...")
-    fill_holes = vtk.vtkFillHolesFilter()
-    fill_holes.SetInputConnection(smoother.GetOutputPort())
-    fill_holes.SetHoleSize(1000.0)  # Large enough to cover the expected hole size
-    fill_holes.Update()
-
     # Compute normal components for all mesh triangles
     print("    Computing normals...")
     normals_generator = vtk.vtkPolyDataNormals()
-    normals_generator.SetInputConnection(fill_holes.GetOutputPort())
+    normals_generator.SetInputConnection(smoother.GetOutputPort())
     normals_generator.SetAutoOrientNormals(1)
     normals_generator.SetFlipNormals(0)
     normals_generator.SetConsistency(1)
