@@ -45,7 +45,7 @@ def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radi
 
         # Start the subprocess
         proc = subprocess.Popen(
-            ['python3', os.path.join(os.path.abspath(""), 'arterial/centerline_extraction/postprocessing/run_branch_model_extraction.py')],
+            ['python3', os.path.join(os.environ["arterial_dir"], 'centerline_extraction/postprocessing/run_branch_model_extraction.py')],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE

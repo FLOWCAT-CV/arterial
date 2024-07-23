@@ -851,14 +851,14 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     
     return endpoint_vtk_points
 
-def consolidate_points(polydata, threshold=1e-2):
+def consolidate_points(centerline_model, threshold=1e-2):
     """
     Maps all points that are within a threshold distance of each other to a single reference
     point, so that centerlines that overlap actually overlap (i.e. share the same points).
 
     Parameters
     ----------
-    polydata : vtk.vtkPolyData
+    centerline_model : vtk.vtkPolyData
         Centerline model.
     threshold : float, optional
         Threshold distance for grouping points. The default is 1e-2.
@@ -869,7 +869,7 @@ def consolidate_points(polydata, threshold=1e-2):
         Dictionary that maps original point indices to the representative point index.
 
     """
-    points = np.array([polydata.GetPoint(i) for i in range(polydata.GetNumberOfPoints())])
+    points = np.array([centerline_model.GetPoint(idx) for idx in range(centerline_model.GetNumberOfPoints())])
     tree = cKDTree(points)
     groups = tree.query_ball_tree(tree, r=threshold)
 
@@ -887,7 +887,7 @@ def consolidate_points(polydata, threshold=1e-2):
 
     return index_map
 
-def update_polydata(polydata, index_map):
+def update_new_centerline_model(centerline_model, index_map):
     """
     Updates the polydata structure by consolidating points that are within a 
     threshold distance of each other. Basically assigns the same position and point data values
@@ -896,20 +896,20 @@ def update_polydata(polydata, index_map):
 
     Parameters
     ----------
-    polydata : vtk.vtkPolyData
+    centerline_model : vtk.vtkPolyData
         Centerline model.
     index_map : dict
         Dictionary that maps original point indices to the representative point index.
 
     Returns
     -------
-    new_polydata : vtk.vtkPolyData
+    new_centerline_model : vtk.vtkPolyData
         Updated centerline model with consolidated points.
         
     """
     # Get original points and point data arrays
-    original_points = polydata.GetPoints()
-    num_point_arrays = polydata.GetPointData().GetNumberOfArrays()
+    original_points = centerline_model.GetPoints()
+    num_point_arrays = centerline_model.GetPointData().GetNumberOfArrays()
     
     # Create new points and point data structures
     new_points = vtk.vtkPoints()
@@ -917,7 +917,7 @@ def update_polydata(polydata, index_map):
     
     # Copy the attributes and names of the original point data arrays
     for i in range(num_point_arrays):
-        array = polydata.GetPointData().GetArray(i)
+        array = centerline_model.GetPointData().GetArray(i)
         new_point_arrays[i].SetName(array.GetName())
         new_point_arrays[i].SetNumberOfComponents(array.GetNumberOfComponents())
 
@@ -932,19 +932,19 @@ def update_polydata(polydata, index_map):
             new_index_map[representative_index] = new_point_idx
             # Copy data for this point
             for i in range(num_point_arrays):
-                original_array = polydata.GetPointData().GetArray(i)
+                original_array = centerline_model.GetPointData().GetArray(i)
                 value = [original_array.GetComponent(representative_index, j) for j in range(original_array.GetNumberOfComponents())]
                 new_point_arrays[i].InsertNextTuple(value)
 
-    new_polydata = vtk.vtkPolyData()
-    new_polydata.SetPoints(new_points)
+    new_centerline_model = vtk.vtkPolyData()
+    new_centerline_model.SetPoints(new_points)
     for new_array in new_point_arrays:
-        new_polydata.GetPointData().AddArray(new_array)
+        new_centerline_model.GetPointData().AddArray(new_array)
 
     # Remap the cells
     new_cells = vtk.vtkCellArray()
-    for i in range(polydata.GetNumberOfCells()):
-        cell = polydata.GetCell(i)
+    for i in range(centerline_model.GetNumberOfCells()):
+        cell = centerline_model.GetCell(i)
         new_cell_points = vtk.vtkIdList()
         for j in range(cell.GetNumberOfPoints()):
             original_index = cell.GetPointId(j)
@@ -953,11 +953,11 @@ def update_polydata(polydata, index_map):
             new_cell_points.InsertNextId(new_index)
         new_cells.InsertNextCell(new_cell_points)
     
-    new_polydata.SetLines(new_cells)
+    new_centerline_model.SetLines(new_cells)
 
-    return new_polydata
+    return new_centerline_model
 
-def clean_centerline(polydata, startpoint, threshold=1e-3):
+def clean_centerline(centerline_model, startpoint, threshold=1e-3):
     """
     Applies the consolidate_points and update_polydata functions to clean the centerline model.
     The result is a centerline model with consolidated points, i.e., centerlines that overlap with
@@ -978,25 +978,25 @@ def clean_centerline(polydata, startpoint, threshold=1e-3):
         Updated centerline model with consolidated points.
         
     """
-    index_map = consolidate_points(polydata, threshold)
+    index_map = consolidate_points(centerline_model, threshold)
 
-    print(f"Found {polydata.GetNumberOfCells()} centerline cells")
+    print(f"Found {centerline_model.GetNumberOfCells()} centerline cells")
 
     # Remove cells with less than 3 points
     number_of_removed_cells = 0
-    for idx in range(polydata.GetNumberOfCells()):
-        cell = polydata.GetCell(idx)
+    for idx in range(centerline_model.GetNumberOfCells()):
+        cell = centerline_model.GetCell(idx)
         if np.linalg.norm(np.array(cell.GetPoints().GetPoint(0)) - startpoint) > 30:
-            polydata.DeleteCell(idx)
+            centerline_model.DeleteCell(idx)
             number_of_removed_cells += 1
         elif cell.GetNumberOfPoints() <= 2:
-            polydata.DeleteCell(idx)
+            centerline_model.DeleteCell(idx)
             number_of_removed_cells += 1
 
-    polydata.RemoveDeletedCells()
+    centerline_model.RemoveDeletedCells()
     print(f"Removed {number_of_removed_cells} cells (less than 3 points or not starting at startpoint)")
 
-    return update_polydata(polydata, index_map)
+    return update_new_centerline_model(centerline_model, index_map)
 
 # def compute_frenet_serret(centerline_poly_data):
 #     """
