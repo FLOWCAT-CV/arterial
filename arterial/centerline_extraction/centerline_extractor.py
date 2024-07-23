@@ -58,6 +58,7 @@ class CenterlineExtractor():
 
         self.centerlines_dir_path = os.path.join(self.case_dir, self.mode, "centerlines")
         self.segmentations_dir_path = os.path.join(self.case_dir, self.mode, "segmentations")
+        self.endpoints_dir_path = os.path.join(self.case_dir, self.mode, "endpoints")
         self.branch_models_dir_path = os.path.join(self.case_dir, self.mode, "branch_models")
         self.clipped_models_dir_path = os.path.join(self.case_dir, self.mode, "clipped_models")
 
@@ -65,6 +66,7 @@ class CenterlineExtractor():
         self.endpoints_list = []
         self.centerline_model_list = []
         self.voronoi_diagrams_list = []
+        self.endpoints_json_list = []
         self.branch_model_list = []
         self.clipped_model_list = []
 
@@ -130,20 +132,38 @@ class CenterlineExtractor():
         if save:
             os.makedirs(self.centerlines_dir_path, exist_ok=True)
             os.makedirs(self.segmentations_dir_path, exist_ok=True)
+            os.makedirs(self.endpoints_dir_path, exist_ok=True)
 
         if self.segmentation_model is None:
             self.perform_preprocessing()
         if self.segmentation_array is None or self.segmentation_affine is None:
             self.load_segmentation_nifti()
 
+        segmentation_idx_to_remove = []
+
+        print("\nNumber of segmentation models:", len(self.segmentation_model_list))
         for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
-            centerlines, voronoi_diagram = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
-            self.centerline_model_list.append(centerlines)
-            self.voronoi_diagrams_list.append(voronoi_diagram)
+            print(f"\nExtracting centerline ({idx + 1}/{len(self.segmentation_model_list)})")
+            print("Number of cells:", segmentation_model_idx.GetNumberOfCells())
+            print("Number of points:", segmentation_model_idx.GetNumberOfPoints())
+            centerlines, voronoi_diagram, endpoints_json = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
+            if centerlines is None:
+                print(f"Centerline could not be extracted for segmentation model {idx}. Skipping...")
+                segmentation_idx_to_remove.append(idx)
+                continue
+            else:
+                self.centerline_model_list.append(centerlines)
+                self.voronoi_diagrams_list.append(voronoi_diagram)
+                self.endpoints_json_list.append(endpoints_json)
+        
+        for idx in segmentation_idx_to_remove:
+            self.tidy_up_segmentation_upon_centerline_extraction_failure(idx)
 
         if save:
             for idx, centerline_model in enumerate(self.centerline_model_list):
                 save_vtkpolydata(centerline_model, os.path.join(self.centerlines_dir_path, f"centerlines_{idx}.vtk"))
+                save_json(self.endpoints_json_list[idx], os.path.join(self.endpoints_dir_path, f"endpoints_{idx}.json"))
+                save_json(self.endpoints_json_list[idx], os.path.join(self.endpoints_dir_path, f"original_endpoints_{idx}.json"))
         
     def perform_branch_model_extraction(self, save=True):
         """
@@ -325,4 +345,19 @@ class CenterlineExtractor():
         if not isinstance(fast_segmentation, bool):
             raise ValueError("fast_segmentation should be a boolean variable.")
         self.fast_segmentation = fast_segmentation
+
+    def tidy_up_segmentation_upon_centerline_extraction_failure(self, idx):
+        # Remove segmentatoin from list
+        self.segmentation_model_list.pop(idx)
+        if len(self.segmentation_model_list) == 0:
+            raise ValueError("No segmentation model left. Interrupting computation, as this is a critical error for all the posterior pipeline.")
+        # Remove segmentation from directory
+        if os.path.isfile(os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk")):
+            os.remove(os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk"))
+        # Rename the rest of the segmentations
+        for idx_, segmentation_model in enumerate(self.segmentation_model_list):
+            save_vtkpolydata(segmentation_model, os.path.join(self.segmentations_dir_path, f"segmentation_{idx_}.vtk"))
+        # Remove the last segmentation (it will have been renamed)
+        if os.path.isfile(os.path.join(self.segmentations_dir_path, f"segmentation_{idx_ + 1}.vtk")):
+            os.remove(os.path.join(self.segmentations_dir_path, f"segmentation_{idx_ + 1}.vtk"))
         

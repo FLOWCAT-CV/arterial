@@ -27,8 +27,16 @@ def extract_centerlines(segmentation_model, segmentation_array, segmentation_aff
         The voronoi diagram model.
     
     """
+    print("Number of cells:", segmentation_model.GetNumberOfCells())
+    print("Number of points:", segmentation_model.GetNumberOfPoints())
     centerline_computation_logic = CenterlineComputationLogic()
-    centerlines, voronoi = centerline_computation_logic.extract_centerline(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
-    centerlines = clean_centerline(centerlines)
-    
-    return centerlines, voronoi
+    centerlines, voronoi, endpoints_json, original_endpoints_json = centerline_computation_logic.extract_centerline(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
+    startpoint = endpoints_json["markups"][0]["controlPoints"][0]["position"]
+    centerlines = clean_centerline(centerlines, startpoint=startpoint)
+
+    print("Number of cells after centerline cleaning:", centerlines.GetNumberOfCells())
+
+    if centerlines.GetNumberOfCells() == 0:
+        return None, None, None
+    else:
+        return centerlines, voronoi, endpoints_json

@@ -61,6 +61,10 @@ def split_segmentation(segmentation_array, segmentation_affine, minimum_island_v
     label_mask = measure.label(segmentation_array)
     values, counts = np.unique(label_mask, return_counts=True)
 
+    # Sort values by counts
+    values = values[np.argsort(counts)[::-1]]
+    counts = counts[np.argsort(counts)[::-1]]
+
     # Compute minimum island voxel size, taking into account reference voxel size
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
@@ -70,11 +74,11 @@ def split_segmentation(segmentation_array, segmentation_affine, minimum_island_v
     minimum_island_voxel_size_ = round(minimum_island_voxel_size * (reference_voxel_size / voxel_size))
 
     segmentation_array_list = []
-    for idx in range(len(values)):
-        if values[idx] == 0:
+    for idx, value in enumerate(values):
+        if value == 0: # Skip background
             continue
         if counts[idx] >= minimum_island_voxel_size_:
-            segmentation_array_list.append(np.where(label_mask == values[idx], 1., 0.))
+            segmentation_array_list.append(np.where(label_mask == value, 1., 0.))
 
     return segmentation_array_list
 
@@ -151,8 +155,9 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
 
     """
     n_iteration_smoothing = surface_extraction_parameters.get('n_iteration_smoothing', 60)
-    feature_angle = surface_extraction_parameters.get('feature_angle', 120.)
+    feature_angle = surface_extraction_parameters.get('feature_angle', 180.)
     pass_band = surface_extraction_parameters.get('pass_band', 0.05)
+    extract_largest_only = surface_extraction_parameters.get('extract_largest_only', True)
 
     # Extract surface using the marching cubes algorithm
     print("    Applying marching cubes...")
@@ -211,7 +216,10 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
     print("    Applying connectivity filter...")
     connectivity_filter = vtk.vtkConnectivityFilter()
     connectivity_filter.SetInputConnection(decimate.GetOutputPort())
-    connectivity_filter.SetExtractionModeToLargestRegion()
+    if extract_largest_only:
+        connectivity_filter.SetExtractionModeToLargestRegion()
+    else:
+        connectivity_filter.SetExtractionModeToAllRegions()
     connectivity_filter.Update()
 
     # Clean the decimated surface
