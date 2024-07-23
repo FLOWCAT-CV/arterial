@@ -86,7 +86,7 @@ class CenterlineComputationLogic(object):
 
         # Prepare the model (cleaning, triangulation, smoothing, normal recalculation, capping)
         print("Preparing model...")
-        prepared_surface_model.DeepCopy(self.prepare_model(surface_model, subdivide=True, non_manifold_edges=None))
+        prepared_surface_model.DeepCopy(self.prepare_model(surface_model, non_manifold_edges=None))
 
         if prepared_surface_model.GetNumberOfPoints() == 0:
             raise ValueError("Input model preparation failed. It probably has surface errors.")
@@ -94,7 +94,7 @@ class CenterlineComputationLogic(object):
         # Decimate the model for faster processing
         print("Decimating model...")
         # Decimate the model (only for network extraction)
-        decimated_surface_model.DeepCopy(self.decimate_surface(prepared_surface_model))
+        decimated_surface_model.DeepCopy(prepared_surface_model)
         # Open the model at the seed (only for network extraction)
         self.open_surface_at_point(decimated_surface_model, current_coordinates_ras)
 
@@ -106,19 +106,21 @@ class CenterlineComputationLogic(object):
 
         print("Clipping surface at endpoints...")
         # clip surface at endpoints identified by the network extraction
-        # prepared_surface_model = self.decimate_surface(prepared_surface_model, 0.7)
         clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
+
+        original_endpoints_json = build_endpoints_json(endpoints)
 
         print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
 
         if is_first_model:
             # Check the presence of the aortic arch endpoints
+            print("Checking aortic arch endpoints...")
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
-        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=5)
+        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10, larger_window_for_aa_startpoint=is_first_model)
         # if is_first_model:
-        #     # Save the endpoints in a json file
-        #     build_endpoints_json(endpoints)
+            # Save the endpoints in a json file
+        endpoints_json = build_endpoints_json(endpoints)
 
         # Now find the one endpoint which is closest to the seed and use it as the source point for centerline computation
         # all other endpoints are the target points
@@ -172,7 +174,7 @@ class CenterlineComputationLogic(object):
         centerlines.DeepCopy(new_centerlines)
         voronoi.DeepCopy(new_voronoi)
 
-        return centerlines, voronoi
+        return centerlines, voronoi, endpoints_json, original_endpoints_json
     
     def get_seed_ras(self, segmentation_array, segmentation_affine):
         """
@@ -205,7 +207,7 @@ class CenterlineComputationLogic(object):
 
         return seed_ras
 
-    def prepare_model(self, surface_model, subdivide=True, non_manifold_edges=None):
+    def prepare_model(self, surface_model, non_manifold_edges=None):
         """
         Prepares the given surface for centerline extraction. Basically, it cleans the surface, triangulates it, applies
         smoothing, recalculates normals, caps the surface, and checks for non-manifold edges.
@@ -214,8 +216,6 @@ class CenterlineComputationLogic(object):
         ----------
         surface_model : vtkPolyData
             The surface to be prepared.
-        subdivide : bool, optional
-            Whether to subdivide the surface. The default is True.
         non_manifold_edges : vtkPolyData, optional
             The non-manifold edges. The default is None.
 
@@ -533,77 +533,75 @@ class CenterlineComputationLogic(object):
 
         return [centerlines, voronoi]
     
-# from arterial.io.load_and_save_operations import save_json
-# def build_endpoints_json(endpoint_list):
-#     endpoints_json = {
-#         "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
-#         "markups": [
-#             {
-#                 "type": "Fiducial",
-#                 "coordinateSystem": "LPS",
-#                 "coordinateUnits": "mm",
-#                 "locked": "false",
-#                 "fixedNumberOfControlPoints": "false",
-#                 "labelFormat": "%N-%d",
-#                 "lastUsedControlPointNumber": 45,
-#                 "controlPoints": [],
-#                 "measurements": [],
-#                 "display": {
-#                     "visibility": "true",
-#                     "opacity": 1.0,
-#                     "color": [0.4, 1.0, 1.0],
-#                     "selectedColor": [1.0, 0.5000076295109483, 0.5000076295109483],
-#                     "activeColor": [0.4, 1.0, 0.0],
-#                     "propertiesLabelVisibility": "false",
-#                     "pointLabelsVisibility": "false",
-#                     "textScale": 3.0,
-#                     "glyphType": "Sphere3D",
-#                     "glyphScale": 3.0,
-#                     "glyphSize": 5.0,
-#                     "useGlyphScale": "true",
-#                     "sliceProjection": "false",
-#                     "sliceProjectionUseFiducialColor": "true",
-#                     "sliceProjectionOutlinedBehindSlicePlane": "false",
-#                     "sliceProjectionColor": [1.0, 1.0, 1.0],
-#                     "sliceProjectionOpacity": 0.6,
-#                     "lineThickness": 0.2,
-#                     "lineColorFadingStart": 1.0,
-#                     "lineColorFadingEnd": 10.0,
-#                     "lineColorFadingSaturation": 1.0,
-#                     "lineColorFadingHueOffset": 0.0,
-#                     "handlesInteractive": "false",
-#                     "translationHandleVisibility": "true",
-#                     "rotationHandleVisibility": "true",
-#                     "scaleHandleVisibility": "true",
-#                     "interactionHandleScale": 3.0,
-#                     "snapMode": "toVisibleSurface"
-#                 }
-#             }
-#         ]
-#     }
+def build_endpoints_json(endpoint_list):
+    endpoints_json = {
+        "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
+        "markups": [
+            {
+                "type": "Fiducial",
+                "coordinateSystem": "LPS",
+                "coordinateUnits": "mm",
+                "locked": "false",
+                "fixedNumberOfControlPoints": "false",
+                "labelFormat": "%N-%d",
+                "lastUsedControlPointNumber": 0,
+                "controlPoints": [],
+                "measurements": [],
+                "display": {
+                    "visibility": "true",
+                    "opacity": 1.0,
+                    "color": [0.4, 1.0, 1.0],
+                    "selectedColor": [1.0, 0.5000076295109483, 0.5000076295109483],
+                    "activeColor": [0.4, 1.0, 0.0],
+                    "propertiesLabelVisibility": "false",
+                    "pointLabelsVisibility": "false",
+                    "textScale": 3.0,
+                    "glyphType": "Sphere3D",
+                    "glyphScale": 3.0,
+                    "glyphSize": 2.5,
+                    "useGlyphScale": "true",
+                    "sliceProjection": "false",
+                    "sliceProjectionUseFiducialColor": "true",
+                    "sliceProjectionOutlinedBehindSlicePlane": "false",
+                    "sliceProjectionColor": [1.0, 1.0, 1.0],
+                    "sliceProjectionOpacity": 0.6,
+                    "lineThickness": 0.2,
+                    "lineColorFadingStart": 1.0,
+                    "lineColorFadingEnd": 10.0,
+                    "lineColorFadingSaturation": 1.0,
+                    "lineColorFadingHueOffset": 0.0,
+                    "handlesInteractive": "false",
+                    "translationHandleVisibility": "true",
+                    "rotationHandleVisibility": "true",
+                    "scaleHandleVisibility": "true",
+                    "interactionHandleScale": 3.0,
+                    "snapMode": "toVisibleSurface"
+                }
+            }
+        ]
+    }
 
-#     # Pass from vtkPoints to list
-#     endpoint_list_ = [list(endpoint_list.GetPoint(idx)) for idx in range(endpoint_list.GetNumberOfPoints())]
+    # Pass from vtkPoints to list
+    endpoint_list_ = [list(endpoint_list.GetPoint(idx)) for idx in range(endpoint_list.GetNumberOfPoints())]
 
-#     for idx, endpoint in enumerate(endpoint_list_):
-#         print(endpoint)
-#         endpoints_json["markups"][0]["controlPoints"].append(
-#             {
-#                 "id": str(idx + 1),
-#                 "label": "Endpoints-1",
-#                 "description": "",
-#                 "associatedNodeID": "",
-#                 "position": list(endpoint),
-#                 "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
-#                 "selected": "false",
-#                 "locked": "false",
-#                 "visibility": "true",
-#                 "positionStatus": "defined"
-#             }
-#         )
-#     endpoints_json["markups"][0]["lastUsedControlPointNumber"] = idx + 1
+    for idx, endpoint in enumerate(endpoint_list_):
+        endpoints_json["markups"][0]["controlPoints"].append(
+            {
+                "id": str(idx + 1),
+                "label": "Endpoints-1",
+                "description": "",
+                "associatedNodeID": "",
+                "position": list(endpoint),
+                "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                "selected": "false",
+                "locked": "false",
+                "visibility": "true",
+                "positionStatus": "defined"
+            }
+        )
+        endpoints_json["markups"][0]["lastUsedControlPointNumber"] += 1
 
-#     save_json(endpoints_json, "/Users/pere/Downloads/endpoints.json")
+    return endpoints_json
 
 def get_bounding_box_limits_3d(array):
     """
@@ -672,7 +670,7 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     if segmentation_volume < 5e4 and bouding_box_volume < 6e6: # Empirically tested
         raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
-def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5):
+def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):
     """
     Relocates automatically detected endpoints to the center of mass of the closest component
     inside a local region around the endpoint (defined by n).
@@ -708,43 +706,38 @@ def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentat
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
         # Compute endpoint ijk coordinates with affine matrix
         i, j, k = np.round(np.matmul(segmentation_affine_inv, np.append(endpoint, 1.0))[:3]).astype(int)
-        # if segmentation_array[i, j, k] == 0:
-        # if np.sum(segmentation_array[i-1:i+1, j-1:j+1, k-1:k+1]) < 9:
-        if True:
-            # print("Relocating endpoint {}: {}".format(endpoint_idx, endpoint))
-
-            # Define limits of the region of interest
+        # Define limits of the region of interest
+        if larger_window_for_aa_startpoint and endpoint_idx == 0:
+            i_min, i_max = np.clip([i - (window_size + 15), i + (window_size + 15)], 0, segmentation_array.shape[0])
+            j_min, j_max = np.clip([j - (window_size + 15), j + (window_size + 15)], 0, segmentation_array.shape[1])
+            k_min, k_max = np.clip([k - (window_size + 15), k + (window_size + 15)], 0, segmentation_array.shape[2])
+        else:
             i_min, i_max = np.clip([i - window_size, i + window_size], 0, segmentation_array.shape[0])
             j_min, j_max = np.clip([j - window_size, j + window_size], 0, segmentation_array.shape[1])
             k_min, k_max = np.clip([k - window_size, k + window_size], 0, segmentation_array.shape[2])
+        # Mask the segmentation_array (only region of interest)
+        masked_segmentation = segmentation_array[i_min:i_max, j_min:j_max, k_min:k_max]
+        # Divide into different connected components
+        label_mask = measure.label(masked_segmentation, connectivity=1)
+        unique_labels = np.unique(label_mask)[1:] 
 
-            # Mask the segmentation_array (only region of interest)
-            masked_segmentation = segmentation_array[i_min:i_max, j_min:j_max, k_min:k_max]
-            # Divide into different connected components
-            label_mask = measure.label(masked_segmentation, connectivity=1)
-            unique_labels = np.unique(label_mask)[1:] 
-
-            if unique_labels.size > 1:
-                # Only perform distance transformation when necessary
-                distances = ndimage.distance_transform_edt(label_mask == 0, return_distances=True, return_indices=False)
-                nearest_label = unique_labels[np.argmin([np.min(distances[label_mask == lbl]) for lbl in unique_labels])]
-                properties = measure.regionprops((label_mask == nearest_label).astype(int))
-                centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
-            elif unique_labels.size == 1:
-                # If only one label, use its centroid directly
-                properties = measure.regionprops(label_mask.astype(int), label_mask == unique_labels[0])
-                centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
-            else:
-                # Default to the original coordinates if no labels were found
-                centroid = [i, j ,k]
-
-            # Return the new position of the endpoint in RAS coordinates
-            endpoint_vtk_points.SetPoint(endpoint_idx, np.matmul(segmentation_affine, np.append(centroid, 1.0))[:3])
-            # print("New endpoint position: {}".format(endpoint_vtk_points.GetPoint(endpoint_idx)))
+        if unique_labels.size > 1:
+            # Only perform distance transformation when necessary
+            distances = ndimage.distance_transform_edt(label_mask == 0, return_distances=True, return_indices=False)
+            nearest_label = unique_labels[np.argmin([np.min(distances[label_mask == lbl]) for lbl in unique_labels])]
+            properties = measure.regionprops((label_mask == nearest_label).astype(int))
+            centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
+        elif unique_labels.size == 1:
+            # If only one label, use its centroid directly
+            properties = measure.regionprops(label_mask.astype(int), label_mask == unique_labels[0])
+            centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
         else:
-            # print("Endpoint {} is already inside the segmentation".format(endpoint_idx))
-            pass
-    
+            # Default to the original coordinates if no labels were found
+            centroid = [i, j ,k]
+
+        # Return the new position of the endpoint in RAS coordinates
+        endpoint_vtk_points.SetPoint(endpoint_idx, np.matmul(segmentation_affine, np.append(centroid, 1.0))[:3])
+
     return endpoint_vtk_points
 
 def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmentation_affine):
@@ -780,11 +773,11 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
     voxel_size = np.prod([segmentation_affine[idx, idx] for idx in range(3)])
     threshold_counts = abs(round(500 * (reference_voxel_size / voxel_size)))
-    # For AA endpoints check (distance from bottom slice)
+    # For AA endpoints check (distance from bottom slice in mm)
     threshold_distance = 50 * 0.4 / segmentation_affine[2, 2]
 
     # Divide into different connected components of the bottom slice
-    label_mask = measure.label(segmentation_array[0])
+    label_mask = measure.label(segmentation_array[:, :, 0])
     properties = measure.regionprops(label_mask.astype(int), label_mask.astype(int))
     
     # Get rid of all components below the threshold_counts
@@ -799,30 +792,30 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     
     # Access and store the coordinates of centroids in RAS coordinates
     # Notice that we set the S coordinate to 1.0 for all centroids
-    centroids = np.zeros(shape = (len(properties), 3))
+    aa_centroids_to_be_found = np.zeros(shape = (len(properties), 3))
     for idx, prop in enumerate(properties):
-        centroids[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid)[[1, 0]], [1.0, 1.0]))[:3]
+        aa_centroids_to_be_found[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid)[[1, 0]], [1.0, 1.0]))[:3]
 
     # Compute distance from each endpoint to all centroids of components in the bottom slice
     # The goal is to check that each component (generallly there should be 2) has one endpoint
     # nearby
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
-        delete_idx = None
-        for idx_centroids, centroid in enumerate(centroids):
+        delete_indices = []
+        for idx_centroids, centroid in enumerate(aa_centroids_to_be_found):
             # If a connnected component is found close to an endpoint, we accept it as correctly placed
+            # We remove the AA centroid from the list of aa_centroids as a way of saying "this one is found" 
             if np.linalg.norm(centroid - endpoint) < threshold_distance: # Threshold at 50 mm
-                delete_idx = idx_centroids
-        if delete_idx is not None:
-            centroids = np.delete(centroids, delete_idx, axis=0)
+                delete_indices.append(idx_centroids)
+        if len(delete_indices) > 0:
+            aa_centroids_to_be_found = np.delete(aa_centroids_to_be_found, delete_idx, axis=0)
 
-    # If any connected components survive, it means that no enpoints were found close by
-    if len(centroids) > 0:
-        print("{} AA islands do not have associated endpoints".format(len(centroids)))
+    # If any aa_centroids_to_be_found survive, it means that no enpoints were found close by
+    if len(aa_centroids_to_be_found) > 0:
+        print("{} AA islands do not have associated endpoints".format(len(aa_centroids_to_be_found)))
         # This way, we convert the remaining centroids to endpoints
-        for centroid in centroids:
+        for centroid in aa_centroids_to_be_found:
             print("Adding endpoint at", centroid)
-            print()
             endpoint_vtk_points.InsertNextPoint(centroid)
 
     # Now all that's left is to ensure that the startpoint is placed at the descending aorta
@@ -831,42 +824,45 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     # Select distal AA endpoint as startpoint (in some cases, the distal LSA endpoint is closer to the origin)
     # The criteria will be to choose the AA endpoint (at < 50 mm from bottom slice) that is closest to the reference point
     # Check every other point's distance to origin (ijk)
+    # Reference point set at [350, 0, 0] in LAS coordinates
+    if nib.orientations.aff2axcodes(segmentation_affine) == ("R", "A", "S"):
+        aa_reference_voxel_coordinates = np.array([150.0 * factor, 0.0, 0.0])
+    elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "A", "S"):
+        aa_reference_voxel_coordinates = np.array([350.0 * factor, 0.0, 0.0])
+    elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
+        aa_reference_voxel_coordinates = np.array([350.0 * factor, label_mask.shape[1], 0.0])
+    aa_reference_ras_coordinates = np.dot(segmentation_affine, np.append(aa_reference_voxel_coordinates, 1))[:3]
+    print("AA reference point in RAS coordinates: ", aa_reference_ras_coordinates)
+
+    # We store the distance to the reference point for each endpoint (in mm)
     distance_to_reference = []
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
-        endpoint = np.matmul(np.linalg.inv(segmentation_affine), np.append(endpoint, 1.0))[:3]
-        # Reference point set at [350, 0, 0] in LAS coordinates
-        if nib.orientations.aff2axcodes(segmentation_affine) == ("R", "A", "S"):
-            distance_to_reference.append(np.linalg.norm(endpoint - np.array([150.0 * factor, 0.0, 0.0])))
-        elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "A", "S"):
-            distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, 0.0, 0.0])))
-        elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
-            distance_to_reference.append(np.linalg.norm(endpoint - np.array([350.0 * factor, label_mask.shape[1], 0.0])))
+        distance_to_reference.append(np.linalg.norm(endpoint - aa_reference_ras_coordinates))
+        # print(f"Endpoint {endpoint_idx}: {endpoint} ({distance_to_reference[-1]})")
 
     # Get order from closest to furthest
     sorted_distance_idx = np.argsort(distance_to_reference)
     for idx in sorted_distance_idx:
-        startpoint = endpoint_vtk_points.GetPoint(idx)
-        if np.matmul(np.linalg.inv(segmentation_affine), np.append(startpoint, 1.0))[2] > threshold_distance:
+        startpoint_candidate = endpoint_vtk_points.GetPoint(idx)
+        if distance_to_reference[idx] > threshold_distance:
             print("Startpoint {} found is not in the AA region".format(idx))
             pass
         else:
-            # Make sure that startpoint is close to the bottom slice
-            if np.matmul(np.linalg.inv(segmentation_affine), np.append(startpoint, 1.0))[2] < threshold_distance and idx == 0:
+            # Check if the endpoint at 0 is at the distal AA
+            if idx == 0:
                 print("Original startpoint is at distal AA")
                 break
             # If it is not, set next closest endpoint to reference as startpoint if it is closer to bottom slice
-            elif np.matmul(np.linalg.inv(segmentation_affine), np.append(startpoint, 1.0))[2] < threshold_distance and idx != 0:
-                print("New startpoint ({}): {}".format(idx, startpoint))
+            else:
+                print("New startpoint ({}): {}".format(idx, startpoint_candidate))
                 endpoint_vtk_points.SetPoint(idx, endpoint_vtk_points.GetPoint(0))
-                endpoint_vtk_points.SetPoint(0, startpoint)
+                endpoint_vtk_points.SetPoint(0, startpoint_candidate)
                 break
-            else: 
-                pass
     
     return endpoint_vtk_points
 
-def consolidate_points(polydata, threshold=1e-3):
+def consolidate_points(polydata, threshold=1e-2):
     """
     Maps all points that are within a threshold distance of each other to a single reference
     point, so that centerlines that overlap actually overlap (i.e. share the same points).
@@ -876,7 +872,7 @@ def consolidate_points(polydata, threshold=1e-3):
     polydata : vtk.vtkPolyData
         Centerline model.
     threshold : float, optional
-        Threshold distance for grouping points. The default is 1e-3.
+        Threshold distance for grouping points. The default is 1e-2.
 
     Returns
     -------
@@ -972,11 +968,13 @@ def update_polydata(polydata, index_map):
 
     return new_polydata
 
-def clean_centerline(polydata, threshold=1e-3):
+def clean_centerline(polydata, startpoint, threshold=1e-3):
     """
     Applies the consolidate_points and update_polydata functions to clean the centerline model.
     The result is a centerline model with consolidated points, i.e., centerlines that overlap with
     points that share the exact position and data values. This helps simplify postprocessing steps.
+
+    Also, we remove cells with less than 3 points and cells that do not start at the startpoint.
 
     Parameters
     ----------
@@ -993,16 +991,21 @@ def clean_centerline(polydata, threshold=1e-3):
     """
     index_map = consolidate_points(polydata, threshold)
 
+    print(f"Found {polydata.GetNumberOfCells()} centerline cells")
+
     # Remove cells with less than 3 points
     number_of_removed_cells = 0
-    for cell_idx in range(polydata.GetNumberOfCells()):
-        cell = polydata.GetCell(cell_idx)
-        if cell.GetNumberOfPoints() <= 2:
-            polydata.DeleteCell(cell_idx)
+    for idx in range(polydata.GetNumberOfCells()):
+        cell = polydata.GetCell(idx)
+        if np.linalg.norm(np.array(cell.GetPoints().GetPoint(0)) - startpoint) > 30:
+            polydata.DeleteCell(idx)
+            number_of_removed_cells += 1
+        elif cell.GetNumberOfPoints() <= 2:
+            polydata.DeleteCell(idx)
             number_of_removed_cells += 1
 
     polydata.RemoveDeletedCells()
-    print(f"Removed {number_of_removed_cells} cells (less than 3 points)")
+    print(f"Removed {number_of_removed_cells} cells (less than 3 points or not starting at startpoint)")
 
     return update_polydata(polydata, index_map)
 

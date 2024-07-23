@@ -35,11 +35,12 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
     vtk_image = add_affine_information(vtk_image, segmentation_affine)
 
     print("Extracting segmentation surface...")
+    surface_extraction_parameters["extract_largest_only"] = False
     segmentation_model = extract_surface(vtk_image, reduction_factor=reduction_factor, **surface_extraction_parameters)
 
     return segmentation_model
 
-def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, fast_segmentation=False, reduction_factor=0.9, minimum_island_voxel_size=8000, **surface_extraction_parameters):
+def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, fast_segmentation=False, minimum_island_voxel_size=8000, **surface_extraction_parameters):
     """
     Computes the segmentation surfaces of a binary array. The binary array is first split into
     different islands, and then each island is converted to a VTK ImageData object. The VTK ImageData
@@ -57,8 +58,8 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         upper 10% of the segmentation's bounding box will be set to 0. This reduces the burden for the 
         branch model extraction and only affects centerlines in the intracranial region. This can be desired if
         the analysis is focused on the extracranial region. The default is False.
-    reduction_factor : float, optional
-        The factor by which to reduce the resolution of the segmentation surfaces. The default is 0.5.
+    minimum_island_voxel_size : int, optional
+        Minimum number of voxels for an island to be considered. The default is 8000 in native resolution (found empirically).
     surface_extraction_parameters : dict
         Parameters to be passed to the extract_segmentation_surface function.
 
@@ -83,6 +84,7 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
     segmentation_model_list = []
     for idx, segmentation_array_ in enumerate(segmentation_array_list):
         print(f"Processing island {idx + 1}/{len(segmentation_array_list)}...")
+        surface_extraction_parameters["pass_band"] = 0.1
         segmentation_model_list.append(compute_segmentation_model(segmentation_array_, segmentation_affine, reduction_factor=0.9, **surface_extraction_parameters))
 
     return segmentation_model, segmentation_model_list
