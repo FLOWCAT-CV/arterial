@@ -6,108 +6,9 @@ from vmtk import vtkvmtk
 
 import numpy as np
 
-# import multiprocessing, sys
-# from arterial.io.load_and_save_operations import *
-
-# def run_branch_extractor_multiprocessing(queue, serialized_centerlines_model, blanking_array_name, radius_array_name, group_ids_array_name, centerline_ids_array_name, tract_ids_array_name):
-#     """
-#     Auxiliary function to run the centerline branching in a subprocess. This is necessary to avoid
-#     uncathchable crashes of the underlying VMTK library, which handles processing in C++ and where
-#     crashes usually result in unrecoverable segmentation faults, causing the main process to fail.
-
-#     Parameters
-#     ----------
-#     queue : multiprocessing.Queue
-#         Queue to store the results.
-#     serialized_centerlines_model : string
-#         Serialized centerlines model.
-#     blanking_array_name : string
-#         Name of the blanking array.
-#     radius_array_name : string
-#         Name of the radius array.
-#     group_ids_array_name : string
-#         Name of the group ids array.
-#     centerline_ids_array_name : string
-#         Name of the centerline ids array.
-#     tract_ids_array_name : string
-#         Name of the tract ids array
-
-#     Returns
-#     -------
-
-#     """
-#     try:
-#         centerlines_model = deserialize_vtk_polydata(serialized_centerlines_model)
-#         branchExtractor = vtkvmtk.vtkvmtkCenterlineBranchExtractor()
-#         branchExtractor.SetInputData(centerlines_model)
-#         branchExtractor.SetBlankingArrayName(blanking_array_name)
-#         branchExtractor.SetRadiusArrayName(radius_array_name)
-#         branchExtractor.SetGroupIdsArrayName(group_ids_array_name)
-#         branchExtractor.SetCenterlineIdsArrayName(centerline_ids_array_name)
-#         branchExtractor.SetTractIdsArrayName(tract_ids_array_name)
-#         branchExtractor.Update()
-#         branch_model = branchExtractor.GetOutput()
-#         serialized_data = serialize_vtk_polydata(branch_model)
-#         print("    Centerline branching completed.")
-#         queue.put(serialized_data)
-#     except:
-#         print("    Centerline branching failed. This is most likely a VMTK issue. \nIf this is the first model (idx=0) " \
-#               "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
-#               "(Usually the first one is the largest and most relevant).")
-#         queue.put(None)
-#     print("    Subprocess completed execution.")
-#     sys.exit(0)
-
-# def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds", centerline_ids_array_name="CenterlineIds", tract_ids_array_name="TractIds"):
-#     """
-#     Performs centerline branching over centerline models. This allows division
-#     of the centerline tree in segments corresponding to the individual arteries.
-    
-#     This function summons the vtkvmtk.vtkvmtkCenterlineBranchExtractor() class. 
-#     For additional info refer to <https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchextractor.py>.
-
-#     Parameters
-#     ----------
-#     centerlines_model : vtkPolyData
-#         Centerlines model. 
-#     blanking_array_name : string, optional
-#         Name of the blanking array. The default is "Blanking".
-#     radius_array_name : string, optional
-#         Name of the radius array. The default is "MaximumInscribedSphereRadius".
-#     group_ids_array_name : string, optional
-#         Name of the group ids array. The default is "GroupIds".
-#     centerline_ids_array_name : string, optional
-#         Name of the centerline ids array. The default is "CenterlineIds".
-#     tract_ids_array_name : string, optional
-#         Name of the tract ids array. The default is "TractIds".
-
-#     Returns
-#     -------
-#     branch_model : vtkPolyData
-#         Branched centerline model.
-    
-#     """
-            
-#     queue = multiprocessing.Queue()
-#     print("    Running centerline branching in a subprocess...")
-#     serialized_centerlines_model = serialize_vtk_polydata(centerlines_model)
-#     p = multiprocessing.Process(target=run_branch_extractor_multiprocessing, args=(queue, serialized_centerlines_model, blanking_array_name, radius_array_name, group_ids_array_name, centerline_ids_array_name, tract_ids_array_name))
-#     print("    Subprocess starts.")
-#     p.start()
-#     print("    Subprocess join.")
-#     p.join()  
-#     if p.is_alive():
-#         print("    Subprocess is still running, something might be wrong.")
-#         p.terminate()
-#     print("    Subprocess close.")
-#     p.close()
-#     print("    Getting result.")
-#     result = queue.get()
-#     print("    Subprocess done.")
-#     if result is not None:
-#         return deserialize_vtk_polydata(result)
-#     else:
-#         return None
+import pickle
+import subprocess
+from arterial.io.load_and_save_operations import *
 
 def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds", centerline_ids_array_name="CenterlineIds", tract_ids_array_name="TractIds"):
     """
@@ -119,8 +20,8 @@ def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radi
 
     Parameters
     ----------
-    centerlines_model : string or path-like object
-        Path to centerlines model. 
+    centerlines_model : vtkPolyData
+        Centerlines model. 
     blanking_array_name : string, optional
         Name of the blanking array. The default is "Blanking".
     radius_array_name : string, optional
@@ -138,26 +39,92 @@ def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radi
         Branched centerline model.
     
     """
-    # Initialize the vtkvmtkCenterlineBranchExtractor object
-    branchExtractor = vtkvmtk.vtkvmtkCenterlineBranchExtractor()
-    branchExtractor.SetInputData(centerlines_model)
-    branchExtractor.SetBlankingArrayName(blanking_array_name)
-    branchExtractor.SetRadiusArrayName(radius_array_name)
-    branchExtractor.SetGroupIdsArrayName(group_ids_array_name)
-    branchExtractor.SetCenterlineIdsArrayName(centerline_ids_array_name)
-    branchExtractor.SetTractIdsArrayName(tract_ids_array_name)
-
-    # Execute the branch extraction
     try:
-        branchExtractor.Update()
-        branch_model = branchExtractor.GetOutput()
-    except:
-        print("Centerline branching failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \
-              "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
-              "(Usually the first one is the largest and most relevant).")
-        branch_model = None
+        # Serialize centerlines_model (dummy example - replace with actual serialization if needed)
+        serialized_centerlines_model = serialize_vtk_polydata(centerlines_model)
 
-    return branch_model
+        # Start the subprocess
+        proc = subprocess.Popen(
+            ['python3', os.path.join(os.path.abspath(""), 'arterial/centerline_extraction/postprocessing/run_branch_model_extraction.py')],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+        args = (blanking_array_name, radius_array_name, group_ids_array_name, centerline_ids_array_name, tract_ids_array_name)  
+
+        # Send serialized data to subprocess
+        input_data = pickle.dumps((serialized_centerlines_model, *args))
+        stdout_data, stderr_data = proc.communicate(input=input_data)
+
+        if proc.returncode != 0:
+            error_message = stderr_data.decode()
+            print(f"Subprocess failed with error: {error_message}")
+            return None
+
+        # Deserialize the result
+        result_str = pickle.loads(stdout_data)
+        if result_str:
+            # Deserialize vtkPolyData
+            branch_model = deserialize_vtk_polydata(result_str)
+            return branch_model
+        else:
+            return None
+
+    except Exception as e:
+        print(f"Exception occurred in branch model extraction: {e}")
+        return None
+    
+
+# def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds", centerline_ids_array_name="CenterlineIds", tract_ids_array_name="TractIds"):
+#     """
+#     Performs centerline branching over centerline models. This allows division
+#     of the centerline tree in segments corresponding to the individual arteries.
+    
+#     This function summons the vtkvmtk.vtkvmtkCenterlineBranchExtractor() class. 
+#     For additional info refer to <https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchextractor.py>.
+
+#     Parameters
+#     ----------
+#     centerlines_model : string or path-like object
+#         Path to centerlines model. 
+#     blanking_array_name : string, optional
+#         Name of the blanking array. The default is "Blanking".
+#     radius_array_name : string, optional
+#         Name of the radius array. The default is "MaximumInscribedSphereRadius".
+#     group_ids_array_name : string, optional
+#         Name of the group ids array. The default is "GroupIds".
+#     centerline_ids_array_name : string, optional
+#         Name of the centerline ids array. The default is "CenterlineIds".
+#     tract_ids_array_name : string, optional
+#         Name of the tract ids array. The default is "TractIds".
+
+#     Returns
+#     -------
+#     branch_model : vtkPolyData
+#         Branched centerline model.
+    
+#     """
+#     # Initialize the vtkvmtkCenterlineBranchExtractor object
+#     branchExtractor = vtkvmtk.vtkvmtkCenterlineBranchExtractor()
+#     branchExtractor.SetInputData(centerlines_model)
+#     branchExtractor.SetBlankingArrayName(blanking_array_name)
+#     branchExtractor.SetRadiusArrayName(radius_array_name)
+#     branchExtractor.SetGroupIdsArrayName(group_ids_array_name)
+#     branchExtractor.SetCenterlineIdsArrayName(centerline_ids_array_name)
+#     branchExtractor.SetTractIdsArrayName(tract_ids_array_name)
+
+#     # Execute the branch extraction
+#     try:
+#         branchExtractor.Update()
+#         branch_model = branchExtractor.GetOutput()
+#     except:
+#         print("Centerline branching failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \
+#               "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
+#               "(Usually the first one is the largest and most relevant).")
+#         branch_model = None
+
+#     return branch_model
 
 def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSphereRadius"):
     """
@@ -196,6 +163,7 @@ def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSp
         acc_group_id_branch_model = 0
         points_from_previous_branch_models = 0
         for branch_model_idx, branch_model in enumerate(branch_model_list):
+            print("Processing branch model {}...".format(branch_model_idx))
             if branch_model.GetNumberOfCells() == 0:
                 print("Error in branch model {}. Skipping".format(branch_model_idx))
             else:
@@ -224,7 +192,7 @@ def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSp
                 radius_array = vtk.util.numpy_support.vtk_to_numpy(branch_model.GetPointData().GetArray(radius_array_name))
 
                 # On rare occasions, there is a mismatch (a gap) between the number of points of the vtkPolyData and the sum of the number of points from each cell
-                # These should be restarted for each branch_modelIdx
+                # These should be restarted for each branch_model_idx
                 gap = 0
                 idx_points_minus_gap = 0
 
