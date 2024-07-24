@@ -11,6 +11,8 @@ from skimage import measure
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
+from arterial.io.load_and_save_operations import *
+
 class CenterlineComputationLogic(object):
     """
     Centerline computation logic class from Slicer's VMTK extension. This class is 
@@ -74,7 +76,6 @@ class CenterlineComputationLogic(object):
         """
         # Define the output models
         prepared_surface_model = vtk.vtkPolyData()
-        decimated_surface_model = vtk.vtkPolyData()
         network = vtk.vtkPolyData()
         centerlines = vtk.vtkPolyData()
         voronoi = vtk.vtkPolyData()
@@ -91,19 +92,14 @@ class CenterlineComputationLogic(object):
         if prepared_surface_model.GetNumberOfPoints() == 0:
             raise ValueError("Input model preparation failed. It probably has surface errors.")
 
-        # Decimate the model for faster processing
-        print("Decimating model...")
-        # Decimate the model (only for network extraction)
-        decimated_surface_model.DeepCopy(prepared_surface_model)
         # Open the model at the seed (only for network extraction)
-        self.open_surface_at_point(decimated_surface_model, current_coordinates_ras)
+        self.open_surface_at_point(prepared_surface_model, current_coordinates_ras)
 
         print("Extracting network...")
-        # extract Network
-        network.DeepCopy(self.extract_network(decimated_surface_model))
-
-        # here we start the actual centerline computation which is mathematically more robust and accurate but takes longer than the network extraction
-
+        # Extract Network
+        network.DeepCopy(self.extract_network(prepared_surface_model))
+        
+        # Here we start the actual centerline computation which is mathematically more robust and accurate but takes longer than the network extraction
         print("Clipping surface at endpoints...")
         # clip surface at endpoints identified by the network extraction
         clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
@@ -116,8 +112,7 @@ class CenterlineComputationLogic(object):
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
         endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10, larger_window_for_aa_startpoint=is_first_model)
-        # if is_first_model:
-            # Save the endpoints in a json file
+        # Convert the endpoints to a JSON format (compatible with Markups module for visualization in 3D Slicer)
         endpoints_json = build_endpoints_json(endpoints)
 
         # Now find the one endpoint which is closest to the seed and use it as the source point for centerline computation
@@ -659,13 +654,13 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     voxel_size = np.abs(np.prod([segmentation_affine[idx, idx] for idx in range(3)]))
     segmentation_volume = np.sum(segmentation_array > 0) * voxel_size
     bouding_box_volume = (max_lr - min_lr) * (max_pa - min_pa) * (max_is - min_is) * voxel_size
-    if segmentation_volume < 4.5e4: # Empirically tested
+    if segmentation_volume < 4e4: # Empirically tested
         raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
     if bouding_box_volume < 3.5e6: # Empirically tested
         raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
     if bouding_box_volume > 3.5e7: # Empirically tested
         raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
-    if segmentation_volume < 5e4 and bouding_box_volume < 6e6: # Empirically tested
+    if segmentation_volume < 5e4 and bouding_box_volume < 5.5e6: # Empirically tested
         raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
 def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):

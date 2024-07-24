@@ -10,6 +10,8 @@ def run_branch_extractor_subprocessing(serialized_centerlines_model, blanking_ar
     uncathchable crashes of the underlying VMTK library, which handles processing in C++ and where
     crashes usually result in unrecoverable segmentation faults, causing the main process to fail.
 
+    As a result, the function is called in a subprocess, and the results are stored in a buffer.
+
     Parameters
     ----------
     queue : multiprocessing.Queue
