@@ -154,8 +154,8 @@ class CenterlineExtractor():
                 self.voronoi_diagrams_list.append(voronoi_diagram)
                 self.endpoints_json_list.append(endpoints_json)
         
-        for idx in segmentation_idx_to_remove:
-            self.tidy_up_segmentation_upon_centerline_extraction_failure(idx)
+        for number_of_removed_segmentations, idx in enumerate(segmentation_idx_to_remove):
+            self.tidy_up_segmentation_upon_centerline_extraction_failure(idx - number_of_removed_segmentations)
 
         if save:
             for idx, centerline_model in enumerate(self.centerline_model_list):
@@ -346,7 +346,7 @@ class CenterlineExtractor():
         self.fast_segmentation = fast_segmentation
 
     def tidy_up_segmentation_upon_centerline_extraction_failure(self, idx):
-        # Remove segmentatoin from list
+        # Remove segmentation from list
         self.segmentation_model_list.pop(idx)
         if len(self.segmentation_model_list) == 0:
             raise ValueError("No segmentation model left. Interrupting computation, as this is a critical error for all the posterior pipeline.")

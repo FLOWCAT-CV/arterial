@@ -18,6 +18,14 @@ def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radi
     This function summons the vtkvmtk.vtkvmtkCenterlineBranchExtractor() class. 
     For additional info refer to <https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchextractor.py>.
 
+    This function is a wrapper for the branch model extraction subprocess. This is necessary to avoid
+    uncathchable crashes of the underlying VMTK library, which handles processing in C++ and where
+    crashes usually result in unrecoverable segmentation faults, causing the main process to fail.
+
+    Within the Arterial pipeline, this error is only critical for the first model, as the first model is usually the largest
+    and most relevant. If the first model fails, the process is interrupted. If the first model is successful, the process continues
+    and successive failed models is ignored.
+
     Parameters
     ----------
     centerlines_model : vtkPolyData
