@@ -125,9 +125,29 @@ def add_affine_information(vtk_image_data, affine=None):
         The vtkImageData object with the added affine information.
         
     """
-    vtk_image_data.SetOrigin(affine[:3, 3])
-    vtk_image_data.SetSpacing(affine[0, 0], affine[1, 1], affine[2, 2])
-    vtk_image_data.SetDirectionMatrix(1., 0., 0., 0., 1., 0., 0., 0., 1.)
+    if affine is None:
+        raise ValueError("Affine matrix is required")
+    # Ensure the affine matrix is 4x4
+    if affine.shape != (4, 4):
+        raise ValueError("Affine matrix must be 4x4")
+    # Extract the origin (translation vector)
+    origin = affine[:3, 3]
+    # Extract the direction matrix (rotation + shear)
+    direction_matrix = affine[:3, :3]
+    # Calculate spacing from the direction matrix
+    spacing = np.linalg.norm(direction_matrix, axis=0)
+    # Normalize the direction matrix
+    direction_matrix = direction_matrix / spacing
+    # Set the origin
+    vtk_image_data.SetOrigin(*origin)
+    # Set the spacing
+    vtk_image_data.SetSpacing(*spacing)
+    # Set the direction matrix
+    vtk_image_data.SetDirectionMatrix(
+        direction_matrix[0, 0], direction_matrix[0, 1], direction_matrix[0, 2],
+        direction_matrix[1, 0], direction_matrix[1, 1], direction_matrix[1, 2],
+        direction_matrix[2, 0], direction_matrix[2, 1], direction_matrix[2, 2]
+    )
     return vtk_image_data
 
 def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_parameters):

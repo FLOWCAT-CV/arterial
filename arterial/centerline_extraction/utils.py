@@ -799,9 +799,9 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     # For AA endpoints check (distance from bottom slice in mm)
     threshold_distance = 50 # mm
 
-    print(segmentation_array.shape)
-    print(nib.orientations.aff2axcodes(segmentation_affine))
-    print(segmentation_affine)
+    # print("Segmentation array shape:", segmentation_array.shape)
+    # print("Nifti orientation: ", nib.orientations.aff2axcodes(segmentation_affine))
+    # print("Nifti affine matrix: \n", segmentation_affine)
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(segmentation_array[:, :, 0])
@@ -823,7 +823,7 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     for idx, prop in enumerate(properties):
         aa_centroids_to_be_found[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid), [1.0, 1.0]))[:3] # result in RAS coordinates
 
-    print("AA centroids to be found:", aa_centroids_to_be_found)
+    # print("AA centroids to be found:", aa_centroids_to_be_found)
 
     # Compute distance from each endpoint to all centroids of components in the bottom slice
     # The goal is to check that each component (generallly there should be 2) has one endpoint
@@ -831,7 +831,7 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     delete_indices = []
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
-        print("Checking endpoint at", endpoint)
+        # print("Checking endpoint at", endpoint)
         for idx_centroids, centroid in enumerate(aa_centroids_to_be_found):
             # If a connnected component is found close to an endpoint, we accept it as correctly placed
             # We remove the AA centroid from the list of aa_centroids as a way of saying "this one is found" 
@@ -863,7 +863,7 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
         aa_reference_voxel_coordinates = np.array([350.0 * factor, label_mask.shape[1], 0.0])
     aa_reference_ras_coordinates = np.dot(segmentation_affine, np.append(aa_reference_voxel_coordinates, 1))[:3]
 
-    print("Reference point in RAS coordinates:", aa_reference_ras_coordinates)
+    # print("Reference point in RAS coordinates:", aa_reference_ras_coordinates)
 
     # We store the distance to the reference point for each endpoint (in mm)
     distance_to_reference = []
