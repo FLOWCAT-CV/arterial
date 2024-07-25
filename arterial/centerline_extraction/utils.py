@@ -113,7 +113,7 @@ class CenterlineComputationLogic(object):
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
         endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10, larger_window_for_aa_startpoint=is_first_model)
         # Convert the endpoints to a JSON format (compatible with Markups module for visualization in 3D Slicer)
-        endpoints_json = build_endpoints_json(endpoints)
+        endpoints_json = build_endpoints_json(endpoints, segmentation_affine)
 
         # Now find the one endpoint which is closest to the seed and use it as the source point for centerline computation
         # all other endpoints are the target points
@@ -526,13 +526,41 @@ class CenterlineComputationLogic(object):
 
         return [centerlines, voronoi]
     
-def build_endpoints_json(endpoint_list):
+def build_endpoints_json(endpoint_list, segmentation_affine):
+    """
+    Builds a JSON object with the endpoints in the format compatible with the Markups module in 3D Slicer.
+
+    Parameters
+    ----------
+    endpoint_list : vtkPoints
+        The list of endpoints.
+    segmentation_affine : numpy.array or array-like object. Shape: 4 x 4
+        Affine matrix corresponding to the nifti file. RAS to ijk transformation.
+
+    Returns
+    -------
+    endpoints_json : dict
+        The JSON-serializable dict with the endpoints.
+
+    """
+    # For some reason, in order to visualize the endpoints in Slicer correctly and in the right orientation, 
+    # we need to invert the coordinate system for the first two axes. I believe this may have something to do
+    # with how nibabel reads the orientation of the nifti file compared to sitk
+    coordinate_system = ''.join(str(axis) for axis in nib.orientations.aff2axcodes(segmentation_affine))
+    if "R" in coordinate_system:
+        coordinate_system = coordinate_system.replace("R", "L")
+    else:
+        coordinate_system = coordinate_system.replace("L", "R")
+    if "A" in coordinate_system:
+        coordinate_system = coordinate_system.replace("A", "P")
+    else:
+        coordinate_system = coordinate_system.replace("P", "A")
     endpoints_json = {
         "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
         "markups": [
             {
                 "type": "Fiducial",
-                "coordinateSystem": "LPS",
+                "coordinateSystem": coordinate_system,
                 "coordinateUnits": "mm",
                 "locked": "false",
                 "fixedNumberOfControlPoints": "false",
@@ -656,7 +684,7 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     bouding_box_volume = (max_lr - min_lr) * (max_pa - min_pa) * (max_is - min_is) * voxel_size
     if segmentation_volume < 4e4: # Empirically tested
         raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
-    if bouding_box_volume < 3.5e6: # Empirically tested
+    if bouding_box_volume < 2.5e6: # Empirically tested
         raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
     if bouding_box_volume > 3.5e7: # Empirically tested
         raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
@@ -761,13 +789,19 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     # We always assume we have close-to-isotropic voxels. 0.43 corresponds to the reference voxel size
     # used to empirically define certain reference values
     factor = abs(0.43 / segmentation_affine[0, 0])
+
     # For AA island validation (number of foreground voxels in the bottom slice)
     # Empirically, we found that 500 is a good threshold for a voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4
     voxel_size = np.prod([segmentation_affine[idx, idx] for idx in range(3)])
     threshold_counts = abs(round(500 * (reference_voxel_size / voxel_size)))
+
     # For AA endpoints check (distance from bottom slice in mm)
     threshold_distance = 50 # mm
+
+    print(segmentation_array.shape)
+    print(nib.orientations.aff2axcodes(segmentation_affine))
+    print(segmentation_affine)
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(segmentation_array[:, :, 0])
@@ -789,12 +823,15 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     for idx, prop in enumerate(properties):
         aa_centroids_to_be_found[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid), [1.0, 1.0]))[:3] # result in RAS coordinates
 
+    print("AA centroids to be found:", aa_centroids_to_be_found)
+
     # Compute distance from each endpoint to all centroids of components in the bottom slice
     # The goal is to check that each component (generallly there should be 2) has one endpoint
     # nearby
     delete_indices = []
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
+        print("Checking endpoint at", endpoint)
         for idx_centroids, centroid in enumerate(aa_centroids_to_be_found):
             # If a connnected component is found close to an endpoint, we accept it as correctly placed
             # We remove the AA centroid from the list of aa_centroids as a way of saying "this one is found" 
@@ -825,6 +862,8 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
         aa_reference_voxel_coordinates = np.array([350.0 * factor, label_mask.shape[1], 0.0])
     aa_reference_ras_coordinates = np.dot(segmentation_affine, np.append(aa_reference_voxel_coordinates, 1))[:3]
+
+    print("Reference point in RAS coordinates:", aa_reference_ras_coordinates)
 
     # We store the distance to the reference point for each endpoint (in mm)
     distance_to_reference = []
