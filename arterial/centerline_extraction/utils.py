@@ -11,8 +11,6 @@ from skimage import measure
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
-from arterial.io.load_and_save_operations import *
-
 class CenterlineComputationLogic(object):
     """
     Centerline computation logic class from Slicer's VMTK extension. This class is 
@@ -103,13 +101,14 @@ class CenterlineComputationLogic(object):
         print("Clipping surface at endpoints...")
         # clip surface at endpoints identified by the network extraction
         clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
-
+        
         print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
 
         if is_first_model:
             # Check the presence of the aortic arch endpoints
             print("Checking aortic arch endpoints...")
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
+            
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
         endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10, larger_window_for_aa_startpoint=is_first_model)
         # Convert the endpoints to a JSON format (compatible with Markups module for visualization in 3D Slicer)
@@ -744,8 +743,17 @@ def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentat
 
         if unique_labels.size > 1:
             # Only perform distance transformation when necessary
-            distances = ndimage.distance_transform_edt(label_mask == 0, return_distances=True, return_indices=False)
-            nearest_label = unique_labels[np.argmin([np.min(distances[label_mask == lbl]) for lbl in unique_labels])]
+            distances = np.ndarray([len(unique_labels), label_mask.shape[0], label_mask.shape[1], label_mask.shape[2]])
+            for idx_unique_label, unique_label in enumerate(unique_labels):
+                # Select label mask for the current unique label
+                label_mask_unique_label = label_mask == unique_label
+                # Invert the mask to compute the distance transform
+                inverted_label_mask = label_mask_unique_label == 0
+                distances[idx_unique_label, :] = ndimage.distance_transform_edt(inverted_label_mask, return_distances=True, return_indices=False)
+            # Now collect the distances at the center of the region of interest
+            distances = distances[:, window_size, window_size, window_size]
+            # Select the nearest label (that with the lowest value in the distance map)
+            nearest_label = unique_labels[np.argmin(distances)]
             properties = measure.regionprops((label_mask == nearest_label).astype(int))
             centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
         elif unique_labels.size == 1:
