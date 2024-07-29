@@ -11,6 +11,8 @@ from skimage import measure
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
+from arterial.io.load_and_save_operations import *
+
 class CenterlineComputationLogic(object):
     """
     Centerline computation logic class from Slicer's VMTK extension. This class is 
@@ -108,9 +110,9 @@ class CenterlineComputationLogic(object):
             # Check the presence of the aortic arch endpoints
             print("Checking aortic arch endpoints...")
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
-            
+
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
-        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=10, larger_window_for_aa_startpoint=is_first_model)
+        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=15, larger_window_for_aa_startpoint=is_first_model)
         # Convert the endpoints to a JSON format (compatible with Markups module for visualization in 3D Slicer)
         endpoints_json = build_endpoints_json(endpoints, segmentation_affine)
 
@@ -148,7 +150,7 @@ class CenterlineComputationLogic(object):
         target_id_list = vtk.vtkIdList()
 
         point_locator = vtk.vtkPointLocator()
-        point_locator.SetDataSet(clipped_surface)
+        point_locator.SetDataSet(surface_model)
         point_locator.BuildLocator()
 
         # locate the source on the surface
@@ -161,7 +163,7 @@ class CenterlineComputationLogic(object):
             target_id_list.InsertNextId(id)
 
         print("Computing centerlines...")
-        new_centerlines, new_voronoi = self.compute_centerlines(clipped_surface, source_id_list, target_id_list)
+        new_centerlines, new_voronoi = self.compute_centerlines(surface_model, source_id_list, target_id_list)
 
         centerlines.DeepCopy(new_centerlines)
         voronoi.DeepCopy(new_voronoi)
@@ -805,11 +807,7 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     threshold_counts = abs(round(500 * (reference_voxel_size / voxel_size)))
 
     # For AA endpoints check (distance from bottom slice in mm)
-    threshold_distance = 50 # mm
-
-    # print("Segmentation array shape:", segmentation_array.shape)
-    # print("Nifti orientation: ", nib.orientations.aff2axcodes(segmentation_affine))
-    # print("Nifti affine matrix: \n", segmentation_affine)
+    threshold_distance_for_aa_centroid = 30 # mm
 
     # Divide into different connected components of the bottom slice
     label_mask = measure.label(segmentation_array[:, :, 0])
@@ -828,25 +826,49 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     # Access and store the coordinates of centroids in RAS coordinates
     # Notice that we set the S coordinate to 1.0 for all centroids
     aa_centroids_to_be_found = np.zeros(shape = (len(properties), 3))
-    for idx, prop in enumerate(properties):
-        aa_centroids_to_be_found[idx] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid), [1.0, 1.0]))[:3] # result in RAS coordinates
-
-    # print("AA centroids to be found:", aa_centroids_to_be_found)
+    aa_candidate_dict = {}
+    for idx_centroid, prop in enumerate(properties):
+        aa_centroids_to_be_found[idx_centroid] = np.matmul(segmentation_affine, np.append(np.array(prop.centroid), [1.0, 1.0]))[:3] # Result in RAS coordinates
+        aa_candidate_dict[idx_centroid] = {}
+        aa_candidate_dict[idx_centroid]["found_aa_centroid_candidate"] = False
+        aa_candidate_dict[idx_centroid]["endpoints_idx"] = []
+        aa_candidate_dict[idx_centroid]["endpoints"] = []
+        aa_candidate_dict[idx_centroid]["distances"] = []
 
     # Compute distance from each endpoint to all centroids of components in the bottom slice
     # The goal is to check that each component (generallly there should be 2) has one endpoint
     # nearby
-    delete_indices = []
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
-        # print("Checking endpoint at", endpoint)
-        for idx_centroids, centroid in enumerate(aa_centroids_to_be_found):
+        for idx_centroid, centroid in enumerate(aa_centroids_to_be_found):
             # If a connnected component is found close to an endpoint, we accept it as correctly placed
             # We remove the AA centroid from the list of aa_centroids as a way of saying "this one is found" 
-            if np.linalg.norm(centroid - endpoint) < threshold_distance: # Threshold at 50 mm
-                delete_indices.append(idx_centroids)
-    if len(delete_indices) > 0:
-        aa_centroids_to_be_found = np.delete(aa_centroids_to_be_found, delete_indices, axis=0)
+            distance_to_aa_centroid = np.linalg.norm(centroid - endpoint)
+            if distance_to_aa_centroid < threshold_distance_for_aa_centroid:
+                aa_candidate_dict[idx_centroid]["found_aa_centroid_candidate"] = True
+                aa_candidate_dict[idx_centroid]["endpoints_idx"].append(endpoint_idx)
+                aa_candidate_dict[idx_centroid]["endpoints"].append(endpoint)
+                aa_candidate_dict[idx_centroid]["distances"].append(distance_to_aa_centroid)
+
+    # We add a filter to ensure that we only keep the closest endpoint to each centroid, and discard the rest
+    # for this, we remove the furthest one from the corresponding aa_candidate
+    aa_centroids_to_be_found = np.delete(aa_centroids_to_be_found, [idx_centroid for idx_centroid in aa_candidate_dict.keys() if aa_candidate_dict[idx_centroid]["found_aa_centroid_candidate"]], axis=0)
+    endpoints_to_remove = []
+    for idx_centroid in aa_candidate_dict.keys():
+        # print(aa_candidate_dict[idx_centroid])
+        if aa_candidate_dict[idx_centroid]["found_aa_centroid_candidate"]:
+            if len(aa_candidate_dict[idx_centroid]["endpoints_idx"]) > 1:
+                # We keep te closest endpoint to the candidate, we remove the rest
+                closest_endpoint_idx = aa_candidate_dict[idx_centroid]["endpoints_idx"][np.argmin(aa_candidate_dict[idx_centroid]["distances"])]
+                endpoints_to_remove += [idx for idx in aa_candidate_dict[idx_centroid]["endpoints_idx"] if idx != closest_endpoint_idx]
+
+    # Remove endpoints that are not the closest to the centroids. The only way to remove points from a vtkPoints object
+    # is to create a new one and copy the points that we want to keep
+    new_endpoints = vtk.vtkPoints()
+    for idx in range(endpoint_vtk_points.GetNumberOfPoints()):
+        if idx in endpoints_to_remove: continue
+        new_endpoints.InsertNextPoint(endpoint_vtk_points.GetPoint(idx))
+    endpoint_vtk_points = new_endpoints
 
     # If any aa_centroids_to_be_found survive, it means that no enpoints were found close by
     if len(aa_centroids_to_be_found) > 0:
@@ -858,7 +880,7 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
 
     # Now all that's left is to ensure that the startpoint is placed at the descending aorta
     # (most proximal point from femoral access in endovascular interventions)
-            
+
     # Select distal AA endpoint as startpoint (in some cases, the distal LSA endpoint is closer to the origin)
     # The criteria will be to choose the AA endpoint (at < 50 mm from bottom slice) that is closest to the reference point
     # Check every other point's distance to origin (ijk)
@@ -870,8 +892,6 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
     elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
         aa_reference_voxel_coordinates = np.array([350.0 * factor, label_mask.shape[1], 0.0])
     aa_reference_ras_coordinates = np.dot(segmentation_affine, np.append(aa_reference_voxel_coordinates, 1))[:3]
-
-    # print("Reference point in RAS coordinates:", aa_reference_ras_coordinates)
 
     # We store the distance to the reference point for each endpoint (in mm)
     distance_to_reference = []

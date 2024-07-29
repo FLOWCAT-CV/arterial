@@ -71,15 +71,24 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
     """
     segmentation_array = np.transpose(segmentation_array, (2, 1, 0))
 
-    print("Processing complete array...")
-    segmentation_model = compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor=0.8, **surface_extraction_parameters)
+    print("Splitting segmentation array into islands...")
+    segmentation_array_list = split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size=minimum_island_voxel_size)
 
+    # We generate a "clean" segmentation array, with small islands removed
+    clean_segmentation_array = np.zeros_like(segmentation_array)
+    for segmentation_array_ in segmentation_array_list:
+        clean_segmentation_array += segmentation_array_
+
+    print("\nProcessing complete array...")
+    segmentation_model = compute_segmentation_model(clean_segmentation_array, segmentation_affine, reduction_factor=0.8, **surface_extraction_parameters)
+
+    # For fast segmentation processing, we remove the upper 10% of the segmentation bonding box voxels. This typically simplifies endpoint extraction 
+    # and centerline tracing 
     if fast_segmentation:
         _, max_is, _, _, _, _ = get_bounding_box_limits_3d(segmentation_array)
-        segmentation_array[int(np.round(max_is * 0.9)):, :, :] = 0
+        for idx, segmentation_array_ in enumerate(segmentation_array_list):
+            segmentation_array_list[idx][int(np.round(max_is * 0.9)):, :, :] = 0
     
-    print("\nSplitting segmentation array into islands...")
-    segmentation_array_list = split_segmentation(segmentation_array, segmentation_affine, minimum_island_voxel_size=minimum_island_voxel_size)
     print("Number of islands found:", len(segmentation_array_list))
     segmentation_model_list = []
     for idx, segmentation_array_ in enumerate(segmentation_array_list):
