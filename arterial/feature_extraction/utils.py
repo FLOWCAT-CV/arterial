@@ -371,8 +371,8 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
         local_graph[main_graph_node][candidate_node]["vessel_type"] = predicted_vessel_types[local_graph[main_graph_node][candidate_node]["cell_id"]]
         local_graph[main_graph_node][candidate_node]["vessel_type_name"] = predicted_vessel_type_names[local_graph[main_graph_node][candidate_node]["cell_id"]]
         local_graph[main_graph_node][candidate_node]["indices"] = np.array([])
-        local_graph[main_graph_node][candidate_node]["coordinate_array"] = np.ndarray([0, 3])
-        local_graph[main_graph_node][candidate_node]["radius_array"] = np.array([])
+        local_graph[main_graph_node][candidate_node]["centerline_coordinate_array"] = np.ndarray([0, 3])
+        local_graph[main_graph_node][candidate_node]["centerline_radius_array"] = np.array([])
         
         # Now, for the modification of the segments arrays and the cell_ids and indices of nodes and edges, we perform an indepth analysis.
         # First of all, it only makes sense to split the segment if the node has degree 2 (otherwise it will already be a border between different segments)
@@ -402,11 +402,11 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
                         local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
                         # Update edge indices with cut_off_idx
                         local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
-                        # Eliminate negative edges if found (this)
+                        # Eliminate negative edges if found
                         while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
                             local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
-                            local_graph[previous_node][neighbor]["coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
-                            local_graph[previous_node][neighbor]["radius_array"] = np.delete(local_graph[previous_node][neighbor]["radius_array"], 0)
+                            local_graph[previous_node][neighbor]["centerline_coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_coordinate_array"], 0, axis = 0)
+                            local_graph[previous_node][neighbor]["centerline_radius_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_radius_array"], 0)
                         # Update previous_node
                         previous_node = neighbor
                         # Check found neighbor
@@ -421,8 +421,8 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
                         local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
                         while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
                             local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
-                            local_graph[previous_node][neighbor]["coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["coordinate_array"], 0, axis = 0)
-                            local_graph[previous_node][neighbor]["radius_array"] = np.delete(local_graph[previous_node][neighbor]["radius_array"], 0)
+                            local_graph[previous_node][neighbor]["centerline_coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_coordinate_array"], 0, axis = 0)
+                            local_graph[previous_node][neighbor]["centerline_radius_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_radius_array"], 0)
                         # Update previous_node
                         previous_node = neighbor
                         # Check found neighbor
@@ -500,8 +500,8 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
                 local_graph[closest_node][deg_1_node]["vessel_type"] = predicted_vessel_types[local_graph[closest_node][deg_1_node]["cell_id"]]
                 local_graph[closest_node][deg_1_node]["vessel_type_name"] = predicted_vessel_type_names[local_graph[closest_node][deg_1_node]["cell_id"]]
                 local_graph[closest_node][deg_1_node]["indices"] = np.array([])
-                local_graph[closest_node][deg_1_node]["coordinate_array"] = np.ndarray([0, 3])
-                local_graph[closest_node][deg_1_node]["radius_array"] = np.array([])
+                local_graph[closest_node][deg_1_node]["centerline_coordinate_array"] = np.ndarray([0, 3])
+                local_graph[closest_node][deg_1_node]["centerline_radius_array"] = np.array([])
 
                 # Add to the subgraphs_union_edges
                 subgraphs_union_edges.append([closest_node, deg_1_node])
