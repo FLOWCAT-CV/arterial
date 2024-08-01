@@ -149,18 +149,19 @@ def predict_extracranial_vessel_types_ensemble(graph):
     # We will average logits across folds and then argmax to choose final class
     predicted_nodes = torch.zeros(len(next(iter(data_loader)).x), dataset_description["num_edge_classes"], 5).to(device)
 
-    for fold in range(5):
-        # Load the trained graph U-Net model for inference
-        model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device)).to(device)
-        # Load model to device
-        model.eval()
-        # We have to iterate over the DataLoader (even thogh it will just be one graph at the time)
-        for graph_preprocessed in data_loader:
-            # Inference returns a tensor with the softmax probabilities for the vessel type for each node
-            # We perform argmax to obtain the vessel type with the highest probability and pass it to list
-            # The result is a 1D list with the predicted vessel types for each node
-            predicted_nodes[:, :, fold] = F.softmax(model(graph_preprocessed.x, graph_preprocessed.edge_index), dim=1).to(device)
-    
+    with torch.no_grad():
+        for fold in range(5):
+            # Load the trained graph U-Net model for inference
+            model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device)).to(device)
+            # Load model to device
+            model.eval()
+            # We have to iterate over the DataLoader (even thogh it will just be one graph at the time)
+            for graph_preprocessed in data_loader:
+                # Inference returns a tensor with the softmax probabilities for the vessel type for each node
+                # We perform argmax to obtain the vessel type with the highest probability and pass it to list
+                # The result is a 1D list with the predicted vessel types for each node
+                predicted_nodes[:, :, fold] = F.softmax(model(graph_preprocessed.x, graph_preprocessed.edge_index), dim=1).to(device)
+
     # Get mean of the logits across folds. Perform argmax to obtain the vessel type with the highest probability and pass it to list
     predicted_nodes = predicted_nodes.mean(dim=-1).argmax(dim=1).cpu().tolist()
     # 
@@ -178,29 +179,3 @@ def predict_extracranial_vessel_types_ensemble(graph):
         predicted_graph[src][dst]["vessel_type_name"] = edge_labels_dict[str(predicted_graph[src][dst]["vessel_type"])]
     
     return predicted_graph
-
-
-
-""" The function below belonged to an old implementation for intracranial vessel labelling. It is kept here for reference, 
-but the final approach will be different. """
-
-# def predict_intracranial_vessel_types(graph, case_dir):
-#     """
-    
-#     """
-#     # Get the features DataFrame for the graph
-#     x = graph_data_to_df(case_dir, graph) 
-#     # Initialize the XGBoost model
-#     model = xgb.Booster({'nthread': 4})     
-#     # Load the pre-trained model
-#     model.load_model(os.path.join(os.environ["arterial_dir"], 'vessel_labelling/models/intracranial_vessels/model.model'))
-    
-#     # Use the XBG model to predict the vessel types
-#     predicted_nodes = model.predict(xgb.DMatrix(x)).astype(int)
-
-#     # We create a dict to link the cell_ids from the centerline_segments_array to the predicted vessel types
-#     predicted_vessels = {}
-#     for idx, (src, dst) in enumerate(sorted(graph.edges)):
-#         predicted_vessels[graph[src][dst]['cell_id']] = predicted_nodes[idx]
-        
-#     return predicted_vessels 
