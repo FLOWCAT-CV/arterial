@@ -101,8 +101,8 @@ class CenterlineComputationLogic(object):
         
         # Here we start the actual centerline computation which is mathematically more robust and accurate but takes longer than the network extraction
         print("Clipping surface at endpoints...")
-        # clip surface at endpoints identified by the network extraction
-        clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
+        # Extract endpoints
+        endpoints = self.autodetect_endpoints(network, prepared_surface_model)
 
         if endpoints.GetNumberOfPoints() == 0:
             if is_first_model:
@@ -119,7 +119,7 @@ class CenterlineComputationLogic(object):
             endpoints = aortic_arch_endpoint_check(endpoints, segmentation_array, segmentation_affine)
 
         # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
-        endpoints = robust_endpoint_detection(endpoints, segmentation_array, segmentation_affine, window_size=15, larger_window_for_aa_startpoint=is_first_model)
+        endpoints = robust_endpoint_relocation(endpoints, segmentation_array, segmentation_affine, window_size=15, larger_window_for_aa_startpoint=is_first_model)
         # Convert the endpoints to a JSON format (compatible with Markups module for visualization in 3D Slicer)
         endpoints_json = build_endpoints_json(endpoints, segmentation_affine)
 
@@ -412,7 +412,7 @@ class CenterlineComputationLogic(object):
 
         return network
 
-    def clip_surface_at_end_points(self, network, surface_model):
+    def autodetect_endpoints(self, network, surface_model):
         """
         Clips the surface_poly_data on the endpoints identified using the network_poly_data.
 
@@ -487,7 +487,7 @@ class CenterlineComputationLogic(object):
         for point_index in range(number_of_endpoints):
             self.open_surface_at_point(clipped_surface_model, endpoints_points.GetPoint(point_index))
 
-        return [clipped_surface_model, endpoints_points]
+        return endpoints_points
 
     def compute_centerlines(self, surface_model, inlet_seed_ids, outlet_seed_ids):
         """
@@ -699,7 +699,7 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     if segmentation_volume < 5e4 and bouding_box_volume < 5.5e6: # Empirically tested
         raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
-def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):
+def robust_endpoint_relocation(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):
     """
     Relocates automatically detected endpoints to the center of mass of the closest component
     inside a local region around the endpoint (defined by n).
@@ -722,6 +722,8 @@ def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentat
         Defines the size of the region around the endpoint that is analyzed for this method.
         New endpoint location will be searched within a cubic box of size 2 * n around the 
         originial endpoint location.
+    larger_window_for_aa_startpoint : bool, optional
+        Whether to use a larger window for the first endpoint (AA startpoint). The default is False.
 
     Returns
     -------
@@ -731,50 +733,70 @@ def robust_endpoint_detection(endpoint_vtk_points, segmentation_array, segmentat
     """
     # Invert the affine matrix
     segmentation_affine_inv = np.linalg.inv(segmentation_affine)
+    max_iterations = 5
     for endpoint_idx in range(endpoint_vtk_points.GetNumberOfPoints()):
         endpoint = endpoint_vtk_points.GetPoint(endpoint_idx)
         # Compute endpoint ijk coordinates with affine matrix
         i, j, k = np.round(np.matmul(segmentation_affine_inv, np.append(endpoint, 1.0))[:3]).astype(int)
-        # Define limits of the region of interest
-        if larger_window_for_aa_startpoint and endpoint_idx == 0:
-            i_min, i_max = np.clip([i - (window_size + 15), i + (window_size + 15)], 0, segmentation_array.shape[0])
-            j_min, j_max = np.clip([j - (window_size + 15), j + (window_size + 15)], 0, segmentation_array.shape[1])
-            k_min, k_max = np.clip([k - (window_size + 15), k + (window_size + 15)], 0, segmentation_array.shape[2])
-        else:
-            i_min, i_max = np.clip([i - window_size, i + window_size], 0, segmentation_array.shape[0])
-            j_min, j_max = np.clip([j - window_size, j + window_size], 0, segmentation_array.shape[1])
-            k_min, k_max = np.clip([k - window_size, k + window_size], 0, segmentation_array.shape[2])
-        # Mask the segmentation_array (only region of interest)
-        masked_segmentation = segmentation_array[i_min:i_max, j_min:j_max, k_min:k_max]
-        # Divide into different connected components
-        label_mask = measure.label(masked_segmentation, connectivity=1)
-        unique_labels = np.unique(label_mask)[1:] 
+        original_i, original_j, original_k = i, j, k
+        valid_endpoint = False
+        window_size_  = window_size
+        iteration = 0
+        while not valid_endpoint and iteration < max_iterations:
+            # Define limits of the region of interest
+            if larger_window_for_aa_startpoint and endpoint_idx == 0:
+                i_min, i_max = np.clip([i - (window_size_ + 15), i + (window_size_ + 15)], 0, segmentation_array.shape[0])
+                j_min, j_max = np.clip([j - (window_size_ + 15), j + (window_size_ + 15)], 0, segmentation_array.shape[1])
+                k_min, k_max = np.clip([k - (window_size_ + 15), k + (window_size_ + 15)], 0, segmentation_array.shape[2])
+            else:
+                i_min, i_max = np.clip([i - window_size_, i + window_size_], 0, segmentation_array.shape[0])
+                j_min, j_max = np.clip([j - window_size_, j + window_size_], 0, segmentation_array.shape[1])
+                k_min, k_max = np.clip([k - window_size_, k + window_size_], 0, segmentation_array.shape[2])
+            # Mask the segmentation_array (only region of interest)
+            masked_segmentation = segmentation_array[i_min:i_max, j_min:j_max, k_min:k_max]
+            # Divide into different connected components
+            label_mask = measure.label(masked_segmentation, connectivity=1)
+            unique_labels = np.unique(label_mask)[1:] 
 
-        if unique_labels.size > 1:
-            # Only perform distance transformation when necessary
-            distances = np.ndarray([len(unique_labels), label_mask.shape[0], label_mask.shape[1], label_mask.shape[2]])
-            for idx_unique_label, unique_label in enumerate(unique_labels):
-                # Select label mask for the current unique label
-                label_mask_unique_label = label_mask == unique_label
-                # Invert the mask to compute the distance transform
-                inverted_label_mask = label_mask_unique_label == 0
-                distances[idx_unique_label, :] = ndimage.distance_transform_edt(inverted_label_mask, return_distances=True, return_indices=False)
-            # Now collect the distances at the center of the region of interest
-            distances = distances[:, window_size, window_size, window_size]
-            # Select the nearest label (that with the lowest value in the distance map)
-            nearest_label = unique_labels[np.argmin(distances)]
-            properties = measure.regionprops((label_mask == nearest_label).astype(int))
-            centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
-        elif unique_labels.size == 1:
-            # If only one label, use its centroid directly
-            properties = measure.regionprops(label_mask.astype(int), label_mask == unique_labels[0])
-            centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
-        else:
-            # Default to the original coordinates if no labels were found
-            centroid = [i, j ,k]
-
+            if unique_labels.size == 0:
+                # Default to the original coordinates if no labels were found
+                window_size_ += 5
+                iteration += 1
+            else:
+                if unique_labels.size > 1:
+                    # Only perform distance transformation when necessary
+                    distances = np.ndarray([len(unique_labels), label_mask.shape[0], label_mask.shape[1], label_mask.shape[2]])
+                    for idx_unique_label, unique_label in enumerate(unique_labels):
+                        # Select label mask for the current unique label
+                        label_mask_unique_label = label_mask == unique_label
+                        # Invert the mask to compute the distance transform
+                        inverted_label_mask = label_mask_unique_label == 0
+                        distances[idx_unique_label, :] = ndimage.distance_transform_edt(inverted_label_mask, return_distances=True, return_indices=False)
+                    # Now collect the distances at the center of the region of interest
+                    distances = distances[:, window_size, window_size, window_size]
+                    # Select the nearest label (that with the lowest value in the distance map)
+                    nearest_label = unique_labels[np.argmin(distances)]
+                    properties = measure.regionprops((label_mask == nearest_label).astype(int))
+                    centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
+                elif unique_labels.size == 1:
+                    # If only one label, use its centroid directly
+                    properties = measure.regionprops(label_mask.astype(int), label_mask == unique_labels[0])
+                    centroid = properties[0].centroid + np.array([i_min, j_min, k_min])
+                # Check if the new endpoint is within the segmentation (array at ijk is non-zero)
+                if segmentation_array[int(centroid[0]), int(centroid[1]), int(centroid[2])] > 0.5:
+                    valid_endpoint = True
+                else:
+                    # Recenter centroid for the next iteration 
+                    i, j, k = centroid.astype(int)
+                    iteration += 1
+            # If no valid endpoint was found after max_iterations, default to the originally found centroid
+            if not valid_endpoint and iteration == max_iterations:
+                centroid = np.array([original_i, original_j, original_k])
+            
         # Return the new position of the endpoint in RAS coordinates
         endpoint_vtk_points.SetPoint(endpoint_idx, np.matmul(segmentation_affine, np.append(centroid, 1.0))[:3])
+
+    print("Endpoint relocation completed. Number of endpoints: ", endpoint_vtk_points.GetNumberOfPoints())
 
     return endpoint_vtk_points
 
