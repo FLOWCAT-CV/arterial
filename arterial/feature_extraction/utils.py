@@ -634,8 +634,26 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
         node_pos_dict_P[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
 
     nx.draw(graph, node_pos_dict_P, node_size=10, node_color=color_map)
-    ax.set_xlim([-250, -40])
-    ax.set_ylim([-10, 300])
+    # Set limits according to the local_graph
+    # Extract x and y coordinates from node_pos_dict_P
+    x_coords = [node_pos_dict_P[node][0] for node in node_pos_dict_P]
+    y_coords = [node_pos_dict_P[node][1] for node in node_pos_dict_P]
+    
+    # Calculate limits
+    x_min, x_max = min(x_coords), max(x_coords)
+    y_min, y_max = min(y_coords), max(y_coords)
+    
+    # Add some padding
+    x_padding = (x_max - x_min) * 0.1
+    y_padding = (y_max - y_min) * 0.1
+    
+    # Set limits
+    x_lim = (x_min - x_padding, x_max + x_padding)
+    y_lim = (y_min - y_padding, y_max + y_padding)
+
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+
     # Set title as feature
     if feature is not None:
         # Add a colorbar

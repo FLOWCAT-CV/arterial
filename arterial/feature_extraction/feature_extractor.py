@@ -206,7 +206,7 @@ class FeatureExtractor():
         if save:
             for config, supersegment in self.supersegments.items():
                 save_pickle(supersegment, os.path.join(self.supersegments_dir_path, f"{config[0]} + {config[1]} + {config[2]}.pickle"))
-            make_supersegment_plots(self.supersegments, output_path=self.supersegments_plot_path)
+            make_supersegment_plots(self.supersegments, local_graph=self.local_graph, output_path=self.supersegments_plot_path)
 
     def is_local_featurized(self):
         if "features femoral" in self.local_graph.nodes[0].keys():
