@@ -4,7 +4,7 @@ import os
 
 from arterial.vessel_labelling.preprocessing.preprocessing import build_nx_graph_from_segments_array
 from arterial.vessel_labelling.inference import perform_inference
-from arterial.vessel_labelling.utils import make_graph_plot 
+from arterial.vessel_labelling.utils import make_graph_plot
 from arterial.io.load_and_save_operations import load_pickle, save_pickle, load_numpy
 
 class VesselLabeller():
@@ -98,6 +98,9 @@ class VesselLabeller():
                 self.load_segments_graph()
             else:
                 self.build_segments_graph()
+
+        # Perform sanity check on the segments graph
+        self.segments_graph_sanity_check()
             
         print("Predicting vessel types...")
         self.segments_graph_pred = perform_inference(self.segments_graph, self.mode, ensemble)
@@ -105,6 +108,23 @@ class VesselLabeller():
         if save:
             save_pickle(self.segments_graph_pred, self.segments_graph_pred_path)
             make_graph_plot(self.segments_graph_pred, label="vessel_type_name", output_path=self.segments_graph_pred_plot_path)
+
+    def segments_graph_sanity_check(self):
+        """
+        Performs sanity check on segments graph. Raises an error
+        if the graph has less than 2 edges.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
+        if self.segments_graph is None:
+            raise ValueError("Segments graph is not loaded or created.")
+        if len(self.segments_graph.edges) < 2:
+            raise ValueError("Segment graph has less than 2 edges. This is a critical error, processing is interrupted.")
 
     def load_centerline_segments_array(self):
         if not os.path.isfile(self.centerline_segments_array_path):
