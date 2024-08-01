@@ -29,6 +29,10 @@ def extract_centerlines(segmentation_model, segmentation_array, segmentation_aff
     """
     centerline_computation_logic = CenterlineComputationLogic()
     centerlines, voronoi, endpoints_json = centerline_computation_logic.extract_centerline(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
+    
+    if centerlines is None: # True if no endpoints are found
+        return None, None, None
+    
     startpoint = endpoints_json["markups"][0]["controlPoints"][0]["position"]
     if centerlines.GetNumberOfCells() == 0 or centerlines.GetNumberOfPoints() == 0:
         pass
