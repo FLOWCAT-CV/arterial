@@ -103,6 +103,13 @@ class CenterlineComputationLogic(object):
         print("Clipping surface at endpoints...")
         # clip surface at endpoints identified by the network extraction
         clipped_surface, endpoints = self.clip_surface_at_end_points(network, prepared_surface_model)
+
+        if endpoints.GetNumberOfPoints() == 0:
+            if is_first_model:
+                raise ValueError("No endpoints found for first model. This is a critical error. Please check the segmentation.")
+            else:
+                print("No endpoints were found in a secondary island, returning empty centerlines")
+                return None, None, None
         
         print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
 
