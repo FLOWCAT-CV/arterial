@@ -696,7 +696,7 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
         raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
     if bouding_box_volume > 3.5e7: # Empirically tested
         raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
-    if segmentation_volume < 5e4 and bouding_box_volume < 4e6: # Empirically tested
+    if segmentation_volume < 4e4 and bouding_box_volume < 4e6: # Empirically tested
         raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
 
 def robust_endpoint_relocation(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):
