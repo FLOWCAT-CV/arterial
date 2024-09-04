@@ -71,6 +71,7 @@ class CenterlineExtractor():
         self.clipped_model_list = []
 
         self.segmentation_path = os.path.join(self.case_dir, self.mode, "segmentation.vtk")
+        self.segmentation_path_stl = os.path.join(self.case_dir, self.mode, "segmentation.stl")
         self.branch_model_path = os.path.join(self.case_dir, self.mode, "branch_model.vtk")
         self.clipped_model_path = os.path.join(self.case_dir, self.mode, "clipped_model.vtk")
 
@@ -107,6 +108,7 @@ class CenterlineExtractor():
         
         if save:
             save_vtkpolydata(self.segmentation_model, self.segmentation_path)
+            save_vtkpolydata_as_stl(self.segmentation_model, self.segmentation_path_stl)
             for idx, segmentation_model in enumerate(self.segmentation_model_list):
                 save_vtkpolydata(segmentation_model, os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk"))
     
