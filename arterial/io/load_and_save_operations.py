@@ -122,6 +122,24 @@ def save_vtkpolydata(vtk_poly_data, path):
     writer.SetFileName(path)
     writer.Write()
 
+def save_vtkpolydata_as_stl(vtk_poly_data, path):
+    """
+    Saves a vtkPolyData object to a file in .stl format.
+
+    Parameters
+    ----------
+    vtk_poly_data : vtk.vtkPolyData
+        vtkPolyData object to be saved.
+    path : str
+        Path to the file where the vtkPolyData object will be saved.
+
+    """
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileTypeToBinary()
+    writer.SetInputData(vtk_poly_data)
+    writer.SetFileName(path)
+    writer.Write()
+
 def load_vtk_list_from_dir(dir_path):
     """
     Load a list of vtkPolyData objects from a directory.
