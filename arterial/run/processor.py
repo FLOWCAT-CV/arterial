@@ -110,7 +110,13 @@ class ArterialProcessor():
         print("Feature extraction took {:.2f} s".format(step3 - step2))
         print("Total time for analysis: {:.2f} s".format(step3 - start))
 
-        times = [segmentation_time, centerline_extraction_time, vessel_labelling_time, feature_extraction_time]
+        times = {
+            "segmentation_time": segmentation_time,
+            "centerline_extraction_time": centerline_extraction_time,
+            "vessel_labelling_time": vessel_labelling_time,
+            "feature_extraction_time": feature_extraction_time,
+            "total_time": step3 - start
+        }
 
         return times
 
