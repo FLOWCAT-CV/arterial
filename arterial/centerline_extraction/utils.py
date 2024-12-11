@@ -39,7 +39,7 @@ class CenterlineComputationLogic(object):
         self.torsion_array_name = "Torsion"
         self.tortuosity_array_name = "Tortuosity"
 
-    def extract_centerline(self, surface_model, segmentation_array, segmentation_affine, is_first_model=True):
+    def extract_centerline_full_cta(self, surface_model, segmentation_array, segmentation_affine, is_first_model=True):
         """
         Extracts the centerline from the given surface model. The pipeline comprises the following steps:
         1. Prepare the model
@@ -66,12 +66,8 @@ class CenterlineComputationLogic(object):
             The centerlines.
         voronoi : vtkPolyData
             The Voronoi diagram.
-        network : vtkPolyData   
-            The network.
-        decimated_surface_model : vtkPolyData
-            The decimated surface model.
-        prepared_surface_model : vtkPolyData
-            The prepared surface model.
+        endpoints_json : dict
+            Dictionary with the endpoints.
         
         """
         # Define the output models
@@ -176,6 +172,71 @@ class CenterlineComputationLogic(object):
         voronoi.DeepCopy(new_voronoi)
 
         return centerlines, voronoi, endpoints_json
+    
+    def extract_centerline_between_endpoints(self, surface_model, segmentation_array, segmentation_affine, endpoints):
+        """
+        Extracts the centerline from the given surface model. The pipeline comprises the following steps:
+        1. Clip the surface at the endpoints
+        2. Compute the centerlines
+
+        Parameters
+        ----------
+        surface_model : vtkPolyData
+            The surface model.
+        segmentation_array : numpy.array
+            The segmentation array.
+        segmentation_affine : numpy.array
+            The segmentation affine.
+        endpoints_json : dict
+            Dictionary with the endpoints.
+
+        Returns
+        -------
+        centerlines : vtkPolyData
+            The centerlines.
+        voronoi : vtkPolyData
+            The Voronoi diagram.
+        
+        """
+        # Define the output models
+        centerlines = vtk.vtkPolyData()
+        voronoi = vtk.vtkPolyData()
+
+        # Computes the robust endpoints. This helps avoid centerline extraction errors due to the endpoints being outside the segmentation
+        # create a vtkPoints object from the endpoints python list
+        endpoints_vtk = vtk.vtkPoints()
+        for point in endpoints:
+            endpoints_vtk.InsertNextPoint(point)
+
+        endpoints_vtk = robust_endpoint_relocation(endpoints_vtk, segmentation_array, segmentation_affine, window_size=15, larger_window_for_aa_startpoint=False)
+
+        source_point = endpoints[0]
+        target_points = endpoints[1:]
+
+        # Create the source_id_list and target_id_list for the actual centerline computation
+        source_id_list = vtk.vtkIdList()
+        target_id_list = vtk.vtkIdList()
+
+        point_locator = vtk.vtkPointLocator()
+        point_locator.SetDataSet(surface_model)
+        point_locator.BuildLocator()
+
+        # locate the source on the surface
+        source_id = point_locator.FindClosestPoint(source_point)
+        source_id_list.InsertNextId(source_id)
+
+        # locate the endpoints on the surface
+        for p in target_points:
+            id = point_locator.FindClosestPoint(p)
+            target_id_list.InsertNextId(id)
+
+        print("Computing centerlines...")
+        new_centerlines, new_voronoi = self.compute_centerlines(surface_model, source_id_list, target_id_list)
+
+        centerlines.DeepCopy(new_centerlines)
+        voronoi.DeepCopy(new_voronoi)
+
+        return centerlines, voronoi
     
     def get_seed_ras(self, segmentation_array, segmentation_affine):
         """
