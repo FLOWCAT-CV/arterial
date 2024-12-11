@@ -2,7 +2,7 @@
 
 from arterial.centerline_extraction.utils import CenterlineComputationLogic, clean_centerline
 
-def extract_centerlines(segmentation_model, segmentation_array, segmentation_affine, is_first_model=True):
+def extract_centerlines_full_cta(segmentation_model, segmentation_array, segmentation_affine, is_first_model=True):
     """
     Extract centerlines from a segmentation model, following the VMTK Slicer extension logic. The only difference between
     this implementation and the Arterial 1.0 (processing within Slicer) is the generation of the segmentation model prior 
@@ -28,7 +28,7 @@ def extract_centerlines(segmentation_model, segmentation_array, segmentation_aff
     
     """
     centerline_computation_logic = CenterlineComputationLogic()
-    centerlines, voronoi, endpoints_json = centerline_computation_logic.extract_centerline(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
+    centerlines, voronoi, endpoints_json = centerline_computation_logic.extract_centerline_full_cta(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
     
     if centerlines is None: # True if no endpoints are found
         return None, None, None
@@ -44,3 +44,46 @@ def extract_centerlines(segmentation_model, segmentation_array, segmentation_aff
         return None, None, None
     else:
         return centerlines, voronoi, endpoints_json
+    
+def extract_centerline_between_endpoints(segmentation_model, segmentation_array, segmentation_affine, endpoints):
+    """
+    This function should extract the centerline between predefined endpoints. The endpoints should be passed either as a json
+    or as a list of points. The logic will be to use the first endpoint as the startpoint and the rest as endpoints. Thus, 
+    N-1 centerlines will be extracted, where N is the number of endpoints.
+
+    Parameters
+    ----------
+    segmentation_model : vtkPolyData
+        The segmentation surface model.
+    segmentation_array : numpy.array
+        Binary array with the original vascular segmentation.
+    segmentation_affine : numpy.array
+        Affine transformation of the nifti.
+    endpoints : list
+        List of points with the endpoints.
+
+    Returns
+    -------
+    centerlines : vtkPolyData
+        The centerline model.
+    voronoi : vtkPolyData
+        The voronoi diagram model.
+    
+    """
+    centerline_computation_logic = CenterlineComputationLogic()
+    centerlines, voronoi = centerline_computation_logic.extract_centerline_between_endpoints(segmentation_model, segmentation_array, segmentation_affine, endpoints)
+    
+    if centerlines is None: # True if no endpoints are found
+        return None, None, None
+    
+    # startpoint = endpoints[0]
+    # if centerlines.GetNumberOfCells() == 0 or centerlines.GetNumberOfPoints() == 0:
+    #     pass
+    # else:
+    #     centerlines = clean_centerline(centerlines, startpoint=startpoint)
+    #     print("Number of cells after centerline cleaning:", centerlines.GetNumberOfCells())
+        
+    if centerlines.GetNumberOfCells() == 0:
+        return None, None
+    else:
+        return centerlines, voronoi
