@@ -1,11 +1,11 @@
 #   Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
 import os
-from arterial.feature_extraction.graph_builder import build_local_graph
+from arterial.feature_extraction.graph_builder import build_local_graph, build_individual_centerline_graph_from_vtkpolydata
 from arterial.feature_extraction.utils import make_graph_plot
-from arterial.feature_extraction.local_features.feature_extraction import perform_local_feature_extraction
+from arterial.feature_extraction.local_features.feature_extraction import perform_local_feature_extraction, perform_local_feature_extraction_individual_centerline
 from arterial.feature_extraction.segment_features.feature_extraction import perform_segment_feature_extraction
-from arterial.feature_extraction.segment_features.utils import plot_single_segments
+from arterial.feature_extraction.segment_features.utils import plot_single_segments, extract_segment_features
 from arterial.feature_extraction.global_features.feature_extraction import perform_global_feature_extraction
 from arterial.feature_extraction.mapping.mapping import extract_arterial_mapping
 from arterial.feature_extraction.mapping.utils import make_supersegment_plots
@@ -91,6 +91,10 @@ class FeatureExtractor():
         self.supersegments = None
         self.supersegments_dir_path = os.path.join(self.case_dir, self.mode, "supersegments")
         self.supersegments_plot_path = os.path.join(self.case_dir, self.mode, "supersegments.png")
+
+        # For intracranial vessel analysis
+        self.individual_centerlines_dir_path = os.path.join(self.case_dir, self.mode, "individual_centerlines")
+        self.individual_centerline_graph = None
 
     def build_local_graph(self, save=True):
         """
@@ -207,6 +211,18 @@ class FeatureExtractor():
             for config, supersegment in self.supersegments.items():
                 save_pickle(supersegment, os.path.join(self.supersegments_dir_path, f"{config[0]} + {config[1]} + {config[2]}.pickle"))
             make_supersegment_plots(self.supersegments, local_graph=self.local_graph, output_path=self.supersegments_plot_path)
+
+    def build_and_featurize_individual_centerline_graph(self, centerline_model, radius_array_name="MaximumInscribedSphereRadius", centerline_id=None, save=True):
+        if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
+        if self.cta_array is None or self.cta_affine is None:
+            self.load_cta_nifti()
+        self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id)
+        self.individual_centerline_graph = perform_local_feature_extraction_individual_centerline(self.individual_centerline_graph, self.cta_array, self.cta_affine)
+        self.individual_centerline_graph = extract_segment_features(self.individual_centerline_graph, use_blanking=False)
+
+        if save:
+            save_pickle(self.individual_centerline_graph, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.pickle"))
+            make_graph_plot(self.individual_centerline_graph, output_path=os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.png"))
 
     def is_local_featurized(self):
         if "features femoral" in self.local_graph.nodes[0].keys():
