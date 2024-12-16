@@ -213,6 +213,24 @@ class FeatureExtractor():
             make_supersegment_plots(self.supersegments, local_graph=self.local_graph, output_path=self.supersegments_plot_path)
 
     def build_and_featurize_individual_centerline_graph(self, centerline_model, radius_array_name="MaximumInscribedSphereRadius", centerline_id=None, save=True):
+        """
+        Builds and featurizes an individual centerline graph from a vtkpolydata. 
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Centerline model to build the individual centerline graph from.
+        radius_array_name : str, optional
+            Name of the radius array in the centerline_model. The default is "MaximumInscribedSphereRadius".
+        centerline_id : int, optional
+            ID of the centerline. This will be used to name the saved graph and plot. The default is None.
+        save : bool, optional
+            Whether to save the generated graph. The default is True.
+
+        Returns
+        -------
+
+        """
         if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
         if self.cta_array is None or self.cta_affine is None:
             self.load_cta_nifti()
