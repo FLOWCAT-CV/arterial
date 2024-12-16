@@ -7,7 +7,7 @@ from vtk.util.numpy_support import vtk_to_numpy
 
 from arterial.feature_extraction.local_features.utils import featurize_node, sanity_check, add_cumulative_features
 
-def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_model):
+def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_model=None):
     """
     Function for local graph featurization. Inputs a networkx.Graph from a case and 
     returns the same graph with node attributes for both femoral and radial accesses.
@@ -51,16 +51,19 @@ def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
     lpi_corner_coordinates = np.dot(cta_affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
-    # Pool branch_model point points. Get blanking for each point
-    branch_model_coordinates = np.ndarray([branch_model.GetNumberOfPoints(), 3])
-    blanking = np.ndarray([branch_model.GetNumberOfPoints()])
-    radius_branch_model = vtk_to_numpy(branch_model.GetPointData().GetArray("MaximumInscribedSphereRadius"))
-    accumulated_number_of_points = 0
-    for idx in range(branch_model.GetNumberOfCells()):         
-        for idx2 in range(branch_model.GetCell(idx).GetNumberOfPoints()):
-            branch_model_coordinates[idx2 + accumulated_number_of_points] = branch_model.GetCell(idx).GetPoints().GetPoint(idx2) - lpi_corner_coordinates
-            blanking[idx2 + accumulated_number_of_points] = vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx]
-        accumulated_number_of_points += branch_model.GetCell(idx).GetNumberOfPoints()
+    if branch_model is not None:
+        # Pool branch_model point points. Get blanking for each point
+        branch_model_coordinates = np.ndarray([branch_model.GetNumberOfPoints(), 3])
+        blanking = np.ndarray([branch_model.GetNumberOfPoints()])
+        accumulated_number_of_points = 0
+        for idx in range(branch_model.GetNumberOfCells()):         
+            for idx2 in range(branch_model.GetCell(idx).GetNumberOfPoints()):
+                branch_model_coordinates[idx2 + accumulated_number_of_points] = branch_model.GetCell(idx).GetPoints().GetPoint(idx2) - lpi_corner_coordinates
+                blanking[idx2 + accumulated_number_of_points] = vtk_to_numpy(branch_model.GetCellData().GetArray("Blanking"))[idx]
+            accumulated_number_of_points += branch_model.GetCell(idx).GetNumberOfPoints()
+    else:
+        branch_model_coordinates = None
+        blanking = None
 
     # Compute local features from both accesses
     for access in ["femoral", "radial"]:
@@ -72,7 +75,7 @@ def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_
             local_graph[src][dst]["is_artificial"] = False
         # We need to iterate over all graph nodes and generalize the feature extraction process depending on the degree of the node
         for node in local_graph:
-            featurize_node(local_graph, node, access, radius_branch_model, branch_model_coordinates, blanking, cta_array, cta_affine, lpi_corner_coordinates)
+            featurize_node(local_graph, node, access, cta_array, cta_affine, lpi_corner_coordinates, branch_model_coordinates, blanking)
 
         # If we had removed edges in the beggining, we add them again to compute accumulated features
         for src, dst in local_graph.graph["subgraphs_union_edges"]:
@@ -93,3 +96,53 @@ def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_
             local_graph.nodes[node][f"features {access}"]["vessel_type"] = local_graph.nodes[node]["vessel_type"]
 
     return local_graph
+
+def perform_local_feature_extraction_individual_centerline(individual_centerline_graph, cta_array, cta_affine):
+    """
+    Function for local graph featurization. Inputs a networkx.Graph from a case and 
+    returns the same graph with node attributes for both femoral and radial accesses.
+
+    Local features include:
+    * Node position
+    * Radius
+    * Curvature
+    * Relative position to neighbor nodes
+    * segment distance
+    * Directional features
+    * CTA intensity
+
+    Parameters
+    ----------
+    individual_centerline_graph : networkx.Graph
+        Dense centerline graph returned by graph builder.
+    cta_array : np.ndarray
+        3D array of the CTA image.
+    cta_affine : np.ndarray
+        Affine matrix of the CTA image.
+
+    Returns
+    -------
+    individual_centerline_graph : networkx.Graph
+        Featurized centerline graph with node attributes for both femoral and radial 
+        accesses.
+
+    """
+    # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
+    orientation = nib.aff2axcodes(cta_affine)
+    if orientation == ('R', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([0, 0, 0])
+    elif orientation == ('L', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, 0, 0])
+    elif orientation == ('L', 'P', 'S'):
+        lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, 0])
+
+    # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
+    lpi_corner_coordinates = np.dot(cta_affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
+
+    for node in individual_centerline_graph:
+        featurize_node(individual_centerline_graph, node, "femoral", cta_array, cta_affine, lpi_corner_coordinates)
+
+    # Compute cumulative features
+    add_cumulative_features(individual_centerline_graph, "femoral")
+
+    return individual_centerline_graph
