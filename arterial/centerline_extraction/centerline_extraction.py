@@ -75,13 +75,6 @@ def extract_centerline_between_endpoints(segmentation_model, segmentation_array,
     
     if centerlines is None: # True if no endpoints are found
         return None, None, None
-    
-    # startpoint = endpoints[0]
-    # if centerlines.GetNumberOfCells() == 0 or centerlines.GetNumberOfPoints() == 0:
-    #     pass
-    # else:
-    #     centerlines = clean_centerline(centerlines, startpoint=startpoint)
-    #     print("Number of cells after centerline cleaning:", centerlines.GetNumberOfCells())
         
     if centerlines.GetNumberOfCells() == 0:
         return None, None

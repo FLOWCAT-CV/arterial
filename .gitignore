@@ -13,6 +13,7 @@ dev
 .*
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
 *.json
+*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

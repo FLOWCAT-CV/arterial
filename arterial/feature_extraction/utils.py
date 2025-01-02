@@ -679,6 +679,11 @@ def build_segments_array_for_individual_centerline_graph(centerline_model, affin
     # Get radius array from centerline_segments_array
     radius_array = vtk_to_numpy(centerline_model.GetPointData().GetArray(radius_array_name))
 
+    # For some reason, the vtk logic return a vtk centerline object inverted (so, first points
+    # are the distal end and last points are the proximal end). We need to flip it
+    coordinate_array = np.flip(coordinate_array, axis=0)
+    radius_array = np.flip(radius_array, axis=0)
+
     # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
     orientation = nib.aff2axcodes(affine)
     if orientation == ('R', 'A', 'S'):
