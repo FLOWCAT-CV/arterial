@@ -86,7 +86,7 @@ class CenterlineExtractor():
         self.individual_centerlines_dir_path = os.path.join(self.case_dir, self.mode, "individual_centerlines")
         self.individual_centerlines_list = []
 
-    def perform_preprocessing(self, save=True):
+    def perform_preprocessing(self, volume_check=True, save=True):
         """
         Performs preprocessing of the segmentation nifti file to generate a vtkpolydata 
         of the segmentation's surface mode, as well as the segmentation model list (each of the
@@ -106,7 +106,7 @@ class CenterlineExtractor():
 
         if self.segmentation_array is None or self.segmentation_affine is None:
             self.load_segmentation_nifti()
-        if self.mode == "extracranial_vessels":
+        if self.mode == "extracranial_vessels" and volume_check:
             volume_sanity_check(self.segmentation_array, self.segmentation_affine)
         self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine, self.fast_segmentation)
         
@@ -291,7 +291,7 @@ class CenterlineExtractor():
 
         """
         if self.segmentation_model is None:
-            self.perform_preprocessing()
+            self.perform_preprocessing(volume_check=False)
         if self.segmentation_array is None or self.segmentation_affine is None:
             self.load_segmentation_nifti()
 

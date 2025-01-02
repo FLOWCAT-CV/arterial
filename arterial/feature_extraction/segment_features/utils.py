@@ -540,6 +540,9 @@ def extract_segment_features(segment, use_blanking=True):
     polar, azimuthal = direction_angles(segment, proximal_node, distal_node)
     segment.graph["features"]["polar_angle"] = polar
     segment.graph["features"]["azimuthal_angle"] = azimuthal
+    segment.graph["features"]["diameter_last_5mm"] = diameter_last_5mm(segment, distal_node)
+    segment.graph["features"]["diameter_last_10mm"] = diameter_last_10mm(segment, distal_node)
+    segment.graph["features"]["curvature_energy"] = curvature_energy(segment)
 
     return segment
 
@@ -1114,6 +1117,60 @@ def direction_angles(segment, proximal_node, distal_node):
         return polar, azimuth
     else:
         return 0, 0
+    
+def diameter_last_5mm(segment, distal_node):
+    """
+    Computes the diameter of the last 5 mm of a segment.
+    """
+    accumulated_distance = 0
+    node = distal_node
+    nodes_visited = [distal_node]
+
+    node_diameters = []
+
+    while accumulated_distance < 5:
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                node_diameters.append(segment.nodes[neighbor]["features femoral"]["radius"] * 2)
+                nodes_visited.append(neighbor)
+                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
+                node = neighbor
+
+        if len(nodes_visited) == len(segment):
+            print("Warning: diameter_last_5mm did not find 5 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
+            break
+
+    return np.mean(node_diameters)
+
+def diameter_last_10mm(segment, distal_node):
+    """
+    Computes the diameter of the last 5 mm of a segment.
+    """
+    accumulated_distance = 0
+    node = distal_node
+    nodes_visited = [distal_node]
+
+    node_diameters = []
+
+    while accumulated_distance < 10:
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                node_diameters.append(segment.nodes[neighbor]["features femoral"]["radius"] * 2)
+                nodes_visited.append(neighbor)
+                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
+                node = neighbor
+
+        if len(nodes_visited) == len(segment):
+            print("Warning: diameter_last_10mm did not find 10 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
+            break
+
+    return np.mean(node_diameters)
+
+def curvature_energy(segment):
+    """
+    Computes the curvature energy of a segment.
+    """
+    return np.sum(segment.nodes[node]["features femoral"]["curvature"] ** 2 for node in segment)
 
 ## Measurements between two segments
 

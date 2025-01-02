@@ -51,13 +51,18 @@ def convert_dicom_to_nifti_d2n(input_path, output_path):
     # Create a new dummy directry for temporary storage of the output nifti file
     output_dir = os.path.dirname(output_path)
     dummy_output_dir = os.path.join(output_dir, "temporary_dir_dicom2nifti")
-    os.mkdir(dummy_output_dir)
+    os.makedirs(dummy_output_dir, exist_ok=True)
     # Make conversion, it will create a nifti file in the dummy directory
-    dicom2nifti.convert_directory(input_path, dummy_output_dir)
-    # Move the new nifti to its output path with a proper, chosen name
-    shutil.move(glob.glob(os.path.join(dummy_output_dir, "*.nii.gz"))[0], output_path)
-    # Remove the final directory
-    shutil.rmtree(dummy_output_dir)
+    try:
+        dicom2nifti.convert_directory(input_path, dummy_output_dir)
+        # Move the new nifti to its output path with a proper, chosen name
+        shutil.move(glob.glob(os.path.join(dummy_output_dir, "*.nii.gz"))[0], output_path)
+        # Remove the final directory
+        shutil.rmtree(dummy_output_dir)
+    except Exception as e:
+        print(e)
+        print("Conversion failed.")
+        shutil.rmtree(dummy_output_dir)
 
 def convert_to_las(nifti_file):
     # Load the NIfTI file
