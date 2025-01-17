@@ -1253,7 +1253,7 @@ def diameter_last_5mm(segment, distal_node):
                 node = neighbor
 
         if len(nodes_visited) == len(segment):
-            print("Warning: diameter_last_5mm did not find 5 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
+            # print("Warning: diameter_last_5mm did not find 5 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
             break
 
     return np.mean(node_diameters)
@@ -1277,7 +1277,7 @@ def diameter_last_10mm(segment, distal_node):
                 node = neighbor
 
         if len(nodes_visited) == len(segment):
-            print("Warning: diameter_last_10mm did not find 10 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
+            # print("Warning: diameter_last_10mm did not find 10 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
             break
 
     return np.mean(node_diameters)
