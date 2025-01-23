@@ -16,7 +16,7 @@ conda activate foo
 conda install -c conda-forge vmtk
 
 pip install torch=2.2.2 torch_geometric==2.5.2
-pip install pyg_lib torch_scatter==2.1.2+pt22cu121 torch_sparse==0.6.18+pt22cu121 torch_cluster==1.6.3+pt22cu121 torch_spline_conv==1.2.2+pt22cu121 -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
+pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6.3 torch_spline_conv==1.2.2 -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
 ```
 
 For MacOS:
