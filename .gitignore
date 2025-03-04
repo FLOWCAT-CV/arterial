@@ -13,6 +13,9 @@ dev
 .*
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
 *.json
+*.zip
+copy_nnunet_models.py
+move_models_access_prediction.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
