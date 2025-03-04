@@ -37,7 +37,7 @@ def preprocess_supersegment(supersegment, access, side):
     # Global features
     global_features = {}
     global_features["features"] = {}
-    # global_features["features"]["access"] = 0 if access == "femoral" else 1
+    # global_features["features"]["access"] = 0 if access == "femoral" else 1 # Currently unused, to be implemented when radial access is assessed
     global_features["features"]["side"] = 0 if side == "right" else 1
     total_segment = None
 
