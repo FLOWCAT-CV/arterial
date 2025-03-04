@@ -6,6 +6,7 @@ from arterial.segmentation.segmenter import VesselSegmenter
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
 from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
+from arterial.access_prediction.access_predictor import AccessPredictor
 
 from time import time
 
@@ -61,6 +62,7 @@ class ArterialProcessor():
         self.skip_clipping = args.skip_clipping
         self.skip_vessel_labelling = args.skip_vessel_labelling
         self.skip_feature_extraction = args.skip_feature_extraction
+        self.skip_access_prediction = args.skip_access_prediction
         self.use_vanilla_nnunet = not args.cl_dice_nnunet
         self.no_slicing = args.no_slicing
 
@@ -81,6 +83,10 @@ class ArterialProcessor():
                                                   self.mode,
                                                   self.sampling_distance_mm,
                                                   self.cta_nifti_path)
+        self.access_predictor = AccessPredictor(self.case_dir,
+                                                self.cta_nifti_path,
+                                                ['femoral'],
+                                                ['left', 'right'])
 
     def perform_analysis(self):
         """
@@ -105,17 +111,23 @@ class ArterialProcessor():
         print("Vessel labelling took {:.2f} s".format(step2 - step1))
         if self.mode == "extracranial_vessels":
             self.perform_feature_extraction()   
-        step3 = time()
-        feature_extraction_time = step3 - step2
-        print("Feature extraction took {:.2f} s".format(step3 - step2))
-        print("Total time for analysis: {:.2f} s".format(step3 - start))
+            step3 = time()
+            feature_extraction_time = step3 - step2
+            print("Feature extraction took {:.2f} s".format(step3 - step2))
+            step4 = time()
+            self.perform_access_prediction()
+            access_prediction_time = step4 - step3
+            print("Access prediction took {:.2f} s".format(step4 - step3))
+        step5 = time()
+        print("Total time for analysis: {:.2f} s".format(step5 - start))
 
         times = {
             "segmentation_time": segmentation_time,
             "centerline_extraction_time": centerline_extraction_time,
             "vessel_labelling_time": vessel_labelling_time,
             "feature_extraction_time": feature_extraction_time,
-            "total_time": step3 - start
+            "access_prediction_time": access_prediction_time,
+            "total_time": step5 - start
         }
 
         return times
@@ -259,3 +271,36 @@ class ArterialProcessor():
             print("done \n")
         else:
             print("Skipping feature extraction \n")
+
+    def perform_access_prediction(self):
+        """
+        Wrapper method of the access_prediction module. Calls methods to perform access prediction,
+        including preprocessing and inference.
+
+        At the end of the execution, the following directories should be generated:
+
+        >>> case_dir/extracranial_vessels/access_prediction/femoral_left
+        >>> case_dir/extracranial_vessels/access_prediction/femoral_right
+
+        Each of the directories will contain the following files:
+
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/access_prediction.json
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/attention_map.pickle
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/attention_map.png
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/attention_map.vtk
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/dense_supersegment.pickle
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/segment_supersegment.pickle
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/global_features.json
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/combined_plot.png
+        >>> case_dir/extracranial_vessels/access_prediction/{access}_{side}/preprocessed_supersegment_dict.pickle
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
+        if not self.skip_access_prediction:
+            # Perform access prediction
+            self.access_predictor.predict_accessibility()
