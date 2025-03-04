@@ -55,7 +55,7 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
         prediction = np.mean(pred_list, axis=0)
         prediction_std = np.std(pred_list, axis=0)
 
-        return prediction, prediction_std, None
+        attention_map_graph = None
     
     else:
         # Initialize attention map tensor. 8 is the number of attention heads of the GAT operator (hardcoded here)
@@ -86,4 +86,6 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
         attention_map_graph.graph["prediction"] = prediction
         attention_map_graph.graph["prediction_std"] = prediction_std
 
-        return prediction, prediction_std, attention_map_graph
+    print(f"Access feasibility prediction: {prediction:.2f} (95%CI {max(prediction - 1.96 * prediction_std / np.sqrt(5), 0):.2f}, {min(prediction + 1.96 * prediction_std / np.sqrt(5), 1):.2f})")
+
+    return prediction, prediction_std, attention_map_graph
