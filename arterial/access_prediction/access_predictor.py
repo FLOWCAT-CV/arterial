@@ -125,7 +125,7 @@ class AccessPredictor():
                         save_pickle(self.attention_maps_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.pickle"))
                         make_graph_plot(self.attention_maps_dict[(access, side)], feature="attention_weight", output_path=os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.png"))
                         save_vtkpolydata(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.vtk"))
-                        save_vtkpolydata_as_stl(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.stl"))
+                        # save_vtkpolydata_as_stl(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.stl"))
 
     def compute_lpi_corner_coordinates(self):
         """
