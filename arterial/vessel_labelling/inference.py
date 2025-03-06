@@ -46,12 +46,6 @@ def perform_inference(graph, mode = "extracranial_vessels", ensemble=True):
     
     elif mode == "intracranial_vessels":
         raise NotImplementedError("Intracranial vessel labelling is not implemented yet.")
-        # # Load the edge form graph (graph.pickle) created at centerlineGraph.py
-        # graph = load_pickle(os.path.join(case_dir, "{}_graph_simple.pickle".format(mode)))
-        # # Predict intracranial vessel types
-        # predicted_vessels_types = predict_intracranial_vessel_types(graph, case_dir)
-        # # Save the predicted graph in edge form as graph_pred.pickle
-        # save_predicted_graph(case_dir, graph, predicted_vessels_types, mode)
 
 def predict_extracranial_vessel_types(graph):
     """ 
@@ -62,7 +56,7 @@ def predict_extracranial_vessel_types(graph):
     Parameters
     ----------
     model : torch_geometric.nn.models.graph_unet_GraphUNet object
-        Trained graph U-Net node classification model.
+        Trained GNN node classification model.
     tranformed_graph : networkx.Graph
         Graph in node form, where nodes encode vessels.
     
@@ -120,7 +114,7 @@ def predict_extracranial_vessel_types_ensemble(graph):
     Parameters
     ----------
     model : torch_geometric.nn.models.graph_unet_GraphUNet object
-        Trained graph U-Net node classification model.
+        Trained GNN node classification model.
     tranformed_graph : networkx.Graph
         Graph in node form, where nodes encode vessels.
     

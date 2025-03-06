@@ -608,6 +608,35 @@ def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
     return sanity_check, skip_cell_ids
 
 def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=None, show=False, output_path=None):
+    """
+    Make a plot of the graph. Adds the option to provide a feature to plot. This is expected to be a node feature, within
+    the "features femoral" feature dictionary.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to plot.
+    feature : str, optional
+        Feature to plot.
+    access : str, optional
+        Access to plot.
+    cmap : str, optional
+        Color map to use.
+    subplot : matplotlib.axes.Axes, optional
+        Subplot to use.
+    show : bool, optional
+        Whether to show the plot.
+    output_path : str, optional
+        Path to save the plot.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure.
+    ax : matplotlib.axes.Axes
+        Axes.
+
+    """
     if subplot is None:
         fig, ax = plt.subplots(figsize=[5, 10])
     else:

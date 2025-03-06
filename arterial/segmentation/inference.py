@@ -43,12 +43,9 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     props = {"spacing": tuple(np.abs(np.diag(img_affine, k=0)[:3][::-1]))}
 
     # Read device
-    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cpu") # This will take forever on 'cpu', only to be used for debugging
     if torch.cuda.is_available():
         device = torch.device("cuda")
-    # elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-    #     device = torch.device("mps")
 
     print(f"Using device: {device}")
 
@@ -68,7 +65,7 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     predictor.initialize_from_trained_model_folder(
         os.path.join(os.environ["arterial_dir"], f'segmentation/models/{mode}/nnUNetTrainer__nnUNetPlans__{nnunet_mode}'),
         use_folds=("all" if use_vanilla_nnunet else "0",), # Models set by use_vanilla_nnunet. "0" is model trained with nnUNetClDiceLossTrainer, "all" is trained with vanilla nnUNetTrainer
-        # use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer
+        # use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer (these have an error on inference, sometimes return tensors with nan values)
         # use_folds=("all",), # Models trained with vanilla nnUNetTrainer
         checkpoint_name='checkpoint_final.pth',
     )

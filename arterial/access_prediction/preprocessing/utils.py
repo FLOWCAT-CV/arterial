@@ -8,6 +8,22 @@ from arterial.feature_extraction.segment_features.utils import extract_segment_f
 vessel_type_dict = dict(zip(["other", "AA", "BT", "RCCA", "LCCA", "RSA", "LSA", "RVA", "LVA", "RICA", "LICA", "RECA", "LECA", "BA"], np.arange(14)))
 
 def clean_supersegment(supersegment):
+    """
+    Cleans a supersegment by removing nodes that are not part of the supersegment.
+    The supersegment is defined as the linear chain of nodes with is_supersegment > 0.5, i.e., 
+    removing segments that bifurcate from the complete  AA-intracranial path.
+
+    Parameters
+    ----------
+    supersegment : networkx.Graph
+        Supersegment to clean.
+
+    Returns
+    -------
+    segment : networkx.Graph
+        Cleaned supersegment.
+
+    """
     segment = nx.Graph()
     for node in supersegment:
         if supersegment.nodes[node]["is_supersegment"] > 0.5:
@@ -23,15 +39,45 @@ def clean_supersegment(supersegment):
     return segment
 
 def get_supersegment_vessel_types(supersegment):
+    """
+    Gets the vessel types within the supersegment.
+
+    Parameters
+    ----------
+    supersegment : networkx.Graph
+        Supersegment to get the vessel types from.
+
+    Returns
+    -------
+    vessel_type_names : list
+        List of vessel type names.
+
+    """
     vessel_type_names = []
     for node in supersegment:
-        if supersegment.nodes[node]["is_supersegment"] > 0.5:
-            vessel_type_names.append(supersegment.nodes[node]["vessel_type_name"])
+        vessel_type_names.append(supersegment.nodes[node]["vessel_type_name"])
     return list(np.unique(vessel_type_names)), \
         [get_vessel_type(vessel_type_name) for vessel_type_name in np.unique(vessel_type_names)], \
             get_onehot_encoded_vessel_type(list(np.unique(vessel_type_names)))
 
 def sort_by_hierarchy(vessel_type_counts, vessel_type_hierarchy, vessel_type_nodes):
+    """
+    Sorts the vessel types by hierarchy. Modifies the vessel_type_counts, vessel_type_hierarchy 
+    and vessel_type_nodes dictionaries in-place.
+
+    Parameters
+    ----------
+    vessel_type_counts : dict
+        Dictionary with vessel types as keys and counts as values.
+    vessel_type_hierarchy : dict
+        Dictionary with vessel types as keys and hierarchy as values.
+    vessel_type_nodes : dict
+        Dictionary with vessel types as keys and nodes as values.
+
+    Returns
+    -------
+
+    """
     for vessel_type in vessel_type_hierarchy:
         vessel_type_hierarchy[vessel_type] = np.mean(vessel_type_hierarchy[vessel_type])
     # Sort by hierarchy
@@ -40,6 +86,25 @@ def sort_by_hierarchy(vessel_type_counts, vessel_type_hierarchy, vessel_type_nod
     vessel_type_nodes = dict(sorted(vessel_type_nodes.items(), key=lambda item: item[1]))
 
 def filter_vessel_types(vessel_type_counts, vessel_type_nodes, vessel_type_hierarchy, node_count_threshold=3):
+    """
+    Filters the vessel types by node count threshold. Modifies the vessel_type_counts, vessel_type_nodes 
+    and vessel_type_hierarchy dictionaries in-place.
+
+    Parameters
+    ----------
+    vessel_type_counts : dict
+        Dictionary with vessel types as keys and counts as values.
+    vessel_type_nodes : dict
+        Dictionary with vessel types as keys and nodes as values.
+    vessel_type_hierarchy : dict
+        Dictionary with vessel types as keys and hierarchy as values.
+    node_count_threshold : int
+        Threshold for the node count.
+
+    Returns
+    -------
+
+    """
     def get_previous_key(dictionary, current_key):
         keys = list(dictionary.keys())
         current_index = keys.index(current_key)
@@ -53,9 +118,41 @@ def filter_vessel_types(vessel_type_counts, vessel_type_nodes, vessel_type_hiera
                 vessel_type_hierarchy.pop(vessel_type)
 
 def compute_segment_graph_node_features(segment_graph):
+    """
+    Computes the features for the nodes of a segment graph.
+
+    Parameters
+    ----------
+    segment_graph : networkx.Graph
+        Segment graph to compute the features for.
+
+    Returns
+    -------
+    features : dict
+        Dictionary with the features for the nodes of the segment graph.
+
+    """
     return extract_segment_features(segment_graph).graph["features"]
 
 def compute_segment_graph_edge_features(segment_1, segment_2):
+    """ 
+    Computes the features for the edges of a segment graph. Edge features in the segment graph
+    correspond to those features that are computed as a relative measurement between two consecutive
+    anatomically meaningful vascular segments (e.g., AA, RCCA...) lying in the same supersegment.
+
+    Parameters
+    ----------
+    segment_1 : networkx.Graph
+        First segment.
+    segment_2 : networkx.Graph
+        Second segment.
+
+    Returns
+    -------
+    features : dict
+        Dictionary with the features for the edges of the segment graph.
+
+    """
     # Get positions of the nodes with degree 1 from each segment
     segment_1_positions = np.array([segment_1.nodes[node]["pos"] for node in segment_1.nodes if segment_1.degree(node) == 1])
     segment_2_positions = np.array([segment_2.nodes[node]["pos"] for node in segment_2.nodes if segment_2.degree(node) == 1])
@@ -78,10 +175,25 @@ def compute_segment_graph_edge_features(segment_1, segment_2):
     return features
 
 def get_onehot_encoded_vessel_type(vessel_type_name):
-    onehot_encoded_vessel_type = np.zeros(14)
+    """
+    Gets the one-hot encoded vessel type.
+
+    Parameters
+    ----------
+    vessel_type_name : str or list
+        Vessel type name or list of vessel type names.
+
+    Returns
+    -------
+    onehot_encoded_vessel_type : numpy.ndarray
+        One-hot encoded vessel type.
+
+    """
     if isinstance(vessel_type_name, str):
+        onehot_encoded_vessel_type = np.zeros(14)
         onehot_encoded_vessel_type[vessel_type_dict[vessel_type_name]] = 1
     elif isinstance(vessel_type_name, list):
+        onehot_encoded_vessel_type = np.zeros(14)
         for vessel_type in vessel_type_name:
             onehot_encoded_vessel_type[vessel_type_dict[vessel_type]] = 1
     
@@ -91,6 +203,21 @@ def get_vessel_type(vessel_type_name):
     return vessel_type_dict[vessel_type_name]
 
 def clean_node(node_data):
+    """
+    Cleans a node from the segment graph, removing unnecessary features and renaming them appropiately.
+    TODO: This should be done in the feature extraction module directly.
+
+    Parameters
+    ----------
+    node_data : dict
+        Node data to clean.
+
+    Returns
+    -------
+    node_data : dict
+        Cleaned node data.
+
+    """
     node_data.pop("radius")
     node_data.pop("cell_id")
     node_data.pop("is_supersegment")

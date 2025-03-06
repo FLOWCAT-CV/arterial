@@ -555,7 +555,7 @@ def make_supersegment_plots(supersegments, local_graph=None, show=False, output_
     Makes plots for all possible supersegment configurations and saves an
     image with all 8 configurations:
 
-    >>> case_dir/supersegments.png
+    >>> case_dir/extracranial_vessels/supersegments.png
 
     Parameters
     ---------- 

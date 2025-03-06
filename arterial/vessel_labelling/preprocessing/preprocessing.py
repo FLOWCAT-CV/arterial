@@ -84,8 +84,3 @@ def build_nx_graph_from_segments_array(centerline_segments_array):
     simple_centerline_graph = extract_features_for_labelling(simple_centerline_graph)
 
     return simple_centerline_graph
-
-    # # Save simplified graph and image for quick visualization
-    # with open(os.path.join(case_dir, "{}_graph_simple.pickle".format(mode)), "wb") as f:
-    #     pickle.dump(simple_centerline_graph, f, protocol = 4)
-    # make_graph_plot(case_dir, simple_centerline_graph, "{}_graph_simple.png".format(mode), label = "cell_id")

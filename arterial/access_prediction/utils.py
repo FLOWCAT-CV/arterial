@@ -36,6 +36,27 @@ class ArterialGNetDatasetInference(Dataset):
 
     """
     def __init__(self, preprocessed_supersegment_dict, pre_transform = None, transform = None, use_lap_pos_enc = False, pos_enc_dim = 8):
+        """
+        Initializes the ArterialGNetDatasetInference class.
+
+        Parameters
+        ----------
+        preprocessed_supersegment_dict : dict
+            Dictionary containing the preprocessed supersegment, with the global features,
+            segment graph and dense graph.
+        pre_transform : torch_geometric.transforms.Compose
+            Pre-transform to apply to the data.
+        transform : torch_geometric.transforms.Compose
+            Transform to apply to the data.
+        use_lap_pos_enc : bool
+            Whether to use Laplacian positional encoding.
+        pos_enc_dim : int
+            Dimension of the positional encoding.
+
+        Returns
+        -------
+
+        """
         self.raw_file = preprocessed_supersegment_dict
         if not os.path.exists(os.path.join(os.environ["arterial_dir"], "access_prediction/models/dataset.json")):
             raise FileNotFoundError("No dataset description file found. This will be an issue for normalization of features.")
@@ -55,7 +76,20 @@ class ArterialGNetDatasetInference(Dataset):
         return None
         
     def process(self): 
-        # Load the raw file
+        """
+        Processes the raw file into a Pytorch Geometric Data object. Creates a different
+        Data object for the global features (a normal tensor), segment and dense graphs
+        (PyG Data objects).
+
+        Then sets the three objects into a normal torch Data object.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         raw_global_features = self.raw_file["global_features"]
         raw_segment_graph = self.clean_node_indexing(self.raw_file["segment_graph"])
         raw_dense_graph = self.clean_node_indexing(self.raw_file["dense_graph"])
@@ -125,19 +159,42 @@ class ArterialGNetDatasetInference(Dataset):
         -------
         graph_nx : networkx.Graph
             Networkx graph with cleaned node indexing.
+
         """
         mapping = {node: idx for idx, node in enumerate(graph_nx.nodes)}
         return nx.relabel_nodes(graph_nx, mapping)
     
     def normalize_global_features(self, global_features):      
+        """
+        Normalizes the global features. Uses the dataset description file to normalize the features.
+
+        Uses min-max normalization for the features that are bounded (i.e., tortuosity index, min polar 
+        angle, polar angle, azimuthal angle), no normalization for one-hot encoded features (i.e., side, 
+        vessel type), and z-score normalization for the rest of the features.
+
+        These features correspond to extracted features treating the supersegment as a single
+        segment. Thus, the featurization process is the same as that used for the segment graph node features
+        (which correspond to single vessel segments).
+
+        Parameters
+        ----------
+        global_features : torch.Tensor
+            Global features to normalize.
+
+        Returns
+        -------
+        global_features : torch.Tensor
+            Normalized global features.
+
+        """
         if self.dataset_description is None:
             print("No dataset description file found. This will be an issue for normalization of features.")
             return global_features
         else:
             mean_features = self.dataset_description["mean_global_features"]
             std_features = self.dataset_description["std_global_features"]
-            min_features = self.dataset_description["min_segment_node_features"]
-            max_features = self.dataset_description["max_segment_node_features"]
+            min_features = self.dataset_description["min_global_features"]
+            max_features = self.dataset_description["max_global_features"]
 
             for idx, feature_name in enumerate(self.dataset_description["global_feature_names"]):
                 if feature_name in ["side", "vessel_type"]:
@@ -150,6 +207,24 @@ class ArterialGNetDatasetInference(Dataset):
             return global_features
 
     def normalize_segment_node_features(self, segment_node_features):
+        """
+        Normalizes the segment node features. Uses the dataset description file to normalize the features.
+
+        Uses min-max normalization for the features that are bounded (i.e., tortuosity index, min polar 
+        angle, polar angle, azimuthal angle), no normalization for one-hot encoded features (i.e., vessel type),
+        and z-score normalization for the rest of the features.
+
+        Parameters
+        ----------
+        segment_node_features : torch.Tensor
+            Segment node features to normalize.
+
+        Returns
+        -------
+        segment_node_features : torch.Tensor
+            Normalized segment node features.
+
+        """
         if self.dataset_description is None:
             print("No dataset description file found. This will be an issue for normalization of features.")
             return segment_node_features
@@ -170,6 +245,25 @@ class ArterialGNetDatasetInference(Dataset):
             return segment_node_features
         
     def normalize_segment_edge_features(self, segment_edge_features):
+        """
+        Normalizes the segment edge features. Uses the dataset description file to normalize the features.
+
+        Uses min-max normalization for the features that are bounded (i.e., max angle difference, max azimuthal difference, max polar difference),
+        and z-score normalization for the rest of the features.
+
+        These features correspond to extracted features involving two consecutive vessel segments.
+
+        Parameters
+        ----------
+        segment_edge_features : torch.Tensor
+            Segment edge features to normalize.
+
+        Returns
+        -------
+        segment_edge_features : torch.Tensor
+            Normalized segment edge features.
+
+        """
         if self.dataset_description is None:
             print("No dataset description file found. This will be an issue for normalization of features.")
             return segment_edge_features
@@ -188,6 +282,24 @@ class ArterialGNetDatasetInference(Dataset):
             return segment_edge_features
     
     def normalize_dense_node_features(self, dense_node_features):
+        """
+        Normalizes the dense node features. Uses the dataset description file to normalize the features.
+
+        Uses min-max normalization for the features that are bounded (i.e., curvature, torsion, polar angle, 
+        azimuthal angle, accumulated length from access), no normalization for one-hot encoded features (i.e., 
+        blanking, vessel type), and z-score normalization for the rest of the features.
+
+        Parameters
+        ----------
+        dense_node_features : torch.Tensor
+            Dense node features to normalize.
+
+        Returns
+        -------
+        dense_node_features : torch.Tensor
+            Normalized dense node features.
+            
+        """
         if self.dataset_description is None:
             print("No dataset description file found. This will be an issue for normalization of features.")
             return dense_node_features
@@ -235,7 +347,8 @@ def laplacian_positional_encoding(edge_index, num_nodes, pos_enc_dim=8):
     Returns
     -------
     torch.Tensor
-        Laplacian positional encoding matrix with shape [num_nodes, pos_enc_dim]
+        Laplacian positional encoding matrix with shape [num_nodes, pos_enc_dim].
+
     """
     # Get normalized Laplacian
     edge_index, edge_weight = get_laplacian(edge_index, normalization='sym', num_nodes=num_nodes)
@@ -271,6 +384,7 @@ def sinusoidal_positional_encoding(num_nodes, pos_enc_dim):
     -------
     torch.Tensor
         Positional encoding matrix with shape [num_nodes, dim].
+
     """
     pos = torch.arange(0, num_nodes).unsqueeze(1)
     i = torch.arange(0, pos_enc_dim // 2).unsqueeze(0)
@@ -281,10 +395,55 @@ def sinusoidal_positional_encoding(num_nodes, pos_enc_dim):
     return pos_encoding
 
 class DenseRadiusGraph(object):
+    """
+    Radius graph transform for the dense graph.
+    This is needeed because of the structure of a standard Data object of the
+    ArterialGNetDatasetInference class, which contains a dense_data which corresponds
+    to a standard PyTorch Geometric Data object, where we want to apply the RadiusGraph
+    transform.
+
+    One difference to the normal RadiusGraph transform is that we combine the original
+    edge_index with the new edge_index generated by the RadiusGraph transform, and we use
+    torch.unique to ensure that we do not have duplicate edges. This is done to preserve
+    the original edge_index, while adding the new edges generated by the RadiusGraph
+    transform.
+
+    """
     def __init__(self, r, loop=True):
+        """
+        Initializes the RadiusGraph transform.
+
+        Parameters
+        ----------
+        r : float
+            Radius of the graph.
+        loop : bool
+            Whether to add self-loops to the graph.
+
+        Returns
+        -------
+
+        """
         self.transform = RadiusGraph(r=r, loop=loop)
 
     def __call__(self, data):
+        """
+        Applies the RadiusGraph transform to the dense graph. It first
+        checks if the dense_data attribute exists in the data object, and if so,
+        applies the transform to the dense_data object. Otherwise, it applies the
+        transform directly on the data object (same as the normal RadiusGraph transform).
+
+        Parameters
+        ----------
+        data : torch_geometric.data.Data
+            Data object containing the dense graph.
+
+        Returns
+        -------
+        data : torch_geometric.data.Data
+            Data object containing the dense graph with the RadiusGraph transform applied.
+
+        """
         if hasattr(data, 'dense_data'):
             dense_data = data.dense_data
             original_edge_index = dense_data.edge_index
@@ -321,6 +480,27 @@ class DenseRadiusGraph(object):
         return data
     
 def collate_ArterialGNetInference(data_list):
+    """
+    Collate function for the ArterialGNetDatasetInference class.
+    This is needed because the Data objects are not directly batchable, and we need to
+    create a new Data object for the batch.
+
+    Each Data object contains a global_data, segment_data and dense_data attribute. The
+    global data object is simply a 1D tensor of features, which can be stacked directly.
+    The segment_data and dense_data objects are PyG Data objects, which can be stacked
+    using the Batch class.
+
+    Parameters
+    ----------
+    data_list : list
+        List of Data objects.
+
+    Returns
+    -------
+    batch : torch_geometric.data.Batch
+        Batch object.
+
+    """
     device = data_list[0].dense_data.x.device
     # Create a new Data object for the batch
     batch = Data()
@@ -337,6 +517,25 @@ def collate_ArterialGNetInference(data_list):
     return batch
    
 def make_combined_plot(side, segment_graph, dense_graph, output_path=None):
+    """
+    Makes a combined plot of the segment graph and the dense graph, plotted side by side.
+
+    Parameters
+    ----------
+    side : str
+        Side of the arterial pathway.
+    segment_graph : networkx.Graph
+        Segment graph representation of the supersegment.
+    dense_graph : networkx.Graph
+        Dense graph representation of the supersegment.
+    output_path : str
+        Path to save the plot.
+
+    Returns
+    -------
+    None
+
+    """
     fig, ax = plt.subplots(1, 2, figsize=(10, 10), dpi = 300)
     # Set side as title of the whole plot
     fig.suptitle(side, fontsize=16)
@@ -365,6 +564,22 @@ def make_combined_plot(side, segment_graph, dense_graph, output_path=None):
         plt.show()
 
 def get_lpi_corner_coordinates(cta_nifti):
+    """
+    Computes LPI corner coordinates from the CTA nifti to adjust positions 
+    of the attention maps, for these to be coherent with 3D models directly derived
+    from the segmentation nifti.
+
+    Parameters
+    ----------
+    cta_nifti : nib.Nifti1Image
+        CTA nifti image object.
+
+    Returns
+    -------
+    lpi_corner_coordinates : numpy.ndarray
+        LPI corner coordinates of the CTA nifti image.
+
+    """
     # Get lpi corner coordinates
     cta_array = cta_nifti.get_fdata()
     cta_affine = cta_nifti.affine
@@ -383,6 +598,29 @@ def get_lpi_corner_coordinates(cta_nifti):
     return lpi_corner_coordinates
 
 def build_final_attention_map(edge_indices, edge_attention_weights, batch, lpi_corner_coordinates):
+    """
+    Builds final attention map as a 1-D networkx graph, removing self-loops and loops added
+    artificially by the RadiusGraph transform.
+
+    Parameters
+    ----------
+    edge_indices : torch.Tensor
+        Edge indices of the attention map.
+    edge_attention_weights : torch.Tensor
+        Edge attention weights of the attention map.
+    batch : torch_geometric.data.Batch
+        Batch object of the attention map.
+    lpi_corner_coordinates : numpy.ndarray
+        LPI corner coordinates of the attention map. Used to adjust the position of the nodes
+        for these to be coherent with 3D models directly derived from the segmentation nifti.
+
+    Returns
+    -------
+    attention_map_graph : networkx.Graph
+        Networkx graph of the attention map. Stores attention weights as a edge features, and
+        averaged edge attention weights as a node feature.
+
+    """
     # Sort edge_indices by first row
     sorted_indices = np.argsort(edge_indices[0])
     edge_indices = edge_indices[:, sorted_indices]
@@ -426,6 +664,21 @@ def build_final_attention_map(edge_indices, edge_attention_weights, batch, lpi_c
     return attention_map_graph
 
 def nx_graph_to_vtk_polydata(G):
+    """
+    Generates a vtkPolyData object from a networkx graph, with attention weights as 
+    point data.
+
+    Parameters
+    ----------
+    G : networkx.Graph
+        Networkx graph of the centerline graph.
+
+    Returns
+    -------
+    polydata : vtk.vtkPolyData
+        vtkPolyData object of the centerline graph with attention weights as point data.
+
+    """
     # Create a vtkPoints object to store node coordinates
     points = vtk.vtkPoints()
     
@@ -470,3 +723,24 @@ def nx_graph_to_vtk_polydata(G):
         polydata.GetPointData().AddArray(vtk_array)
     
     return polydata
+
+def nx_graph_to_point_dict(G):
+    """
+    Generates a new dictionary with the point positions of the graph in a 'points' list, and the
+    attention weights of the graph in a 'attention_weight' list.
+
+    Parameters
+    ----------
+    G : networkx.Graph
+        Networkx graph.
+
+    Returns
+    -------
+    point_dict : dict
+        Dictionary with the point positions and attention weights.
+
+    """
+    point_dict = {}
+    point_dict["points"] = [G.nodes[node]["pos"].tolist() if isinstance(G.nodes[node]["pos"], np.ndarray) else list(G.nodes[node]["pos"])  for node in G.nodes]
+    point_dict["attention_weight"] = [G.nodes[node]["features femoral"]["attention_weight"] for node in G.nodes]
+    return point_dict

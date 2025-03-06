@@ -16,7 +16,6 @@ def extract_features_for_labelling(simple_centerline_graph):
     simple_centerline_graph : networkx.Graph
         Simple featurized centerline graph.
 
-
     """
     def relative_length(segment_coordinates):
         """

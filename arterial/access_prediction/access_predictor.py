@@ -4,9 +4,9 @@ import os
 
 from arterial.access_prediction.preprocessing.preprocessing import preprocess_supersegment
 from arterial.access_prediction.inference import perform_inference
-from arterial.access_prediction.utils import make_combined_plot, get_lpi_corner_coordinates, nx_graph_to_vtk_polydata
+from arterial.access_prediction.utils import make_combined_plot, get_lpi_corner_coordinates, nx_graph_to_vtk_polydata, nx_graph_to_point_dict
 
-from arterial.io.load_and_save_operations import load_pickle, save_json, save_pickle, load_nifti, save_vtkpolydata, save_vtkpolydata_as_stl
+from arterial.io.load_and_save_operations import load_pickle, save_json, save_pickle, load_nifti, save_vtkpolydata
 from arterial.feature_extraction.utils import make_graph_plot
 
 class AccessPredictor():
@@ -63,10 +63,29 @@ class AccessPredictor():
         extracted with Arterial. Will store raw supersegments, as well as store preprocessed
         supersegments with global features, segment graph and dense graph.
 
+        Preprocessing includes:
+        - Reading the raw supersegment files
+        - Process the raw supersegment file to get a 1D segment (a nx Graph)
+        - Process the 1D segment to get a set of global features (i.e., a set of segment features extracted from the whole supersegment)
+        - Process the 1D segment to get a segment graph (a nx Graph), where each node corresponds to a vessel segment
+        - Process the 1D segment to get a dense graph (a nx Graph), where each node corresponds to a point of the 1D segment
+        - Join all objects into a single dictionary and save it as a pickle file, as well as saving the global features, segment graph and dense graph separately
+        - Create a combined plot of the segment graph and dense graph and save it as a png file
+
+        The following files are saved:
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "preprocessed_supersegment_dict.pickle")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "global_features.json")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "segment_supersegment.pickle")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "dense_supersegment.pickle")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "combined_plot.png")
+
         Parameters
         ----------
         save : bool
             Whether to save the preprocessed supersegments (separately). Default is True.
+
+        Returns
+        -------
 
         """
         for access in self.access:
@@ -91,7 +110,15 @@ class AccessPredictor():
         """
         Calls perform_inference from access_prediction/inference.py to predict access for each supersegment.
         Predictoin is composed by mean and std of the prediction logits across folds. If return_attention_map is True,
-        attention maps are also computed as nx graphs and vtkPolyData objects.
+        attention maps are also computed as nx graphs, vtkPolyData objects and simple dictionaries with the points and 
+        attention weights.
+
+        The following files are saved:
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "access_prediction.json")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.pickle")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.png")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.vtk")
+        >>> os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map_points.json")
 
         Parameters
         ----------
@@ -118,18 +145,27 @@ class AccessPredictor():
                 if return_attention_map:
                     self.attention_maps_dict[(access, side)] = out[2]
                     self.attention_maps_vtk_dict[(access, side)] = nx_graph_to_vtk_polydata(self.attention_maps_dict[(access, side)])
-
+                    self.attention_maps_point_dict[(access, side)] = nx_graph_to_point_dict(self.attention_maps_dict[(access, side)])
                 if save:
                     save_json(self.predictions_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "access_prediction.json"))
                     if return_attention_map:
                         save_pickle(self.attention_maps_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.pickle"))
                         make_graph_plot(self.attention_maps_dict[(access, side)], feature="attention_weight", output_path=os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.png"))
                         save_vtkpolydata(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.vtk"))
-                        # save_vtkpolydata_as_stl(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.stl"))
+                        save_json(self.attention_maps_point_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map_points.json"))
 
     def compute_lpi_corner_coordinates(self):
         """
-        Computes LPI corner coordinate from the CTA nifti to adjust positions of the attention maps.
+        Computes LPI corner coordinate from the CTA nifti to adjust positions 
+        of the attention maps, for these to be coherent with 3D models directly derived
+        from the segmentation nifti.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
         """
         if self.cta_nifti is None:
             self.load_cta_nifti()
