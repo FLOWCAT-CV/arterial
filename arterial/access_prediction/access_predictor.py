@@ -18,6 +18,7 @@ class AccessPredictor():
     def __init__(self,
                  case_dir,
                  cta_nifti_path=None,
+                 supersegments_dir_path=None,
                  access=["femoral"],
                  side=["left", "right"]
                 ):
@@ -41,6 +42,10 @@ class AccessPredictor():
             self.cta_nifti_path = os.path.join(self.case_dir, "cta.nii.gz")
         else:
             self.cta_nifti_path = cta_nifti_path
+        if supersegments_dir_path is None:
+            self.supersegments_dir_path = os.path.join(self.case_dir, "extracranial_vessels", "supersegments")
+        else:
+            self.supersegments_dir_path = supersegments_dir_path
         self.access = access
         self.side = side
 
@@ -56,6 +61,7 @@ class AccessPredictor():
         self.predictions_dict = {}
         self.attention_maps_dict = {}
         self.attention_maps_vtk_dict = {}
+        self.attention_maps_point_dict = {}
 
     def preprocess_supersegments(self, save=True):
         """
@@ -90,9 +96,9 @@ class AccessPredictor():
         """
         for access in self.access:
             for side in self.side:
-                assert os.path.isfile(os.path.join(self.case_dir, "extracranial_vessels", "supersegments", f"{access} + {side} + anterior.pickle")), f"Supersegments ({access}, {side}) not found"
+                assert os.path.isfile(os.path.join(self.supersegments_dir_path, f"{access} + {side} + anterior.pickle")), f"Supersegments ({access}, {side}) not found"
                 print(f"\nPreprocessing {access} {side} supersegment...")
-                self.raw_supersegment_dict[(access, side)] = load_pickle(os.path.join(self.case_dir, "extracranial_vessels", "supersegments", f"{access} + {side} + anterior.pickle"))                  
+                self.raw_supersegment_dict[(access, side)] = load_pickle(os.path.join(self.supersegments_dir_path, f"{access} + {side} + anterior.pickle"))                  
                 self.preprocessed_supersegment_dict[(access, side)] = preprocess_supersegment(self.raw_supersegment_dict[(access, side)], access, side)
                 if save:
                     assert len(self.preprocessed_supersegment_dict[(access, side)]["segment_graph"]) > 0, "Segment graph not built"
