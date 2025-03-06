@@ -16,6 +16,7 @@ dev
 *.zip
 copy_nnunet_models.py
 move_models_access_prediction.py
+arterial_models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
