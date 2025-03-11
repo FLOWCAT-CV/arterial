@@ -6,6 +6,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from mycolorpy import colorlist as mcp
 
+import nibabel as nib
+from vtk.util.numpy_support import vtk_to_numpy
+
 def get_predicted_vessels_dict(segments_graph_pred):
     """
     Builds cell_id to vessel type and vessel type name dictionaries.
@@ -700,3 +703,42 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
             plt.show()
         else:
             plt.close()
+
+def build_segments_array_for_individual_centerline_graph(centerline_model, affine, image_shape, radius_array_name="MaximumInscribedSphereRadius"):
+    # Get coordinates array from centerline_segments_array
+    coordinate_array = vtk_to_numpy(centerline_model.GetPoints().GetData())
+    # Get radius array from centerline_segments_array
+    radius_array = vtk_to_numpy(centerline_model.GetPointData().GetArray(radius_array_name))
+
+    # For some reason, the vtk logic return a vtk centerline object inverted (so, first points
+    # are the distal end and last points are the proximal end). We need to flip it
+    coordinate_array = np.flip(coordinate_array, axis=0)
+    radius_array = np.flip(radius_array, axis=0)
+
+    # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
+    orientation = nib.aff2axcodes(affine)
+    if orientation == ('R', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([0, 0, 0])
+    elif orientation == ('L', 'A', 'S'):
+        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, 0, 0])
+    elif orientation == ('L', 'P', 'S'):
+        lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
+
+    # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
+    lpi_corner_coordinates = np.dot(affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
+
+    # Build centerline_segments_array to reuse the same code as the one used in the build_centerline_graph function
+    # This structure makes no sense and we should try to mend this in the future
+    centerline_segments_array = np.ndarray([0, 2])
+    centerline_segments_array_ = np.ndarray([len(coordinate_array), 2], dtype=object)
+    for idx in range(len(coordinate_array)):
+        centerline_segments_array_[idx, 0] = coordinate_array[idx] - lpi_corner_coordinates
+        centerline_segments_array_[idx, 1] = radius_array[idx]
+    centerline_segments_array = np.append(centerline_segments_array, centerline_segments_array_, axis=0)
+
+    centerline_coordinate_array = centerline_segments_array[:, 0]
+    centerline_radius_array = centerline_segments_array[:, 1]
+    centerline_coordinate_array = np.expand_dims(centerline_coordinate_array, axis=0)
+    centerline_radius_array = np.expand_dims(centerline_radius_array, axis=0)
+
+    return centerline_segments_array

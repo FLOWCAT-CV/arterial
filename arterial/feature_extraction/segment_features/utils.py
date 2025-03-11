@@ -133,6 +133,122 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
         # Perform feature extraction
         segments_vessel_type_dict["LCA"] = extract_segment_features(segments_vessel_type_dict["LCA"])
 
+    if "BT" in segments_vessel_type_dict.keys() and "RCCA" in segments_vessel_type_dict.keys() and "RICA" in segments_vessel_type_dict.keys():
+        # Get both segments
+        # Add them together (Add nodes from RICA and RCCA to BT)
+        # For all nodes in RCCA, add max hierarchy from BT, and for all nodes in RICA, add max hierarchy from BT and RCCA
+        bt_segment = segments_vessel_type_dict["BT"].copy()
+        rcca_segment = segments_vessel_type_dict["RCCA"].copy()
+        rica_segment = segments_vessel_type_dict["RICA"].copy()
+
+        max_hierarchy_bt = 0
+        previous_node = None
+        for node in bt_segment:
+            if bt_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_bt:
+                max_hierarchy_bt = bt_segment.nodes[node]["hierarchy femoral"]
+                previous_node = node
+        
+        max_hierarchy_rcca = 0
+        for node in rcca_segment:
+            if rcca_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_rcca:
+                max_hierarchy_rcca = rcca_segment.nodes[node]["hierarchy femoral"]
+
+        max_hierarchy_rica = 0
+        for node in rica_segment:
+            if rica_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_rica:
+                max_hierarchy_rica = rica_segment.nodes[node]["hierarchy femoral"]
+
+        for hierarchy in range(max_hierarchy_rcca):
+            for node in rcca_segment:
+                if rcca_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
+                    bt_segment.add_node(node)
+                    bt_segment.add_edge(previous_node, node)
+                    for key in rcca_segment.nodes[node].keys():
+                        bt_segment.nodes[node][key] = rcca_segment.nodes[node][key]
+                    bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + 1
+                    previous_node = node
+                    break
+
+        for hierarchy in range(max_hierarchy_rica):
+            for node in rica_segment:
+                if rica_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
+                    bt_segment.add_node(node)
+                    bt_segment.add_edge(previous_node, node)
+                    for key in rica_segment.nodes[node].keys():
+                        bt_segment.nodes[node][key] = rica_segment.nodes[node][key]
+                    bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + max_hierarchy_rcca + 1
+                    previous_node = node
+                    break
+                    
+        # Add to dict
+        segments_vessel_type_dict["BT-RCA"] = bt_segment
+        # Perform feature extraction
+        segments_vessel_type_dict["BT-RCA"] = extract_segment_features(segments_vessel_type_dict["BT-RCA"])
+    
+    if "BT" in segments_vessel_type_dict.keys() and "LCCA" in segments_vessel_type_dict.keys() and "LICA" in segments_vessel_type_dict.keys():
+        # Get both segments
+        # Add them together (Add nodes from LICA and LCCA to BT)
+        # For all nodes in LCCA, add max hierarchy from BT, and for all nodes in LICA, add max hierarchy from BT and LCCA
+        # For the left side, a condition should be met that the point with the highest hierarchy of the BT is neighbor of 
+        # the point with the lowest hierarchy of the LCCA
+        bt_segment = segments_vessel_type_dict["BT"].copy()
+        lcca_segment = segments_vessel_type_dict["LCCA"].copy()
+        lica_segment = segments_vessel_type_dict["LICA"].copy()
+
+        max_hierarchy_bt = 0
+        previous_node = None
+        node_max_hierarchy_bt = None
+        for node in bt_segment:
+            if bt_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_bt:
+                max_hierarchy_bt = bt_segment.nodes[node]["hierarchy femoral"]
+                node_max_hierarchy_bt = node
+                previous_node = node
+
+        max_hierarchy_lcca = 0
+        min_hierarchy_lcca = 10000
+        node_min_hierarchy_lcca = None
+        for node in lcca_segment:
+            if lcca_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_lcca:
+                max_hierarchy_lcca = lcca_segment.nodes[node]["hierarchy femoral"]
+            if lcca_segment.nodes[node]["hierarchy femoral"] < min_hierarchy_lcca:
+                min_hierarchy_lcca = lcca_segment.nodes[node]["hierarchy femoral"]
+                node_min_hierarchy_lcca = node
+
+        # Check if node_max_hierarchy_bt is neighbor of node_min_hierarchy_lcca in the local_graph
+        if local_graph.has_edge(node_max_hierarchy_bt, node_min_hierarchy_lcca):
+            # Proceed with the addition of nodes from LCCA and LICA to BT
+            max_hierarchy_lica = 0
+            for node in lica_segment:
+                if lica_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_lica:
+                    max_hierarchy_lica = lica_segment.nodes[node]["hierarchy femoral"]
+
+            for hierarchy in range(max_hierarchy_lcca):
+                for node in lcca_segment:
+                    if lcca_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
+                        bt_segment.add_node(node)
+                        bt_segment.add_edge(previous_node, node)
+                        for key in lcca_segment.nodes[node].keys():
+                            bt_segment.nodes[node][key] = lcca_segment.nodes[node][key]
+                        bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + 1
+                        previous_node = node
+                        break
+
+            for hierarchy in range(max_hierarchy_lica):
+                for node in lica_segment:
+                    if lica_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
+                        bt_segment.add_node(node)
+                        bt_segment.add_edge(previous_node, node)
+                        for key in lica_segment.nodes[node].keys():
+                            bt_segment.nodes[node][key] = lica_segment.nodes[node][key]
+                        bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + max_hierarchy_lcca + 1
+                        previous_node = node
+                        break
+                        
+            # Add to dict
+            segments_vessel_type_dict["BT-LCA"] = bt_segment
+            # Perform feature extraction
+            segments_vessel_type_dict["BT-LCA"] = extract_segment_features(segments_vessel_type_dict["BT-LCA"])
+
     return segments_vessel_type_dict
 
 def get_and_featurize_single_segments_cell_ids(local_graph):
@@ -540,6 +656,9 @@ def extract_segment_features(segment, use_blanking=True):
     polar, azimuthal = direction_angles(segment, proximal_node, distal_node)
     segment.graph["features"]["polar_angle"] = polar
     segment.graph["features"]["azimuthal_angle"] = azimuthal
+    # segment.graph["features"]["diameter_last_5mm"] = diameter_last_5mm(segment, distal_node)
+    # segment.graph["features"]["diameter_last_10mm"] = diameter_last_10mm(segment, distal_node)
+    segment.graph["features"]["curvature_energy"] = curvature_energy(segment)
 
     return segment
 
@@ -1134,6 +1253,60 @@ def direction_angles(segment, proximal_node, distal_node):
         return polar, azimuth
     else:
         return 0, 0
+    
+def diameter_last_5mm(segment, distal_node):
+    """
+    Computes the diameter of the last 5 mm of a segment.
+    """
+    accumulated_distance = 0
+    node = distal_node
+    nodes_visited = [distal_node]
+
+    node_diameters = []
+
+    while accumulated_distance < 5:
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                node_diameters.append(segment.nodes[neighbor]["features femoral"]["radius"] * 2)
+                nodes_visited.append(neighbor)
+                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
+                node = neighbor
+
+        if len(nodes_visited) == len(segment):
+            # print("Warning: diameter_last_5mm did not find 5 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
+            break
+
+    return np.mean(node_diameters)
+
+def diameter_last_10mm(segment, distal_node):
+    """
+    Computes the diameter of the last 5 mm of a segment.
+    """
+    accumulated_distance = 0
+    node = distal_node
+    nodes_visited = [distal_node]
+
+    node_diameters = []
+
+    while accumulated_distance < 10:
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                node_diameters.append(segment.nodes[neighbor]["features femoral"]["radius"] * 2)
+                nodes_visited.append(neighbor)
+                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
+                node = neighbor
+
+        if len(nodes_visited) == len(segment):
+            # print("Warning: diameter_last_10mm did not find 10 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
+            break
+
+    return np.mean(node_diameters)
+
+def curvature_energy(segment):
+    """
+    Computes the curvature energy of a segment.
+    """
+    return np.sum(segment.nodes[node]["features femoral"]["curvature"] ** 2 for node in segment)
 
 ## Measurements between two segments
 

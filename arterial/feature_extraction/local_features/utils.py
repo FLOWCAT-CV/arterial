@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 
-def featurize_node(local_graph, node, access, radius_branch_model, branch_model_coordinates, blanking, cta_array, cta_affine, lpi_corner_coordinates):
+def featurize_node(local_graph, node, access, cta_array, cta_affine, lpi_corner_coordinates, branch_model_coordinates=None, blanking=None):
     """
     Computes local features for a node in the centerline graph, updating the graph.
 
@@ -16,18 +16,16 @@ def featurize_node(local_graph, node, access, radius_branch_model, branch_model_
         Node of the centerline graph.
     access : string
         Access site for thrombectomy configuration. Can be either "femoral" or "radial".
-    radius_branch_model : numpy.array or array-like object.
-        Array containing the radius of the vessel model.
-    branch_model_coordinates : numpy.array or array-like object.    
-        Array containing the coordinates of the branch model.
-    blanking : numpy.array or array-like object.
-        Array containing the blanking of the branch model.
     cta_array : numpy.array or array-like object.
         Array containing the CTA data.
     cta_affine : numpy.array or array-like object.
         Affine matrix of the CTA data.
     lpi_corner_coordinates : numpy.array or array-like object.
         Coordinates of the corner voxel of the CTA data.
+    branch_model_coordinates : numpy.array or array-like object.    
+        Array containing the coordinates of the branch model.
+    blanking : numpy.array or array-like object.
+        Array containing the blanking of the branch model.
 
     Returns
     -------
@@ -48,7 +46,7 @@ def featurize_node(local_graph, node, access, radius_branch_model, branch_model_
     local_graph.nodes[node][f"features {access}"]["pos s"] = node_pos[2]
     
     # Radius features
-    local_graph.nodes[node][f"features {access}"]["radius"] = radius_branch_model[find_point_id(node_pos, branch_model_coordinates)]
+    local_graph.nodes[node][f"features {access}"]["radius"] = local_graph.nodes[node]["radius"]
     # Segment length
     local_graph.nodes[node][f"features {access}"]["segment length"] = sum([np.linalg.norm(local_points[idx - 1] - local_points[idx]) for idx in range(1, len(local_points))]) / len(local_points)
     # Curvature and torsion (perhaps we could use the data from )
@@ -65,7 +63,10 @@ def featurize_node(local_graph, node, access, radius_branch_model, branch_model_
     local_graph.nodes[node][f"features {access}"]["direction polar"] = polar
     local_graph.nodes[node][f"features {access}"]["direction azimuth"] = azimuth
     # Other features
-    local_graph.nodes[node][f"features {access}"]["blanking"] = blanking[find_point_id(node_pos, branch_model_coordinates)]
+    if branch_model_coordinates is not None and blanking is not None:
+        local_graph.nodes[node][f"features {access}"]["blanking"] = blanking[find_point_id(node_pos, branch_model_coordinates)]
+    else:
+        local_graph.nodes[node][f"features {access}"]["blanking"] = 0
     # Tranform to ijk
     i, j, k = np.matmul(np.linalg.inv(cta_affine), np.append(node_pos + lpi_corner_coordinates, 1.0))[:3].astype(int)
     local_graph.nodes[node][f"features {access}"]["HU intensity"] = cta_array[i, j, k]

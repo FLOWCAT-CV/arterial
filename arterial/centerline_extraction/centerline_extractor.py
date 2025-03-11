@@ -4,7 +4,7 @@ import os
 
 from arterial.centerline_extraction.utils import volume_sanity_check
 from arterial.centerline_extraction.preprocessing.preprocessing import preprocess_segmentation_for_centerline_extraction
-from arterial.centerline_extraction.centerline_extraction import extract_centerlines
+from arterial.centerline_extraction.centerline_extraction import extract_centerlines_full_cta, extract_centerline_between_endpoints
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import extract_branch_model, unify_branch_models, extract_clipped_model, unify_clipped_models
 from arterial.centerline_extraction.postprocessing.postprocessing import compute_centerline_segments_array
 from arterial.io.load_and_save_operations import *
@@ -82,7 +82,11 @@ class CenterlineExtractor():
         self.centerline_segments_array_path = os.path.join(self.case_dir, self.mode, "centerline_segments_array.npy")
         self.centerline_segments_array = None
 
-    def perform_preprocessing(self, save=True):
+        # For intracranial vessel analysis
+        self.individual_centerlines_dir_path = os.path.join(self.case_dir, self.mode, "individual_centerlines")
+        self.individual_centerlines_list = []
+
+    def perform_preprocessing(self, volume_check=True, save=True):
         """
         Performs preprocessing of the segmentation nifti file to generate a vtkpolydata 
         of the segmentation's surface mode, as well as the segmentation model list (each of the
@@ -102,7 +106,7 @@ class CenterlineExtractor():
 
         if self.segmentation_array is None or self.segmentation_affine is None:
             self.load_segmentation_nifti()
-        if self.mode == "extracranial_vessels":
+        if self.mode == "extracranial_vessels" and volume_check:
             volume_sanity_check(self.segmentation_array, self.segmentation_affine)
         self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine, self.fast_segmentation)
         
@@ -146,7 +150,7 @@ class CenterlineExtractor():
         print("\nNumber of segmentation models:", len(self.segmentation_model_list))
         for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
             print(f"\nExtracting centerline ({idx + 1}/{len(self.segmentation_model_list)})")
-            centerlines, voronoi_diagram, endpoints_json = extract_centerlines(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
+            centerlines, voronoi_diagram, endpoints_json = extract_centerlines_full_cta(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
             if centerlines is None:
                 print(f"Centerline could not be extracted for segmentation model {idx}. Skipping...")
                 segmentation_idx_to_remove.append(idx)
@@ -272,6 +276,34 @@ class CenterlineExtractor():
 
         if save:
             save_numpy(self.centerline_segments_array, self.centerline_segments_array_path)
+
+    def extract_centerline_between_endpoints(self, startpoint, endpoint, centerline_id=None, save=True):
+        """
+        Extracts a centerline between two endpoints.
+
+        Parameters
+        ----------
+        save : bool, default = True
+            Boolean variable to determine whether to save the individual centerline in the case directory.
+
+        Returns
+        -------
+
+        """
+        if self.segmentation_model is None:
+            self.perform_preprocessing(volume_check=False)
+        if self.segmentation_array is None or self.segmentation_affine is None:
+            self.load_segmentation_nifti()
+
+        if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
+        if centerline_id is None:
+            centerline_id = len(self.individual_centerlines_list)
+
+        individual_centerline, _ = extract_centerline_between_endpoints(self.segmentation_model, self.segmentation_array, self.segmentation_affine, [startpoint, endpoint])
+        self.individual_centerlines_list.append(individual_centerline)
+
+        if save:
+            save_vtkpolydata(individual_centerline, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.vtk"))
 
     def load_segmentation_nifti(self):
         if not os.path.isfile(self.segmentation_nifti_path): 
