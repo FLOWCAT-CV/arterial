@@ -46,12 +46,6 @@ def perform_inference(graph, mode = "extracranial_vessels", ensemble=True):
     
     elif mode == "intracranial_vessels":
         raise NotImplementedError("Intracranial vessel labelling is not implemented yet.")
-        # # Load the edge form graph (graph.pickle) created at centerlineGraph.py
-        # graph = load_pickle(os.path.join(case_dir, "{}_graph_simple.pickle".format(mode)))
-        # # Predict intracranial vessel types
-        # predicted_vessels_types = predict_intracranial_vessel_types(graph, case_dir)
-        # # Save the predicted graph in edge form as graph_pred.pickle
-        # save_predicted_graph(case_dir, graph, predicted_vessels_types, mode)
 
 def predict_extracranial_vessel_types(graph):
     """ 
@@ -62,7 +56,7 @@ def predict_extracranial_vessel_types(graph):
     Parameters
     ----------
     model : torch_geometric.nn.models.graph_unet_GraphUNet object
-        Trained graph U-Net node classification model.
+        Trained GNN node classification model.
     tranformed_graph : networkx.Graph
         Graph in node form, where nodes encode vessels.
     
@@ -83,7 +77,7 @@ def predict_extracranial_vessel_types(graph):
     data = EVCDatasetInference(raw_graph=graph, pre_transform=pre_transform)
     # Load graph to the DataLoader through the ArterialDatasetInference class, with the inference transforms
     data_loader = DataLoader(data, batch_size = 1, shuffle = False) 
-    # Load the trained graph U-Net model for inference
+    # Load the trained model for inference
     model = torch.load(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/model.pth"), map_location=torch.device(device)).to(device)
     # Load model to device
     model.eval()
@@ -120,7 +114,7 @@ def predict_extracranial_vessel_types_ensemble(graph):
     Parameters
     ----------
     model : torch_geometric.nn.models.graph_unet_GraphUNet object
-        Trained graph U-Net node classification model.
+        Trained GNN node classification model.
     tranformed_graph : networkx.Graph
         Graph in node form, where nodes encode vessels.
     
@@ -151,7 +145,7 @@ def predict_extracranial_vessel_types_ensemble(graph):
 
     with torch.no_grad():
         for fold in range(5):
-            # Load the trained graph U-Net model for inference
+            # Load the trained model for inference
             model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device)).to(device)
             # Load model to device
             model.eval()

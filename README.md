@@ -1,21 +1,12 @@
 # Arterial: an AI framework for the automated analysis of vascular tortuosity
 
-Mechanical thrombectomy (MT) is considered as the gold standard treatment for acute ischemic stroke (AIS). Studies show that up to 30% of MT patients register abnormally long procedural times, and in about 3% of cases, catheterization through femoral access is impossible. Most of these long procedures are linked to complications due to the presence of vascular tortuosity in supra-aortic and cerebral arteries, which oppose difficulties upon navigation. In an attempt to minimize time loss in these cases we propose ARTERIAL, an artificial intelligence (AI) framework for the fully automatic assessment of vascular tortuosity and operation planning for MT. ARTERIAL is born with the promise to deliver accurate and robust predictions of procedural times from all possible access sites and recognition of potential intra-operation difficulties for endovascular treatment based on machine learning (ML) models, enabling a powerful, objective and personalized analysis for each patient prior to intervention. 
+Mechanical thrombectomy (MT) is considered as the gold standard treatment for acute ischemic stroke (AIS). Studies show that up to 30% of MT patients register abnormally long procedural times, and in about 3-5% of cases, catheterization through femoral access is impossible. Most of these long procedures are linked to complications due to the presence of vascular tortuosity in supra-aortic and cervical arteries, which oppose difficulties upon catheter navigation. In an attempt to minimize time loss in these cases we propose ARTERIAL, an artificial intelligence (AI) framework for the fully automatic assessment of vascular tortuosity and operation planning for MT. ARTERIAL is born with the promise to deliver accurate and robust predictions of procedural times from all possible access sites and recognition of potential intra-operation difficulties for endovascular treatment based on machine learning (ML) models, enabling a powerful, objective and personalized analysis for each patient prior to intervention. 
 
 Arterial is conceived to be deployed as an operation planning and decision support tool prior to endovascuklar intervention for AIS patients. This is a challenging medical emergency setting which requires a robust, rapid and objective analysis, only taking the protocolary imaging (namely non-contrast CT (NCCT) and angio-CT (CTA)) as well as patient metadata that can be gathered before the patient arrival. Therefore, we adjust the analysis as much as possible taking this into account. Moreover, we believe that the only way to achieve the described qualities that the analysis requires is to achieve a fully automated process, without the need of any kind of manual input on the analysis.
 
 In this repository we will be posting the development of Arterial, which is the core project of the Pere Canals' doctoral thesis.
 
-## Table of Contents
-- [Description](#description)
-- [Installation](#installation)
-  * [nnU-Net](#nnU-Net)
-  * [Slicer](#Slicer)
-  * [VMTK](#VMTK)
-  * [GraphNets](#GNNs)
-- [Usage](#usage)
-    * [FullAnalysis](#FullAnalysis)
-    * [SegmentationOnly](#SegmentationOnly)
+
 
 <!-- # Table of Contents
 - [Installation](#installation)

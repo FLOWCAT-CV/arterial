@@ -1223,6 +1223,26 @@ def accumulated_polar_angle_differential(segment, proximal_node):
     return accumulate_polar_angle_differential
 
 def direction_angles(segment, proximal_node, distal_node):
+    """
+    Computes the direction angles of a segment.
+
+    Parameters
+    ----------
+    segment : networkx.Graph
+        Graph of the individual segment.
+    proximal_node : int
+        Proximal node of the segment.
+    distal_node : int
+        Distal node of the segment.
+
+    Returns
+    -------
+    polar : float
+        Polar angle of the segment.
+    azimuth : float
+        Azimuth angle of the segment.
+
+    """
     direction = segment.nodes[distal_node]["pos"] - segment.nodes[proximal_node]["pos"]
     if np.linalg.norm(direction) > 0:
         direction = direction / np.linalg.norm(direction)
@@ -1309,6 +1329,7 @@ def largest_angle_difference(segment_1, segment_2):
     -------
     delta_phi : float
         Largest azimuthal difference between two segments.
+
     """
 
     max_alpha = 0
@@ -1348,6 +1369,7 @@ def largest_azimuthal_difference(segment_1, segment_2, abs_polar_angle_threshold
     -------
     max_delta_phi : float
         Largest azimuthal difference between two segments.
+
     """
 
     max_delta_phi = 0
@@ -1387,6 +1409,7 @@ def largest_polar_difference(segment_1, segment_2):
     -------
     delta_phi : float
         Largest polar difference between two segments.
+
     """
     max_delta_theta = 0
 
@@ -1421,9 +1444,6 @@ def clean_azimuth(graph):
 
     """
     def identify_errors(y):
-        """
-        Identify erroneous data points based on a threshold.
-        """
         # Compute difference
         y_difference = np.zeros_like(y)
         y_difference[1:-1] = (np.abs(y[1:-1] - y[:-2]) + np.abs(y[1:-1] - y[2:])) / 2
@@ -1518,13 +1538,6 @@ def clean_azimuth(graph):
             if len(end_nans) > 0:
                 azimuth_values_interpolated = np.concatenate((azimuth_values_interpolated, azimuth_values_idx[end_nans]))
 
-            # Plotting the cleaned data
-            # plt.figure(figsize=(10, 6))
-            # plt.plot(hierarchy_values_idx, azimuth_values_idx, label='Original Data', alpha=0.5)
-            # plt.scatter(hierarchy_values_idx[identified_errors], azimuth_values_interpolated[identified_errors], color='red', label='Identified Errors')
-            # plt.plot(hierarchy_values_idx, azimuth_values_interpolated, label='Cleaned Data', color='green')
-            # plt.title(f"{vessel_type} {idx}")
-
             # Save modified nodes
             for error_idx in identified_errors:
                 modified_nodes[nodes_idx[error_idx]] = azimuth_values_interpolated[error_idx]
@@ -1542,7 +1555,7 @@ def plot_single_segments(local_graph, segments_vessel_type_dict, show=False, out
 
     Creates new image file as:
 
-    >>> case_dir/single_segments.png
+    >>> case_dir/extracranial_vessels/single_segments.png
 
     Parameters
     ----------

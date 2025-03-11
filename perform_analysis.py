@@ -31,6 +31,8 @@ def main():
         help="Boolean argument to determine if vessel labelling should be skipped or not. Not required, default = False.")
     parser.add_argument("-sfe", "--skip_feature_extraction", action="store_true",
         help="Boolean argument to determine if feature extraction should be skipped or not. Not required, default = False.")
+    parser.add_argument("-sap", "--skip_access_prediction", action="store_true",
+        help="Boolean argument to determine if access prediction should be skipped or not. Not required, default = False.")
     parser.add_argument("-clnn", "--cl_dice_nnunet", action="store_true",
         help="Boolean argument to determine if nnunet trained with centerline dice should be used or not. Not required, default = False.")
     parser.add_argument("-ns", "--no_slicing", action="store_true",

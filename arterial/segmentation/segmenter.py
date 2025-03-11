@@ -88,7 +88,7 @@ class VesselSegmenter():
         model over the original CTA. At the end of the segmentation prediction, a nifti file 
         with the format:
         
-        >>> {self.mode}_segmentation.nii.gz
+        >>> {self.case_dir}/{self.mode}/segmentation.nii.gz
         
         should be generated in the self.case_dir. 
 

@@ -82,57 +82,6 @@ def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radi
     except Exception as e:
         print(f"Exception occurred in branch model extraction: {e}")
         return None
-    
-
-# def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds", centerline_ids_array_name="CenterlineIds", tract_ids_array_name="TractIds"):
-#     """
-#     Performs centerline branching over centerline models. This allows division
-#     of the centerline tree in segments corresponding to the individual arteries.
-    
-#     This function summons the vtkvmtk.vtkvmtkCenterlineBranchExtractor() class. 
-#     For additional info refer to <https://github.com/vmtk/vmtk/blob/master/vmtkScripts/vmtkbranchextractor.py>.
-
-#     Parameters
-#     ----------
-#     centerlines_model : string or path-like object
-#         Path to centerlines model. 
-#     blanking_array_name : string, optional
-#         Name of the blanking array. The default is "Blanking".
-#     radius_array_name : string, optional
-#         Name of the radius array. The default is "MaximumInscribedSphereRadius".
-#     group_ids_array_name : string, optional
-#         Name of the group ids array. The default is "GroupIds".
-#     centerline_ids_array_name : string, optional
-#         Name of the centerline ids array. The default is "CenterlineIds".
-#     tract_ids_array_name : string, optional
-#         Name of the tract ids array. The default is "TractIds".
-
-#     Returns
-#     -------
-#     branch_model : vtkPolyData
-#         Branched centerline model.
-    
-#     """
-#     # Initialize the vtkvmtkCenterlineBranchExtractor object
-#     branchExtractor = vtkvmtk.vtkvmtkCenterlineBranchExtractor()
-#     branchExtractor.SetInputData(centerlines_model)
-#     branchExtractor.SetBlankingArrayName(blanking_array_name)
-#     branchExtractor.SetRadiusArrayName(radius_array_name)
-#     branchExtractor.SetGroupIdsArrayName(group_ids_array_name)
-#     branchExtractor.SetCenterlineIdsArrayName(centerline_ids_array_name)
-#     branchExtractor.SetTractIdsArrayName(tract_ids_array_name)
-
-#     # Execute the branch extraction
-#     try:
-#         branchExtractor.Update()
-#         branch_model = branchExtractor.GetOutput()
-#     except:
-#         print("Centerline branching failed. This is a VMTK issue. \nIf this is the first model (idx=0) " \
-#               "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
-#               "(Usually the first one is the largest and most relevant).")
-#         branch_model = None
-
-#     return branch_model
 
 def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSphereRadius"):
     """

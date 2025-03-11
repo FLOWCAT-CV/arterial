@@ -27,6 +27,9 @@ def featurize_node(local_graph, node, access, cta_array, cta_affine, lpi_corner_
     blanking : numpy.array or array-like object.
         Array containing the blanking of the branch model.
 
+    Returns
+    -------
+
     """
     local_points = find_neighbour_points(local_graph, node, access)
     # Get the index of the node among the points
@@ -68,7 +71,7 @@ def featurize_node(local_graph, node, access, cta_array, cta_affine, lpi_corner_
     i, j, k = np.matmul(np.linalg.inv(cta_affine), np.append(node_pos + lpi_corner_coordinates, 1.0))[:3].astype(int)
     local_graph.nodes[node][f"features {access}"]["HU intensity"] = cta_array[i, j, k]
 
-def find_neighbour_points(local_graph, node, access):
+def find_neighbour_points(local_graph, node, access="femoral"):
     """
     Fins the points of the centerline that are used for feature extraction. Each node type, 
     depending on its degree, has a different strategy to find the points, according to hierarchy and 
@@ -87,6 +90,7 @@ def find_neighbour_points(local_graph, node, access):
     -------
     points : numpy.array or array-like object, shape [3, 3].
         Position of the points used for local feature extraction.
+
     """
     # Endpoints (degree == 1)
     # For endpoints, we gather information from the endpoint node's relationship to its neighbor (node_end)
@@ -187,9 +191,10 @@ def find_neighbour_points(local_graph, node, access):
             ])
     return points
 
-def sanity_check(local_graph, access = "femoral"):
+def sanity_check(local_graph, access="femoral"):
     """
-    Sanity check for feature extraction. Checks for nan or inf values in the features and replaces them with the value of the closest node.
+    Sanity check for feature extraction. Checks for nan or inf values in the features and replaces them with the value 
+    of the closest node.
 
     Parameters
     ----------
@@ -197,6 +202,10 @@ def sanity_check(local_graph, access = "femoral"):
         Dense centerline graph.
     access : string
         Access site for thrombectomy configuration. Can be either "femoral" or "radial".
+
+    Returns
+    -------
+
     """
     # We finally check all nodes not to have any nan or inf values
     # If present, we choose the value from the neighboring nodes
@@ -248,9 +257,10 @@ def sanity_check(local_graph, access = "femoral"):
                                                                                             # We will just hard-code it to 0
                         # raise Exception("A suitable neighbor could not be found for feature {} in node {}".format(feature_key, node))
 
-def add_cumulative_features(local_graph, access):
+def add_cumulative_features(local_graph, access="femoral"):
     """
-    Computes accumulative features for a centerline graph. That can only be computed after all other features have been computed.
+    Computes accumulative features for a centerline graph. That can only be computed after 
+    all other features have been computed. Updates the graph in place.
 
     Parameters
     ----------
@@ -258,6 +268,10 @@ def add_cumulative_features(local_graph, access):
         Dense centerline graph after featurization.
     access : string
         Access site for thrombectomy configuration. Can be either "femoral" or "radial".
+
+    Returns
+    -------
+
     """
     # If we are now performing final feature extraction for supersegment treatment, we compute accumulative features that rely on a proper hierarchical ordering (need subgraph union)
     # Accumulative features
@@ -278,7 +292,7 @@ def add_cumulative_features(local_graph, access):
                 if not neighbor_found:
                     local_graph.nodes[node][f"features {access}"]["accumulated length from access"] = 0
 
-def get_max_hierarchy(local_graph, access = "femoral"):
+def get_max_hierarchy(local_graph, access="femoral"):
     """ 
     Iterates over nodes to find max hierarchy for each access configuration.
 

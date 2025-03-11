@@ -611,10 +611,40 @@ def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
     return sanity_check, skip_cell_ids
 
 def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=None, show=False, output_path=None):
+    """
+    Make a plot of the graph. Adds the option to provide a feature to plot. This is expected to be a node feature, within
+    the "features femoral" feature dictionary.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to plot.
+    feature : str, optional
+        Feature to plot.
+    access : str, optional
+        Access to plot.
+    cmap : str, optional
+        Color map to use.
+    subplot : matplotlib.axes.Axes, optional
+        Subplot to use.
+    show : bool, optional
+        Whether to show the plot.
+    output_path : str, optional
+        Path to save the plot.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure.
+    ax : matplotlib.axes.Axes
+        Axes.
+
+    """
     if subplot is None:
-        _, ax = plt.subplots(figsize=[5, 10])
+        fig, ax = plt.subplots(figsize=[5, 10])
     else:
         ax = subplot
+        fig = ax.figure
         
     if feature is not None:
         # Color map
@@ -636,7 +666,7 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
     for n in graph.nodes():
         node_pos_dict_P[n] = [-graph.nodes(data=True)[n]["pos"][0], graph.nodes(data=True)[n]["pos"][2]]
 
-    nx.draw(graph, node_pos_dict_P, node_size=10, node_color=color_map)
+    nx.draw(graph, node_pos_dict_P, node_size=10, node_color=color_map, ax=ax)
     # Set limits according to the local_graph
     # Extract x and y coordinates from node_pos_dict_P
     x_coords = [node_pos_dict_P[node][0] for node in node_pos_dict_P]
@@ -662,8 +692,9 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
         # Add a colorbar
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=min(feature_values), vmax=max(feature_values)))
         sm._A = []
-        plt.colorbar(sm, fraction=0.046, pad=0.04)
-        plt.title(feature.capitalize().replace("_", " "))  
+        # Explicitly pass the figure and axes to colorbar
+        plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+        ax.set_title(feature.capitalize().replace("_", " "))  
 
     if subplot is None:
         if output_path is not None:

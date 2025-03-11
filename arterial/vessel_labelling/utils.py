@@ -48,7 +48,7 @@ class EVCDatasetInference(InMemoryDataset):
         if os.path.exists(dataset_path):
             self.dataset_description = load_json(dataset_path)
         else:
-            raise RuntimeError("No dataset description file found. Please retrieve this file for proper inference.")
+            raise FileNotFoundError("No dataset description file found. Please retrieve this file for proper inference.")
         self.graphs = [raw_graph]
         self.pre_transform = pre_transform
         self.process()
@@ -68,7 +68,7 @@ class EVCDatasetInference(InMemoryDataset):
             graph_nx = node_transform(raw_graph)
             # Pytorch data object
             data = Data()
-            x, edge_index, y, pos, cell_ids = [], [], [], [], []
+            x, edge_index, pos, cell_ids = [], [], [], []
             for node in graph_nx.nodes:
                 pos.append(graph_nx.nodes[node]["pos"])
                 x.append(graph_nx.nodes[node]["features"])
