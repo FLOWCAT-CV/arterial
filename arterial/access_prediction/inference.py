@@ -5,10 +5,8 @@ import os
 import numpy as np
 
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch_geometric.transforms import Compose, ToDevice
-from torch_geometric.data import Data, Batch
 
 from arterial.access_prediction.utils import ArterialGNetDatasetInference, DenseRadiusGraph, collate_ArterialGNetInference, build_final_attention_map
 
