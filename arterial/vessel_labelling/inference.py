@@ -78,7 +78,7 @@ def predict_extracranial_vessel_types(graph):
     # Load graph to the DataLoader through the ArterialDatasetInference class, with the inference transforms
     data_loader = DataLoader(data, batch_size = 1, shuffle = False) 
     # Load the trained model for inference
-    model = torch.load(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/model.pth"), map_location=torch.device(device)).to(device)
+    model = torch.load(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/model.pth"), map_location=torch.device(device), weights_only=False).to(device)
     # Load model to device
     model.eval()
     # We have to iterate over the DataLoader (even thogh it will just be one graph at the time)
@@ -146,7 +146,7 @@ def predict_extracranial_vessel_types_ensemble(graph):
     with torch.no_grad():
         for fold in range(5):
             # Load the trained model for inference
-            model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device)).to(device)
+            model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device), weights_only=False).to(device)
             # Load model to device
             model.eval()
             # We have to iterate over the DataLoader (even thogh it will just be one graph at the time)

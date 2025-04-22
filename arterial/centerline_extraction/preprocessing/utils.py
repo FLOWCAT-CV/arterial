@@ -65,6 +65,8 @@ def split_segmentation(segmentation_array, segmentation_affine, minimum_island_v
     values = values[np.argsort(counts)[::-1]]
     counts = counts[np.argsort(counts)[::-1]]
 
+    print(len(values))
+
     # Compute minimum island voxel size, taking into account reference voxel size
     # voxel size of 0.43 * 0.43 * 0.4 mm^3
     reference_voxel_size = 0.07385254 # = 0.43 * 0.43 * 0.4

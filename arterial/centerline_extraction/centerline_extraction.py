@@ -34,7 +34,7 @@ def extract_centerlines_full_cta(segmentation_model, segmentation_array, segment
     
     """
     centerline_computation_logic = CenterlineComputationLogic()
-    centerlines, voronoi, endpoints_json = centerline_computation_logic.extract_centerline_full_cta(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
+    centerlines, voronoi, endpoints_json = centerline_computation_logic.extract_centerline(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
     
     if centerlines is None: # True if no endpoints are found
         return None, None, None
