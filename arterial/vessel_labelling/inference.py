@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.loader import DataLoader
 from torch_geometric.transforms import Compose, RadiusGraph, ToDevice
+from torch_geometric.nn.models import GAT
 
 from arterial.vessel_labelling.utils import EVCDatasetInference
 from arterial.io.load_and_save_operations import load_json
@@ -78,7 +79,16 @@ def predict_extracranial_vessel_types(graph):
     # Load graph to the DataLoader through the ArterialDatasetInference class, with the inference transforms
     data_loader = DataLoader(data, batch_size = 1, shuffle = False) 
     # Load the trained model for inference
-    model = torch.load(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/model.pth"), map_location=torch.device(device), weights_only=False).to(device)
+    state_dict = torch.load(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+    model = GAT(
+        in_channels = state_dict["init_kwargs"]["in_channels"],
+        hidden_channels = state_dict["init_kwargs"]["hidden_channels"],
+        out_channels = state_dict["init_kwargs"]["out_channels"],
+        num_layers = state_dict["init_kwargs"]["num_layers"],
+        v2=True,
+        act = state_dict["init_kwargs"]["act"]
+    ).to(device)
+    model.load_state_dict(state_dict["state_dict"], strict=False)
     # Load model to device
     model.eval()
     # We have to iterate over the DataLoader (even thogh it will just be one graph at the time)
@@ -146,7 +156,17 @@ def predict_extracranial_vessel_types_ensemble(graph):
     with torch.no_grad():
         for fold in range(5):
             # Load the trained model for inference
-            model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device), weights_only=False).to(device)
+            # model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device), weights_only=False).to(device)
+            state_dict = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+            model = GAT(
+                in_channels = state_dict["init_kwargs"]["in_channels"],
+                hidden_channels = state_dict["init_kwargs"]["hidden_channels"],
+                out_channels = state_dict["init_kwargs"]["out_channels"],
+                num_layers = state_dict["init_kwargs"]["num_layers"],
+                v2=True,
+                act = state_dict["init_kwargs"]["act"]
+            ).to(device)
+            model.load_state_dict(state_dict["state_dict"], strict=False)
             # Load model to device
             model.eval()
             # We have to iterate over the DataLoader (even thogh it will just be one graph at the time)

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torch_geometric.transforms import Compose, ToDevice
 
 from arterial.access_prediction.utils import ArterialGNetDatasetInference, DenseRadiusGraph, collate_ArterialGNetInference, build_final_attention_map
+from arterial.access_prediction.models import ArterialGNet
 
 def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, return_attention_map=True):
     """
@@ -42,7 +43,28 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
         with torch.no_grad():
             for fold in range(5):
                 # Load the trained model for inference
-                model = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_latest.pth"), map_location=torch.device(device)).to(device)
+                # model = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_latest.pth"), map_location=torch.device(device), weights_only=False).to(device)
+                # Load the trained model for inference
+                state_dict = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+                model = ArterialGNet(
+                    global_in_dim=state_dict["init_kwargs"]["global_in_dim"],
+                    segment_node_in_dim=state_dict["init_kwargs"]["segment_node_in_dim"],
+                    segment_edge_in_dim=state_dict["init_kwargs"]["segment_edge_in_dim"],
+                    dense_node_in_dim=state_dict["init_kwargs"]["dense_node_in_dim"],
+                    hidden_dim=state_dict["init_kwargs"]["hidden_dim"],
+                    hidden_dim_dense=state_dict["init_kwargs"]["hidden_dim_dense"],
+                    out_dim=state_dict["init_kwargs"]["out_dim"],
+                    num_global_layers=state_dict["init_kwargs"]["num_global_layers"],
+                    num_segment_layers=state_dict["init_kwargs"]["num_segment_layers"],
+                    num_dense_layers=state_dict["init_kwargs"]["num_dense_layers"],
+                    num_out_layers=state_dict["init_kwargs"]["num_out_layers"],
+                    attn_heads=state_dict["init_kwargs"]["attn_heads"],
+                    aggregation=state_dict["init_kwargs"]["aggregation_"],
+                    dropout=state_dict["init_kwargs"]["dropout"],
+                    concat=state_dict["init_kwargs"]["concat"],
+                    is_classification=state_dict["init_kwargs"]["is_classification"]
+                ).to(device)
+                model.load_state_dict(state_dict["state_dict"], strict=False)
                 # Load model to device
                 model.eval()
                 # Perform inference (probabilities for each fold)
@@ -61,7 +83,28 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
         with torch.no_grad():
             for fold in range(5):
                 # Load the trained model for inference
-                model = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_latest.pth"), map_location=torch.device(device)).to(device)
+                # model = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_latest.pth"), map_location=torch.device(device), weights_only=False).to(device)
+                # Load the trained model for inference
+                state_dict = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+                model = ArterialGNet(
+                    global_in_dim=state_dict["init_kwargs"]["global_in_dim"],
+                    segment_node_in_dim=state_dict["init_kwargs"]["segment_node_in_dim"],
+                    segment_edge_in_dim=state_dict["init_kwargs"]["segment_edge_in_dim"],
+                    dense_node_in_dim=state_dict["init_kwargs"]["dense_node_in_dim"],
+                    hidden_dim=state_dict["init_kwargs"]["hidden_dim"],
+                    hidden_dim_dense=state_dict["init_kwargs"]["hidden_dim_dense"],
+                    out_dim=state_dict["init_kwargs"]["out_dim"],
+                    num_global_layers=state_dict["init_kwargs"]["num_global_layers"],
+                    num_segment_layers=state_dict["init_kwargs"]["num_segment_layers"],
+                    num_dense_layers=state_dict["init_kwargs"]["num_dense_layers"],
+                    num_out_layers=state_dict["init_kwargs"]["num_out_layers"],
+                    attn_heads=state_dict["init_kwargs"]["attn_heads"],
+                    aggregation=state_dict["init_kwargs"]["aggregation_"],
+                    dropout=state_dict["init_kwargs"]["dropout"],
+                    concat=state_dict["init_kwargs"]["concat"],
+                    is_classification=state_dict["init_kwargs"]["is_classification"]
+                ).to(device)
+                model.load_state_dict(state_dict["state_dict"], strict=False)
                 # Load model to device
                 model.eval()
                 # Perform inference (probabilities and attention map for each fold)

@@ -96,6 +96,7 @@ class AccessPredictor():
         """
         for access in self.access:
             for side in self.side:
+                print(self.supersegments_dir_path, f"{access} + {side} + anterior.pickle")
                 assert os.path.isfile(os.path.join(self.supersegments_dir_path, f"{access} + {side} + anterior.pickle")), f"Supersegments ({access}, {side}) not found"
                 print(f"\nPreprocessing {access} {side} supersegment...")
                 self.raw_supersegment_dict[(access, side)] = load_pickle(os.path.join(self.supersegments_dir_path, f"{access} + {side} + anterior.pickle"))                  

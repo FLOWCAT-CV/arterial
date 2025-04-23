@@ -85,6 +85,7 @@ class ArterialProcessor():
                                                   self.cta_nifti_path)
         self.access_predictor = AccessPredictor(self.case_dir,
                                                 self.cta_nifti_path,
+                                                None,
                                                 ['femoral'],
                                                 ['left', 'right'])
 
