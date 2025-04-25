@@ -112,14 +112,18 @@ class VesselSegmenter():
                 print("Performing fast segmentation...")
                 self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
             else:
-                print("Slicing CTA into head and neck...")
-                self.slice_cta()
-                print("Performing segmentation (head)...")
-                _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet)
-                print("Performing segmentation (neck)...")
-                _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
-                print("Joining segmentations...")
-                self.segmentation_nifti, self.segmentation_array = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
+                if not self.no_slicing:
+                    print("Slicing CTA into head and neck...")
+                    self.slice_cta()
+                    print("Performing segmentation (head)...")
+                    _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet)
+                    print("Performing segmentation (neck)...")
+                    _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
+                    print("Joining segmentations...")
+                    self.segmentation_nifti, self.segmentation_array = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
+                else:
+                    print("No slicing is True. Using the whole CTA volume for extracranial vessels segmentation (nnunet trained at full resolution).")
+                    self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet)
             
         elif self.mode == "intracranial_vessels":   
             if not self.no_slicing:
