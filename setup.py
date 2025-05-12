@@ -23,6 +23,7 @@ setup(
         'scipy',
         'scikit-image',
         'mycolorpy',
-        'vtk'
+        'vtk',
+        'torchio'
         ]
 )
