@@ -32,8 +32,17 @@ class SingleCTADataset:
 
         resampled = resample_image(tio_object, (0.8, 0.8, 0.8))
         cropped_or_padded = crop_or_pad_image(resampled, (320, 320, 480))
-        final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
-
+        
+        # Save the torchio object to a temporary file
+        temp_path = os.path.join(self.folder_path, "temp_cropped_or_padded.nii.gz")
+        cropped_or_padded.save(temp_path)
+        
+        # Pass the file path to change_origin_preprocess
+        processed_path = change_origin_preprocess(temp_path, (0, 0, 0))
+        
+        # Load the processed file back into a torchio object
+        final_image = tio.ScalarImage(processed_path)
+        
         final_image.save(preprocessed_path)
         img = nib.load(preprocessed_path)
 
