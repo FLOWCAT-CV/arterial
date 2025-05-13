@@ -22,6 +22,17 @@ def resample_image(image, new_voxel_size):
     """
     return tio.Resample(new_voxel_size, scalars_only=True)(image)
 
+def crop_or_pad_image(image, target_shape):
+    """
+    Crop or pad the image to a target shape.
+    Args:
+        image (torchio.ScalarImage): The input image to be cropped or padded.
+        target_shape (tuple): The target shape for cropping or padding.
+    Returns:
+        torchio.ScalarImage: The cropped or padded image.
+    """
+    return tio.CropOrPad(target_shape)(image)
+
 ###just in case we need batch processing
 def process_files_resample(folder_path, new_voxel_size=(0.8, 0.8, 0.8)):
     """
@@ -47,7 +58,7 @@ def process_files_crop(folder_path, target_shape=(320, 320, 480)):
     for root, _, files in os.walk(folder_path):
         if "cta.nii.gz" in files:
             file_path = os.path.join(root, "cta.nii.gz")
-            cropped = tio.CropOrPad(target_shape)(tio.ScalarImage(file_path))
+            cropped = crop_or_pad_image(target_shape)(tio.ScalarImage(file_path))
             cropped.save(file_path)
             print(f"Cropped/Padded: {file_path}")
 

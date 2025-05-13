@@ -24,6 +24,8 @@ setup(
         'scikit-image',
         'mycolorpy',
         'vtk',
-        'torchio'
+        'torchio',
+        'cc3d',
+        'opencv-python'
         ]
 )
