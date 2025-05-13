@@ -113,3 +113,29 @@ def restore_centroids_to_original_origin(centroids_mm, affine_path, image_orient
                 centroids_mm_restored[i, 1] -= 2 * affine[1, 3]
 
     return centroids_mm_restored
+
+#this one here reads the json template and updates the control points with the predicted values
+def actualizar_json_con_predicciones(predichas, output_json_path, original_json_path=None, template_json_path="configs/template_landmark.json"):
+    """
+    Update the JSON file with predicted control points.
+    Args:
+        predichas (np.ndarray): Predicted control points.
+        output_json_path (str): Path to save the updated JSON file.
+        original_json_path (str): Path to the original JSON file (if any).
+        template_json_path (str): Path to the template JSON file.
+    """
+    # Check if the original JSON file exists; if not, use the template
+    json_to_use = original_json_path if original_json_path and os.path.exists(original_json_path) else template_json_path
+    with open(json_to_use, 'r') as f:
+        data = json.load(f)
+
+    label_to_index = {"l-tica": 0, "r-tica": 1, "l-eica": 2, "r-eica": 3}
+    control_points = data["markups"][0]["controlPoints"]
+    for cp in control_points:
+        label = cp.get("label")
+        if label in label_to_index:
+            cp["position"] = predichas[label_to_index[label]].tolist()
+
+    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+    with open(output_json_path, 'w') as f:
+        json.dump(data, f, indent=4)
