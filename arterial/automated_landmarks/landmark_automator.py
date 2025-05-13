@@ -104,7 +104,7 @@ class LandmarkAutomator:
         if save_json:
             output_json_path = os.path.join(output_folder_img, "F_o.json")
             input_json_path = os.path.join(sample["folder"], "F.json")
-            actualizar_json_con_predicciones(input_json_path, centroids_mm, output_json_path)
+            actualizar_json_con_predicciones(centroids_mm, output_json_path, input_json_path)
 
         if save_mask:
             combined_img = np.transpose(combined_largest_components, (1, 2, 0))
