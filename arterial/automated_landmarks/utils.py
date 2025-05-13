@@ -10,7 +10,7 @@ import numpy as np
 import json
 import shutil
 
-####individiual version which is most likely the one more used since there's a patient at a time
+####individual version which is most likely the one more used since there's a patient at a time
 def resample_image(image, new_voxel_size):
     """
     Resample the image to a new voxel size.
