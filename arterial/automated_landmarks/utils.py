@@ -58,7 +58,7 @@ def process_files_crop(folder_path, target_shape=(320, 320, 480)):
     for root, _, files in os.walk(folder_path):
         if "cta.nii.gz" in files:
             file_path = os.path.join(root, "cta.nii.gz")
-            cropped = crop_or_pad_image(target_shape)(tio.ScalarImage(file_path))
+            cropped = crop_or_pad_image(tio.ScalarImage(file_path), target_shape)
             cropped.save(file_path)
             print(f"Cropped/Padded: {file_path}")
 
