@@ -171,7 +171,7 @@ class CenterlineComputationLogic(object):
         centerlines.DeepCopy(new_centerlines)
         voronoi.DeepCopy(new_voronoi)
 
-        return centerlines, voronoi, endpoints_json
+        return centerlines, network, voronoi, endpoints_json
     
     def extract_centerline_between_endpoints(self, surface_model, segmentation_array, segmentation_affine, endpoints):
         """

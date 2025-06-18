@@ -28,7 +28,7 @@ def extract_centerlines_full_cta(segmentation_model, segmentation_array, segment
     
     """
     centerline_computation_logic = CenterlineComputationLogic()
-    centerlines, voronoi, endpoints_json = centerline_computation_logic.extract_centerline_full_cta(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
+    centerlines, network, voronoi, endpoints_json = centerline_computation_logic.extract_centerline_full_cta(segmentation_model, segmentation_array, segmentation_affine, is_first_model)
     
     if centerlines is None: # True if no endpoints are found
         return None, None, None
@@ -43,7 +43,7 @@ def extract_centerlines_full_cta(segmentation_model, segmentation_array, segment
     if centerlines.GetNumberOfCells() == 0:
         return None, None, None
     else:
-        return centerlines, voronoi, endpoints_json
+        return centerlines, network, voronoi, endpoints_json
     
 def extract_centerline_between_endpoints(segmentation_model, segmentation_array, segmentation_affine, endpoints):
     """
