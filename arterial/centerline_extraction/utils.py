@@ -834,7 +834,7 @@ def robust_endpoint_relocation(endpoint_vtk_points, segmentation_array, segmenta
                         inverted_label_mask = label_mask_unique_label == 0
                         distances[idx_unique_label, :] = ndimage.distance_transform_edt(inverted_label_mask, return_distances=True, return_indices=False)
                     # Now collect the distances at the center of the region of interest
-                    distances = distances[:, window_size, window_size, window_size]
+                    distances = distances[:, distances.shape[1] // 2, distances.shape[2] // 2, distances.shape[3] // 2]
                     # Select the nearest label (that with the lowest value in the distance map)
                     nearest_label = unique_labels[np.argmin(distances)]
                     properties = measure.regionprops((label_mask == nearest_label).astype(int))

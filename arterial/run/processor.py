@@ -110,6 +110,8 @@ class ArterialProcessor():
         step2 = time()
         vessel_labelling_time = step2 - step1
         print("Vessel labelling took {:.2f} s".format(step2 - step1))
+        feature_extraction_time = 0
+        access_prediction_time = 0
         if self.mode == "extracranial_vessels":
             self.perform_feature_extraction()   
             step3 = time()
