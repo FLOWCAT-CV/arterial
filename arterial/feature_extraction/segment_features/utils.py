@@ -48,6 +48,9 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
             if vessel_type != "other" and vessel_type not in vessel_type_list:
                 vessel_type_list.append(vessel_type)
 
+        # Sort list (to ensure that CCA is always extracted before ICA)
+        vessel_type_list.sort()
+
         return vessel_type_list
 
     # Initialize empty segment dict
@@ -57,7 +60,7 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
     # Iterate over all vessel types in list to find segments for all of them
     for vessel_type in vessel_type_list:
         # Extract individual segments according to vessel type
-        segments_vessel_type_dict[vessel_type] = get_single_segment(local_graph, vessel_type, identifier_type = "vessel_type")        
+        segments_vessel_type_dict[vessel_type] = get_single_segment(local_graph, vessel_type, identifier_type = "vessel_type", segments_vessel_type_dict = segments_vessel_type_dict)        
         if segments_vessel_type_dict[vessel_type] is not None:
             # Perform feature extraction
             segments_vessel_type_dict[vessel_type] = extract_segment_features(segments_vessel_type_dict[vessel_type])
@@ -98,6 +101,42 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
         segments_vessel_type_dict["RCA"] = rcca_segment
         # Perform feature extraction
         segments_vessel_type_dict["RCA"] = extract_segment_features(segments_vessel_type_dict["RCA"])
+    
+    # Special case: no RCCA bifuraction is detected, and both RICA and RCCA are treated as one segment typically labelled as RCCA
+    # In these cases, RCCA length is abnormally long. Usually, we find that RCCAs over 200mm have this issue.
+    if "RCCA" in segments_vessel_type_dict.keys() and "RICA" not in segments_vessel_type_dict.keys():
+        if segments_vessel_type_dict["RCCA"].graph["features"]["length"] > 200:
+            segments_vessel_type_dict['RCA'] = segments_vessel_type_dict['RCCA'].copy()
+            segments_vessel_type_dict['RICA'] = segments_vessel_type_dict['RCCA'].copy()
+            # Now we divide the segment into two, by finding the node with largest radius between the 25 and 75 percentile along the segment
+            radius_mid_50 = {}
+            idx = 0
+            for node in segments_vessel_type_dict["RCA"]:
+                if idx > 0.25 * len(segments_vessel_type_dict["RCA"]) and idx < 0.75 * len(segments_vessel_type_dict["RCA"]):
+                    radius_mid_50[node] = segments_vessel_type_dict["RCA"].nodes[node]['features femoral']["radius"]
+                idx += 1
+            # Find the node with largest radius between the 25 and 75 percentile
+            max_radius_node = max(radius_mid_50, key=radius_mid_50.get)
+            hierarchy_max_radius_node = segments_vessel_type_dict["RCA"].nodes[max_radius_node]["hierarchy femoral"]
+            rcca_nodes, rica_nodes = [], []
+            for node in segments_vessel_type_dict["RCA"]:
+                if segments_vessel_type_dict["RCA"].nodes[node]["hierarchy femoral"] < hierarchy_max_radius_node:
+                    rcca_nodes.append(node)
+                else:
+                    rica_nodes.append(node)
+
+            # Remove nodes from the RCCA segment
+            rcca_segment = segments_vessel_type_dict["RCCA"].subgraph(rcca_nodes)
+            # Remove nodes from the RICA segment
+            rica_segment = segments_vessel_type_dict["RCCA"].subgraph(rica_nodes)
+            # Change vessel type name of the RICA segment
+            for node in rica_segment:
+                rica_segment.nodes[node]["vessel_type_name"] = "RICA"
+                rica_segment.nodes[node]["vessel_type"] = 9
+            
+            # Add to dict
+            segments_vessel_type_dict["RCCA"] = extract_segment_features(rcca_segment)
+            segments_vessel_type_dict["RICA"] = extract_segment_features(rica_segment)
         
     if "LCCA" in segments_vessel_type_dict.keys() and "LICA" in segments_vessel_type_dict.keys():
         # Get both segments
@@ -132,6 +171,40 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
         segments_vessel_type_dict["LCA"] = lcca_segment
         # Perform feature extraction
         segments_vessel_type_dict["LCA"] = extract_segment_features(segments_vessel_type_dict["LCA"])
+    
+    # Special case: no LCCA bifuraction is detected, and both LICA and LCCA are treated as one segment typically labelled as LCCA
+    # In these cases, LCCA length is abnormally long. Usually, we find that LCCAss over 270mm have this issue.
+    if "LCCA" in segments_vessel_type_dict.keys() and "LICA" not in segments_vessel_type_dict.keys():
+        if segments_vessel_type_dict["LCCA"].graph["features"]["length"] > 225:
+            segments_vessel_type_dict['LCA'] = segments_vessel_type_dict['LCCA'].copy()
+            # Now we divide the segment into two, by finding the node with largest radius between the 25 and 75 percentile along the segment
+            radius_mid_50 = {}
+            idx = 0
+            for node in segments_vessel_type_dict["LCA"]:
+                if idx > 0.25 * len(segments_vessel_type_dict["LCA"]) and idx < 0.75 * len(segments_vessel_type_dict["LCA"]):
+                    radius_mid_50[node] = segments_vessel_type_dict["LCA"].nodes[node]['features femoral']["radius"]
+                idx += 1
+            # Find the node with largest radius between the 25 and 75 percentile
+            max_radius_node = max(radius_mid_50, key=radius_mid_50.get)
+            hierarchy_max_radius_node = segments_vessel_type_dict["LCA"].nodes[max_radius_node]["hierarchy femoral"]
+            lcca_nodes, lica_nodes = [], []
+            for node in segments_vessel_type_dict["LCA"]:
+                if segments_vessel_type_dict["LCA"].nodes[node]["hierarchy femoral"] < hierarchy_max_radius_node:
+                    lcca_nodes.append(node)
+                else:
+                    lica_nodes.append(node)
+            # Remove nodes from the LCCA segment
+            lcca_segment = segments_vessel_type_dict["LCCA"].subgraph(lcca_nodes)
+            # Remove nodes from the LICA segment
+            lica_segment = segments_vessel_type_dict["LCCA"].subgraph(lica_nodes)
+            # Change vessel type name of the LICA segment
+            for node in lica_segment:
+                lica_segment.nodes[node]["vessel_type_name"] = "LICA"
+                lica_segment.nodes[node]["vessel_type"] = 10
+
+            # Add to dict
+            segments_vessel_type_dict["LCCA"] = extract_segment_features(lcca_segment)
+            segments_vessel_type_dict["LICA"] = extract_segment_features(lica_segment)
 
     if "BT" in segments_vessel_type_dict.keys() and "RCCA" in segments_vessel_type_dict.keys() and "RICA" in segments_vessel_type_dict.keys():
         # Get both segments
@@ -306,7 +379,7 @@ def get_and_featurize_single_segments_cell_ids(local_graph):
         
     return segments_cell_id
 
-def get_single_segment(local_graph, identifier, identifier_type = "vessel_type"):
+def get_single_segment(local_graph, identifier, identifier_type = "vessel_type", segments_vessel_type_dict = None):
     """
     Extracts single centerline segment linked to an identifier (vessel type or cell id).
     Extracted segment will be 2D (no bifurcations), oriented with respect to the aortic 
@@ -321,6 +394,9 @@ def get_single_segment(local_graph, identifier, identifier_type = "vessel_type")
     identifier_type : str
         Selects extracted segments will be linked to a cell id or vessel type. Can either
         be `vessel_type` or `cell_id` and will raise a KeyError otherwise. Default: `vessel_type`. 
+    segments_vessel_type_dict : dict
+        Dictionary with vessel types as keys and centerline graphs as values. Only used for ICA identification if 
+        multiple subgraphs are found and the ipsilateral segment is present in the segments_vessel_type_dict.
 
     Returns
     -------
@@ -462,13 +538,13 @@ def get_single_segment(local_graph, identifier, identifier_type = "vessel_type")
 
         return graph
 
+    assert identifier_type in ["vessel_type", "cell_id"], "Identifier type should be `vessel_type` or `cell_id`"
+
     # Select the key for node identifier acoording to the selector
     if identifier_type == "vessel_type":
         key_name = "vessel_type_name"
     elif identifier_type == "cell_id":
         key_name = "cell_id"
-    else:
-        raise KeyError("Identifier type should be `vessel_type` or `cell_id`")
     
     # Initialize subsegment graph (it will be a masked local_graph)
     masked_centerline_graph = local_graph.copy()
@@ -484,6 +560,8 @@ def get_single_segment(local_graph, identifier, identifier_type = "vessel_type")
 
     for node in remove_nodes:
         masked_centerline_graph.remove_node(node)
+
+    assert len(masked_centerline_graph.nodes()) > 0, "No nodes left in masked centerline graph. This means that the segment defined by the identifier was not found in the graph."
 
     subgraphs = [masked_centerline_graph.subgraph(components) for components in nx.connected_components(masked_centerline_graph)]
 
@@ -560,15 +638,161 @@ def get_single_segment(local_graph, identifier, identifier_type = "vessel_type")
                         if len(new_segments) > 0:
                             for segment in new_segments:
                                 subgraph_segments_1d.append(segment)
+
         for subgraph_segment_1d in subgraph_segments_1d: 
             segments_1d.append(subgraph_segment_1d)
 
-    # Select longest segment (now it is computed from the number of nodes, but could really be computed by the overall actual distance of each segment)
-    length_segments_1d = [len(segment_1d) for segment_1d in segments_1d]
+    assert len(segments_1d) > 0, "No segments found in the graph"
+
+    # Selecting the final segment if multiple segments are found
+    segment_1d = None
+    ## Special case: RICA or LICA when ipsilateral CCA is present: we identified this as a recurrent error that can probably be avoided
+    if identifier in ['LICA', 'RICA'] and len(segments_1d) > 1:
+        # If multiple segments for RICA or LICA are found, check if the ipsilateral CCA is present in the segments_vessel_type_dict
+        # The selection in this particular case will be based on the proximity of the two closes nodes. This is done to avoid the stupid mistake of prioritizing 
+        # a wrongfully labelled ICA segment over the actual segment when at least CCA is correctly labelled.
+        if segments_vessel_type_dict is not None:
+            if identifier == 'LICA' and "LCCA" in segments_vessel_type_dict.keys():
+                # Store all node positions of the CCA segment
+                lcca_node_positions = []
+                for node in segments_vessel_type_dict["LCCA"]:
+                    lcca_node_positions.append(segments_vessel_type_dict["LCCA"].nodes[node]["pos"])
+                lcca_node_positions = np.array(lcca_node_positions)
+                # Store all node positions of the LICA segment candidates
+                lica_node_positions_candidate_list = []
+                for segment_1d in segments_1d:
+                    lica_candidate_node_positions = []
+                    for node in segment_1d:
+                        lica_candidate_node_positions.append(masked_centerline_graph.nodes[node]["pos"])
+                    lica_node_positions_candidate_list.append(np.array(lica_candidate_node_positions))
+                # Compute distance between all nodes of the CCA and LICA segment candidates
+                extreme_node_min_distances = []
+                for lica_candidate_node_positions in lica_node_positions_candidate_list:
+                    extreme_node_min_distances.append(
+                        min(
+                        np.linalg.norm(lcca_node_positions[0] - lica_candidate_node_positions[0]),
+                        np.linalg.norm(lcca_node_positions[0] - lica_candidate_node_positions[-1]),
+                        np.linalg.norm(lcca_node_positions[-1] - lica_candidate_node_positions[0]),
+                        np.linalg.norm(lcca_node_positions[-1] - lica_candidate_node_positions[-1])
+                        )
+                    )
+                # Select the segment with the minimum distance to the CCA segment
+                min_dist_indices = np.where(np.array(extreme_node_min_distances) == np.min(extreme_node_min_distances))[0]
+                # If they are multiple segments with the same minimum distance, select the longest one
+                if len(min_dist_indices) > 1:
+                    candidate_segments = np.array(segments_1d, dtype=object)[min_dist_indices]
+                    length_segments_1d = [len(s) for s in candidate_segments]
+                    segment_1d = candidate_segments[np.argmax(length_segments_1d)]
+                else:
+                    # Otherwise, select the segment with the minimum distance to the CCA segment
+                    segment_1d = segments_1d[np.argmin(extreme_node_min_distances)]
+            elif identifier == 'RICA' and "RCCA" in segments_vessel_type_dict.keys():
+                # Store all node positions of the CCA segment
+                rcca_node_positions = []
+                for node in segments_vessel_type_dict["RCCA"]:
+                    rcca_node_positions.append(segments_vessel_type_dict["RCCA"].nodes[node]["pos"])
+                rcca_node_positions = np.array(rcca_node_positions)
+                # Store all node positions of the RICA segment candidates
+                rica_node_positions_candidate_list = []
+                for segment_1d in segments_1d:
+                    rica_candidate_node_positions = []
+                    for node in segment_1d:
+                        rica_candidate_node_positions.append(masked_centerline_graph.nodes[node]["pos"])
+                    rica_node_positions_candidate_list.append(np.array(rica_candidate_node_positions))
+                # Compute distance between all nodes of the CCA and RICA segment candidates
+                extreme_node_min_distances = []
+                for rica_candidate_node_positions in rica_node_positions_candidate_list:
+                    extreme_node_min_distances.append(
+                        min(
+                            np.linalg.norm(rcca_node_positions[0] - rica_candidate_node_positions[0]),
+                            np.linalg.norm(rcca_node_positions[0] - rica_candidate_node_positions[-1]),
+                            np.linalg.norm(rcca_node_positions[-1] - rica_candidate_node_positions[0]),
+                            np.linalg.norm(rcca_node_positions[-1] - rica_candidate_node_positions[-1])
+                        )
+                    )
+                # Select the segment with the minimum distance to the CCA segment
+                min_dist_indices = np.where(np.array(extreme_node_min_distances) == np.min(extreme_node_min_distances))[0]
+                # If they are multiple segments with the same minimum distance, select the longest one
+                if len(min_dist_indices) > 1:
+                    candidate_segments = np.array(segments_1d, dtype=object)[min_dist_indices]
+                    length_segments_1d = [len(s) for s in candidate_segments]
+                    segment_1d = candidate_segments[np.argmax(length_segments_1d)]
+                else:
+                    # Otherwise, select the segment with the minimum distance to the CCA segment
+                    segment_1d = segments_1d[np.argmin(extreme_node_min_distances)]
+    # We can do the same with RCCAs that are detected multiple times and there is a BT segment
+    elif identifier == 'RCCA' and len(segments_1d) > 1:
+        if segments_vessel_type_dict is not None:
+            if "BT" in segments_vessel_type_dict.keys():
+                # Store all node positions of the CCA segment
+                bt_node_positions = []
+                for node in segments_vessel_type_dict["BT"]:
+                    bt_node_positions.append(segments_vessel_type_dict["BT"].nodes[node]["pos"])
+                bt_node_positions = np.array(bt_node_positions)
+                # Store all node positions of the LICA segment candidates
+                rcca_node_positions_candidate_list = []
+                for segment_1d in segments_1d:
+                    rcca_candidate_node_positions = []
+                    for node in segment_1d:
+                        rcca_candidate_node_positions.append(masked_centerline_graph.nodes[node]["pos"])
+                    rcca_node_positions_candidate_list.append(np.array(rcca_candidate_node_positions))
+                # Compute distance between all nodes of the CCA and LICA segment candidates
+                extreme_node_min_distances = []
+                for rcca_candidate_node_positions in rcca_node_positions_candidate_list:
+                    extreme_node_min_distances.append(
+                        min(
+                        np.linalg.norm(bt_node_positions[0] - rcca_candidate_node_positions[0]),
+                        np.linalg.norm(bt_node_positions[0] - rcca_candidate_node_positions[-1]),
+                        np.linalg.norm(bt_node_positions[-1] - rcca_candidate_node_positions[0]),
+                        np.linalg.norm(bt_node_positions[-1] - rcca_candidate_node_positions[-1])
+                        )
+                    )
+                # Select the segment with the minimum distance to the BT segment
+                min_dist_indices = np.where(np.array(extreme_node_min_distances) == np.min(extreme_node_min_distances))[0]
+                # If they are multiple segments with the same minimum distance, select the longest one
+                if len(min_dist_indices) > 1:
+                    candidate_segments = np.array(segments_1d, dtype=object)[min_dist_indices]
+                    length_segments_1d = [len(s) for s in candidate_segments]
+                    segment_1d = candidate_segments[np.argmax(length_segments_1d)]
+                else:
+                    # Otherwise, select the segment with the minimum distance to the BT segment
+                    segment_1d = segments_1d[np.argmin(extreme_node_min_distances)]
+    # For multiple LCCA segments, check if length is larger than 5 cm and if so, select the thicker one
+    # There is a typical error where LVA stems from AA and is typically classified as LCCA
+    # This is a workaround to ensure that the correct LCCA is selected
+    elif identifier == "LCCA" and len(segments_1d) > 1:
+        # Store lengths and mean radii for each candidate segment
+        candidate_lengths = []
+        candidate_mean_radii = []
+        for segment in segments_1d:
+            segment_radii = []
+            segment_length = 0
+            for node in segment:
+                segment_radii.append(masked_centerline_graph.nodes[node]["features femoral"]["radius"])
+                segment_length += masked_centerline_graph.nodes[node]["features femoral"]["segment length"]
+            candidate_mean_radii.append(np.mean(segment_radii))
+            candidate_lengths.append(segment_length)
+ 
+        long_segment_indices = [i for i, length in enumerate(candidate_lengths) if length > 50]
+ 
+        if len(long_segment_indices) > 1:
+            # If multiple segments are longer than 5 cm, select the one with the maximum mean radius
+            long_candidate_segments = np.array(segments_1d, dtype=object)[long_segment_indices]
+            long_candidate_mean_radii = np.array(candidate_mean_radii)[long_segment_indices]
+            segment_1d = long_candidate_segments[np.argmax(long_candidate_mean_radii)]
+        elif candidate_lengths:
+            # Otherwise, select the longest segment
+            segment_1d = segments_1d[np.argmax(candidate_lengths)]
+
+    if segment_1d is None:
+        # In all other instances, select longest segment in terms of number of nodes
+        length_segments_1d = [len(segment_1d) for segment_1d in segments_1d]
+        segment_1d = segments_1d[np.argmax(length_segments_1d)]
+
     # Store all nodes not in longest segment
     remove_nodes = []
     for node in masked_centerline_graph:
-        if node not in segments_1d[np.argmax(length_segments_1d)]:
+        if node not in segment_1d:
             remove_nodes.append(node)
     # Remove all nodes not in longest segment
     for node in remove_nodes:
@@ -600,7 +824,7 @@ def get_single_segment(local_graph, identifier, identifier_type = "vessel_type")
 
         masked_centerline_graph = get_hierarchical_order(masked_centerline_graph, start_node = start_node)
 
-        # Ensure right ordering of the segmentsArray values in the edges that might be used for feature computation
+        # Ensure right ordering of the segments_array values in the edges that might be used for feature computation
         # To do that, compare the direction of the hierarchy values between nodes and the direction of the indices values
         # If they are coherent (same direction), do nothing. If they are incoherent, flip the segmentsArray arrays
         for src, dst in masked_centerline_graph.edges:

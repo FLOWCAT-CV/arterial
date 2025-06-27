@@ -197,14 +197,18 @@ class CenterlineExtractor():
 
         for idx, centerline_model in enumerate(self.centerline_model_list):
             print(f"Extracting branch model from centerline model {idx}...")
-            branch_model_ = extract_branch_model(centerline_model)
-            if branch_model_ is None and idx == 0:
-                raise ValueError("Branch model could not be extracted for first model. Interrupting computation, as this "\
-                                 "is a critical error for all the posterior pipeline.")
-            elif branch_model_ is not None:
-                self.branch_model_list.append(branch_model_)
-                if save:
-                    save_vtkpolydata(branch_model_, os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk"))
+            # branch_model_ = extract_branch_model(centerline_model)
+            # if branch_model_ is None and idx == 0:
+            #     raise ValueError("Branch model could not be extracted for first model. Interrupting computation, as this "\
+            #                      "is a critical error for all the posterior pipeline.")
+            # elif branch_model_ is not None:
+            #     self.branch_model_list.append(branch_model_)
+            #     if save:
+            #         save_vtkpolydata(branch_model_, os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk"))
+            # else:
+            #     print(f"Branch model could not be extracted for centerline model {idx}. Skipping...")
+            if os.path.isfile(os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk")):
+                self.branch_model_list.append(load_vtkpolydata(os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk")))
             else:
                 print(f"Branch model could not be extracted for centerline model {idx}. Skipping...")
         

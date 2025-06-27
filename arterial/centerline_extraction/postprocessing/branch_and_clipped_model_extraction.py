@@ -119,28 +119,33 @@ def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSp
         acc_centerline_id = 0
         acc_group_id_branch_model = 0
         points_from_previous_branch_models = 0
+
+        # There is a bug when sometimes the cell data arrays from the branch model are in different order (i.e., their index does not correspond to the cell_data_name_to_idx dictionary, which is the most typical case)
+        # To standardize, we force a reordering of the cell data arrays to match the cell_data_name_to_idx dictionary
+        cell_data_name_to_idx = {"Blanking": 0, "CenterlineIds": 1, "TractIds": 2, "GroupIds": 3}
+
         for branch_model_idx, branch_model in enumerate(branch_model_list):
             print("Processing branch model {}...".format(branch_model_idx))
             if branch_model.GetNumberOfCells() == 0:
                 print("Error in branch model {}. Skipping".format(branch_model_idx))
             else:
                 # Get cell data
-                cell_data_array = np.ndarray([4, branch_model.GetNumberOfCells()], dtype=np.int64)
+                cell_data_array = np.zeros([4, branch_model.GetNumberOfCells()], dtype=np.int64)
                 for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
                     # Get cell data array name
                     cell_data_name = branch_model.GetCellData().GetArrayName(idx)
                     # Add to cell data array
-                    cell_data_array[idx] = vtk.util.numpy_support.vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
+                    cell_data_array[cell_data_name_to_idx[cell_data_name]] = vtk.util.numpy_support.vtk_to_numpy(branch_model.GetCellData().GetArray(cell_data_name))
                     if cell_data_name == "CenterlineIds":
                         # Add accumulated centerline id
-                        cell_data_array[idx] += acc_centerline_id
+                        cell_data_array[cell_data_name_to_idx["CenterlineIds"]] += acc_centerline_id
                         # Update accumulated centerlineId and groupId
-                        acc_centerline_id += np.amax(cell_data_array[idx]) + 1
+                        acc_centerline_id = np.amax(cell_data_array[cell_data_name_to_idx["CenterlineIds"]]) + 1
                     elif cell_data_name == "GroupIds":
                         # Add accumulated group id
-                        cell_data_array[idx] += acc_group_id_branch_model
+                        cell_data_array[cell_data_name_to_idx["GroupIds"]] += acc_group_id_branch_model
                         # Update accumulated centerlineId and groupId
-                        acc_group_id_branch_model += np.amax(cell_data_array[idx]) + 1
+                        acc_group_id_branch_model = np.amax(cell_data_array[cell_data_name_to_idx["GroupIds"]]) + 1
 
                 # Append cell_data_array from present branch_model
                 final_cell_data_array_branch_model = np.append(final_cell_data_array_branch_model, cell_data_array, axis=1)
@@ -198,9 +203,9 @@ def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSp
         unified_branch_model.SetPoints(points_branch_model)
         unified_branch_model.SetLines(cell_array_branch_model)
 
-        for idx in range(branch_model.GetCellData().GetNumberOfArrays()):
+        for cell_data_array_name, idx in cell_data_name_to_idx.items():
             unified_branch_model.GetCellData().AddArray(vtk.util.numpy_support.numpy_to_vtk(final_cell_data_array_branch_model[idx], array_type=vtk.VTK_INT))
-            unified_branch_model.GetCellData().GetArray(idx).SetName(branch_model.GetCellData().GetArrayName(idx))
+            unified_branch_model.GetCellData().GetArray(idx).SetName(cell_data_array_name)
 
         unified_branch_model.GetPointData().AddArray(vtk.util.numpy_support.numpy_to_vtk(final_radius_array))
         unified_branch_model.GetPointData().GetArray(0).SetName(radius_array_name)

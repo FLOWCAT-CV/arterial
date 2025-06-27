@@ -359,98 +359,110 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
     # In order to deliver a more complete supersegment visualization, and accurately deliver supersegments with their bifurcating segments, 
     # we will include artificial edges to the graphs, and we will divide segments (segmentsCoordinatesArray and radius_array) into new cell_ids
     # We analyze each artificial union
+    remove_edges = []
+    idx = 0
     for main_graph_node, candidate_node in subgraphs_union_edges:
-        candidate_cell_id = local_graph.nodes[candidate_node]["cell_id"]
-        # We add the position and radius of the main_graph_node to the candidate_cell_id segment to the first (or last) position of the segments arrays
-        if np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][0]) < np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][-1]):
-            coordinate_array[candidate_cell_id] = np.insert(coordinate_array[candidate_cell_id], 0, [local_graph.nodes[main_graph_node]["pos"]], axis = 0)
-            radius_array[candidate_cell_id] = np.insert(radius_array[candidate_cell_id], 0, local_graph.nodes[main_graph_node]["radius"]) 
+        # If these are really long distance connections, it may be better not to join the vessels, cause this can mess up with hierarchy computation, and these unions are not really very helpful anyway
+        if np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - local_graph.nodes[candidate_node]["pos"]) > 70: # 70 mm is a threshold for long distance connections
+            # Remove candidates
+            remove_edges.append(idx)
+            idx += 1
         else:
-            coordinate_array[candidate_cell_id] = np.append(coordinate_array[candidate_cell_id], [local_graph.nodes[main_graph_node]["pos"]], axis = 0)
-            radius_array[candidate_cell_id] = np.append(radius_array[candidate_cell_id], local_graph.nodes[main_graph_node]["radius"]) 
-        
-        # We add the edge to the graph
-        local_graph.add_edge(main_graph_node, candidate_node, cell_id = local_graph.nodes[candidate_node]["cell_id"])
-        local_graph[main_graph_node][candidate_node]["vessel_type"] = predicted_vessel_types[local_graph[main_graph_node][candidate_node]["cell_id"]]
-        local_graph[main_graph_node][candidate_node]["vessel_type_name"] = predicted_vessel_type_names[local_graph[main_graph_node][candidate_node]["cell_id"]]
-        local_graph[main_graph_node][candidate_node]["indices"] = np.array([])
-        local_graph[main_graph_node][candidate_node]["centerline_coordinate_array"] = np.ndarray([0, 3])
-        local_graph[main_graph_node][candidate_node]["centerline_radius_array"] = np.array([])
-        
-        # Now, for the modification of the segments arrays and the cell_ids and indices of nodes and edges, we perform an indepth analysis.
-        # First of all, it only makes sense to split the segment if the node has degree 2 (otherwise it will already be a border between different segments)
-        if local_graph.degree(main_graph_node) == 3:
-            # The position of the main_graph_node will be the division point between segments
-            cut_off_idx = np.argmin(np.linalg.norm(coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]] - local_graph.nodes[main_graph_node]["pos"], axis = 1))
-            # Check if segment goes downstream with respect to hierarchy. If it is, go against hierarchy. If it is not (normal case), go with hierarchy
-            downstream = False
-            for neighbor in local_graph.neighbors(main_graph_node):
-                # If neighbor with higher hierarchy has smaller indices indices than cut_off_idx, the segment is downstream. Otherwise it is not
-                if local_graph.nodes[main_graph_node]["cell_id"] == local_graph.nodes[neighbor]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] > local_graph.nodes[main_graph_node]["hierarchy femoral"] and np.mean(local_graph[neighbor][main_graph_node]["indices"]) < cut_off_idx:
-                    downstream = True
-            # We keep main_graph_node as initial previous_node for recursive node analysis
-            previous_node = main_graph_node
-            # Boolean variable to stop the neighbor sweeping
-            cell_id_change_completed = False
-            while not cell_id_change_completed:
-                # Auxiliar boolean variable to check if a neighbor fulfilling the conditions has been found
-                neighbor_found = False
-                # Sweep through neighbors of previous_node
-                for neighbor in local_graph.neighbors(previous_node):
-                    # If not downstream and there is a node with the same cell_id as the main_graph_node and a higher hierarchy
-                    if not downstream and local_graph.nodes[neighbor]["cell_id"] == local_graph.nodes[main_graph_node]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] > local_graph.nodes[previous_node]["hierarchy femoral"]:
-                        # Update node cell_id
-                        local_graph.nodes[neighbor]["cell_id"] = next_cell_id
-                        # Update edge cell_id
-                        local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
-                        # Update edge indices with cut_off_idx
-                        local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
-                        # Eliminate negative edges if found
-                        while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
-                            local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
-                            local_graph[previous_node][neighbor]["centerline_coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_coordinate_array"], 0, axis = 0)
-                            local_graph[previous_node][neighbor]["centerline_radius_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_radius_array"], 0)
-                        # Update previous_node
-                        previous_node = neighbor
-                        # Check found neighbor
-                        neighbor_found = True
-                    # If downstream and there is a node with the same cell_id as the main_graph_node and a lower hierarchy
-                    elif downstream and local_graph.nodes[neighbor]["cell_id"] == local_graph.nodes[main_graph_node]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] < local_graph.nodes[previous_node]["hierarchy femoral"]:
-                        # Update node cell_id
-                        local_graph.nodes[neighbor]["cell_id"] = next_cell_id
-                        # Update edge cell_id
-                        local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
-                        # Update edge indices with cut_off_idx
-                        local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
-                        while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
-                            local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
-                            local_graph[previous_node][neighbor]["centerline_coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_coordinate_array"], 0, axis = 0)
-                            local_graph[previous_node][neighbor]["centerline_radius_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_radius_array"], 0)
-                        # Update previous_node
-                        previous_node = neighbor
-                        # Check found neighbor
-                        neighbor_found = True
-                # When a neighbor fulfilling the conditions is not found, the graph update is complete
-                if not neighbor_found:
-                    cell_id_change_completed = True
-            # Now update the coordinate_array and the radius_array
-            # Create a new object at the end of the array
-            coordinate_array = np.hstack((coordinate_array, np.empty(1)))
-            # The new cell will contain all points from the original cell_id from cut_off_idx onwards
-            coordinate_array[next_cell_id] = coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
-            # The original cell will only keep points up until cut_off_idx (included)
-            coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]] = coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
-            # Create a new object at the end of the array
-            radius_array = np.hstack((radius_array, np.empty(1)))
-            # The new cell will contain all points from the original cell_id from cut_off_idx onwards
-            radius_array[next_cell_id] = radius_array[local_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
-            # The original cell will only keep points up until cut_off_idx (included)
-            radius_array[local_graph.nodes[main_graph_node]["cell_id"]] = radius_array[local_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
-            # Also, add new cell_id to label dicts
-            predicted_vessel_types[next_cell_id] = predicted_vessel_types[local_graph.nodes[main_graph_node]["cell_id"]]
-            predicted_vessel_type_names[next_cell_id] = predicted_vessel_type_names[local_graph.nodes[main_graph_node]["cell_id"]]
-            # Update next_cell_id
-            next_cell_id += 1
+            candidate_cell_id = local_graph.nodes[candidate_node]["cell_id"]
+            # We add the position and radius of the main_graph_node to the candidate_cell_id segment to the first (or last) position of the segments arrays
+            if np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][0]) < np.linalg.norm(local_graph.nodes[main_graph_node]["pos"] - coordinate_array[candidate_cell_id][-1]):
+                coordinate_array[candidate_cell_id] = np.insert(coordinate_array[candidate_cell_id], 0, [local_graph.nodes[main_graph_node]["pos"]], axis = 0)
+                radius_array[candidate_cell_id] = np.insert(radius_array[candidate_cell_id], 0, local_graph.nodes[main_graph_node]["radius"]) 
+            else:
+                coordinate_array[candidate_cell_id] = np.append(coordinate_array[candidate_cell_id], [local_graph.nodes[main_graph_node]["pos"]], axis = 0)
+                radius_array[candidate_cell_id] = np.append(radius_array[candidate_cell_id], local_graph.nodes[main_graph_node]["radius"]) 
+            
+            # We add the edge to the graph
+            local_graph.add_edge(main_graph_node, candidate_node, cell_id = local_graph.nodes[candidate_node]["cell_id"])
+            local_graph[main_graph_node][candidate_node]["vessel_type"] = predicted_vessel_types[local_graph[main_graph_node][candidate_node]["cell_id"]]
+            local_graph[main_graph_node][candidate_node]["vessel_type_name"] = predicted_vessel_type_names[local_graph[main_graph_node][candidate_node]["cell_id"]]
+            local_graph[main_graph_node][candidate_node]["indices"] = np.array([])
+            local_graph[main_graph_node][candidate_node]["centerline_coordinate_array"] = np.ndarray([0, 3])
+            local_graph[main_graph_node][candidate_node]["centerline_radius_array"] = np.array([])
+            
+            # Now, for the modification of the segments arrays and the cell_ids and indices of nodes and edges, we perform an indepth analysis.
+            # First of all, it only makes sense to split the segment if the node has degree 2 (otherwise it will already be a border between different segments)
+            if local_graph.degree(main_graph_node) == 3:
+                # The position of the main_graph_node will be the division point between segments
+                cut_off_idx = np.argmin(np.linalg.norm(coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]] - local_graph.nodes[main_graph_node]["pos"], axis = 1))
+                # Check if segment goes downstream with respect to hierarchy. If it is, go against hierarchy. If it is not (normal case), go with hierarchy
+                downstream = False
+                for neighbor in local_graph.neighbors(main_graph_node):
+                    # If neighbor with higher hierarchy has smaller indices indices than cut_off_idx, the segment is downstream. Otherwise it is not
+                    if local_graph.nodes[main_graph_node]["cell_id"] == local_graph.nodes[neighbor]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] > local_graph.nodes[main_graph_node]["hierarchy femoral"] and np.mean(local_graph[neighbor][main_graph_node]["indices"]) < cut_off_idx:
+                        downstream = True
+                # We keep main_graph_node as initial previous_node for recursive node analysis
+                previous_node = main_graph_node
+                # Boolean variable to stop the neighbor sweeping
+                cell_id_change_completed = False
+                while not cell_id_change_completed:
+                    # Auxiliar boolean variable to check if a neighbor fulfilling the conditions has been found
+                    neighbor_found = False
+                    # Sweep through neighbors of previous_node
+                    for neighbor in local_graph.neighbors(previous_node):
+                        # If not downstream and there is a node with the same cell_id as the main_graph_node and a higher hierarchy
+                        if not downstream and local_graph.nodes[neighbor]["cell_id"] == local_graph.nodes[main_graph_node]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] > local_graph.nodes[previous_node]["hierarchy femoral"]:
+                            # Update node cell_id
+                            local_graph.nodes[neighbor]["cell_id"] = next_cell_id
+                            # Update edge cell_id
+                            local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
+                            # Update edge indices with cut_off_idx
+                            local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
+                            # Eliminate negative edges if found
+                            while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
+                                local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
+                                local_graph[previous_node][neighbor]["centerline_coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_coordinate_array"], 0, axis = 0)
+                                local_graph[previous_node][neighbor]["centerline_radius_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_radius_array"], 0)
+                            # Update previous_node
+                            previous_node = neighbor
+                            # Check found neighbor
+                            neighbor_found = True
+                        # If downstream and there is a node with the same cell_id as the main_graph_node and a lower hierarchy
+                        elif downstream and local_graph.nodes[neighbor]["cell_id"] == local_graph.nodes[main_graph_node]["cell_id"] and local_graph.nodes[neighbor]["hierarchy femoral"] < local_graph.nodes[previous_node]["hierarchy femoral"]:
+                            # Update node cell_id
+                            local_graph.nodes[neighbor]["cell_id"] = next_cell_id
+                            # Update edge cell_id
+                            local_graph[previous_node][neighbor]["cell_id"] = next_cell_id
+                            # Update edge indices with cut_off_idx
+                            local_graph[previous_node][neighbor]["indices"] = local_graph[previous_node][neighbor]["indices"] - cut_off_idx
+                            while local_graph[previous_node][neighbor]["indices"][0] < 0 and len(local_graph[previous_node][neighbor]["indices"]) > 1:
+                                local_graph[previous_node][neighbor]["indices"] = np.delete(local_graph[previous_node][neighbor]["indices"], 0)
+                                local_graph[previous_node][neighbor]["centerline_coordinate_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_coordinate_array"], 0, axis = 0)
+                                local_graph[previous_node][neighbor]["centerline_radius_array"] = np.delete(local_graph[previous_node][neighbor]["centerline_radius_array"], 0)
+                            # Update previous_node
+                            previous_node = neighbor
+                            # Check found neighbor
+                            neighbor_found = True
+                    # When a neighbor fulfilling the conditions is not found, the graph update is complete
+                    if not neighbor_found:
+                        cell_id_change_completed = True
+                # Now update the coordinate_array and the radius_array
+                # Create a new object at the end of the array
+                coordinate_array = np.hstack((coordinate_array, np.empty(1)))
+                # The new cell will contain all points from the original cell_id from cut_off_idx onwards
+                coordinate_array[next_cell_id] = coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
+                # The original cell will only keep points up until cut_off_idx (included)
+                coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]] = coordinate_array[local_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
+                # Create a new object at the end of the array
+                radius_array = np.hstack((radius_array, np.empty(1)))
+                # The new cell will contain all points from the original cell_id from cut_off_idx onwards
+                radius_array[next_cell_id] = radius_array[local_graph.nodes[main_graph_node]["cell_id"]][cut_off_idx:]
+                # The original cell will only keep points up until cut_off_idx (included)
+                radius_array[local_graph.nodes[main_graph_node]["cell_id"]] = radius_array[local_graph.nodes[main_graph_node]["cell_id"]][:cut_off_idx + 1]
+                # Also, add new cell_id to label dicts
+                predicted_vessel_types[next_cell_id] = predicted_vessel_types[local_graph.nodes[main_graph_node]["cell_id"]]
+                predicted_vessel_type_names[next_cell_id] = predicted_vessel_type_names[local_graph.nodes[main_graph_node]["cell_id"]]
+                # Update next_cell_id
+                next_cell_id += 1
+            idx += 1
+
+    # Remove edges that were too long
+    subgraphs_union_edges = [edge for idx, edge in enumerate(subgraphs_union_edges) if idx not in remove_edges]
 
     nodes_in_subgraph_union_edges = []
     for src, dst in subgraphs_union_edges:
