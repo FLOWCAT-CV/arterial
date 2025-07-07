@@ -30,8 +30,8 @@ class SingleCTADataset:
         tio_object = tio.ScalarImage(cta_path)
 
         # Preprocess in memory
-        resampled = resample_image(tio_object, (0.8, 0.8, 0.8))
-        cropped_or_padded = crop_or_pad_image(resampled, (320, 320, 480))
+        resampled = resample_image(tio_object, (0.6, 0.6, 0.6))
+        cropped_or_padded = crop_or_pad_image(resampled, (352, 352, 512))
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
 
         # Get as nibabel image directly (no disk write)
@@ -63,7 +63,7 @@ class LandmarkAutomator:
         return volume, sample
 
     def _postprocess_and_save(self, preds, sample, output_folder, save_mask=True, save_json=True):
-        preds = preds.cpu().numpy()[0]  # (5, D, H, W)
+        preds = preds.cpu().numpy()[0]  # (7, D, H, W)
         combined = np.zeros(preds.shape[1:], dtype=np.uint8)
         confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)
 
@@ -72,9 +72,9 @@ class LandmarkAutomator:
             confidence_map[mask] = preds[c][mask]
             combined[mask] = c
 
-        centroids_voxel = np.zeros((4, 3), dtype=np.float32)
+        centroids_voxel = np.zeros((6, 3), dtype=np.float32)
         all_largest_components = []
-        for label in range(1, 5):
+        for label in range(1, 7):
             binary_mask = (combined == label).astype(np.uint8)
             kernel = np.ones((2, 2), np.uint8)
             binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
@@ -89,7 +89,7 @@ class LandmarkAutomator:
         for i, mask in enumerate(all_largest_components):
             combined_largest_components[mask] = i + 1
 
-        centroids_mm = centroids_voxel * 0.8
+        centroids_mm = centroids_voxel * 0.6
         affine = sample["affine"]
         orientation = nib.aff2axcodes(affine)
 

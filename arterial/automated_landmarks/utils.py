@@ -34,7 +34,7 @@ def crop_or_pad_image(image, target_shape):
     return tio.CropOrPad(target_shape)(image)
 
 ###just in case we need batch processing
-def process_files_resample(folder_path, new_voxel_size=(0.8, 0.8, 0.8)):
+def process_files_resample(folder_path, new_voxel_size=(0.6, 0.6, 0.6)):
     """
     Resample all NIfTI files in the given folder to a new voxel size.
     Args:
@@ -48,7 +48,7 @@ def process_files_resample(folder_path, new_voxel_size=(0.8, 0.8, 0.8)):
             resampled.save(file_path)
             print(f"Resampled: {file_path}")
             
-def process_files_crop(folder_path, target_shape=(320, 320, 480)):
+def process_files_crop(folder_path, target_shape=(352, 352, 512)):
     """
     Crop or pad all NIfTI files in the given folder to a target shape.
     Args:
@@ -65,22 +65,20 @@ def process_files_crop(folder_path, target_shape=(320, 320, 480)):
 ### adding origin changer functions required in the original setup of CarotiCAT
 ### this function is used to change the origin of the nifti file to a new origin
 def change_origin_preprocess(nifti_path, new_origin):
-    """
-    Change the origin of a NIfTI file to a new origin.
-    Args:
-        nifti_path (str): The path to the NIfTI file.
-        new_origin (tuple): The new origin in mm (x, y, z).
-    Returns:
-        str: The path to the modified NIfTI file.
-    """
     img = nib.load(nifti_path)
     data = img.get_fdata()
     affine = img.affine
+
     new_affine = np.copy(affine)
-    #save the previous affine in a txt in the same folder before changing it
     np.savetxt(os.path.join(os.path.dirname(nifti_path), "affine_before_origin_change.txt"), affine)
     new_affine[:3, 3] = new_origin
-    new_img = nib.Nifti1Image(data, new_affine)
+
+    new_img = nib.Nifti1Image(data, new_affine, header=img.header)
+
+    # Force both qform and sform to match the new affine, with appropriate codes
+    new_img.set_qform(new_affine, code=1)  # NIFTI_XFORM_SCANNER_ANAT
+    new_img.set_sform(new_affine, code=1)
+
     nib.save(new_img, nifti_path)
     return nifti_path
 
@@ -140,7 +138,7 @@ def actualizar_json_con_predicciones(predichas, output_json_path, original_json_
     with open(json_to_use, 'r') as f:
         data = json.load(f)
 
-    label_to_index = {"l-tica": 0, "r-tica": 1, "l-eica": 2, "r-eica": 3}
+    label_to_index = {"l-tica": 0, "r-tica": 1, "l-eica": 2, "r-eica": 3, "r-mca": 4, "l-mca": 5}
     control_points = data["markups"][0]["controlPoints"]
     for cp in control_points:
         label = cp.get("label")

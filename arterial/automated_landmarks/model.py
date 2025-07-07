@@ -5,7 +5,7 @@ from monai.networks.layers import Norm
 import torch.nn.functional as F
 
 class MonaiUNet3DSeg(nn.Module):
-    def __init__(self, num_classes=5):
+    def __init__(self, num_classes=7):
         super().__init__()
         self.unet = UNet(
             spatial_dims=3,
