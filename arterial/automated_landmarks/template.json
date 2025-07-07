@@ -57,6 +57,30 @@
                     "locked": false,
                     "visibility": true,
                     "positionStatus": "defined"
+                },
+                {
+                    "id": "6",
+                    "label": "l-mca",
+                    "description": "",
+                    "associatedNodeID": "",
+                    "position": [32.987992562753554, -208.9896271885305, 110.65052494309853],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": true,
+                    "locked": false,
+                    "visibility": true,
+                    "positionStatus": "defined"
+                },
+                {
+                    "id": "7",
+                    "label": "r-mca",
+                    "description": "",
+                    "associatedNodeID": "",
+                    "position": [-40.6152522477293, -207.81492441101526, 114.65077738222985],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": true,
+                    "locked": false,
+                    "visibility": true,
+                    "positionStatus": "defined"
                 }
             ],
             "measurements": [],
