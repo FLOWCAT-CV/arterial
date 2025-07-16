@@ -34,7 +34,7 @@ def crop_or_pad_image(image, target_shape):
     return tio.CropOrPad(target_shape)(image)
 
 ###just in case we need batch processing
-def process_files_resample(folder_path, new_voxel_size=(0.6, 0.6, 0.6)):
+def process_files_resample(folder_path, new_voxel_size=(0.8, 0.8, 0.8)):
     """
     Resample all NIfTI files in the given folder to a new voxel size.
     Args:
@@ -48,7 +48,7 @@ def process_files_resample(folder_path, new_voxel_size=(0.6, 0.6, 0.6)):
             resampled.save(file_path)
             print(f"Resampled: {file_path}")
             
-def process_files_crop(folder_path, target_shape=(352, 352, 512)):
+def process_files_crop(folder_path, target_shape=(320, 320, 480)):
     """
     Crop or pad all NIfTI files in the given folder to a target shape.
     Args:

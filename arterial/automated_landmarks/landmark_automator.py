@@ -30,8 +30,8 @@ class SingleCTADataset:
         tio_object = tio.ScalarImage(cta_path)
 
         # Preprocess in memory
-        resampled = resample_image(tio_object, (0.6, 0.6, 0.6))
-        cropped_or_padded = crop_or_pad_image(resampled, (352, 352, 512))
+        resampled = resample_image(tio_object, (0.8, 0.8, 0.8))
+        cropped_or_padded = crop_or_pad_image(resampled, (320, 320, 480))
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
 
         # Get as nibabel image directly (no disk write)
