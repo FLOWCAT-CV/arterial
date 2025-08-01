@@ -1,10 +1,16 @@
 #    Copyright 2022 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
+import os
+import torch
+
 import numpy as np
 import nibabel as nib
-
+from time import time
 from scipy.ndimage import gaussian_laplace
 from skimage.measure import label
+from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+
+from totalsegmentator.python_api import totalsegmentator
 
 def get_largest_connected_component(segmentation):
     """
@@ -32,8 +38,92 @@ def get_largest_connected_component(segmentation):
 
     return largest_connected_component  
 
-def slice_cta_head_and_neck(cta_array, cta_affine):
+def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
     """
+    Runs TotalSegmentator for cranium segmentation. If the scan is long (axial length > 240 mm),
+    it only considers the upper half of the scan for speed. Otherwise, it considers the whole scan.
+
+    If the spacing coeff are all within 0.3 mm of 0.5 mm, we can ignore preprocessing. 
+    To do that, we have to set the spacing to 0.5 mm artificially.
+
+    Parameters
+    ----------
+    cta_array : numpy.ndarray or array-like object
+        Numpy array with the CTA image.
+    cta_affine : numpy.ndarray
+        Affine matrix of the CTA.
+
+    Returns
+    -------
+    cranium_mask : numpy.ndarray or array-like object
+        Numpy array with the cranium mask.
+
+    """
+    start = time()
+    # If axial length of scan is more than 240mm, we can ignore lower part of the scan for speed
+    final_mask = np.zeros_like(cta_array)
+    only_upper_half = False
+    if cta_affine[2, 2] * cta_array.shape[2] > 240:
+        print("Long scan (axial >240 mm), assuming head-and-neck CTA and only considering upper half for cranium segmentation")
+        cta_array = cta_array[:, :, cta_array.shape[2] // 2:]
+        only_upper_half = True
+
+    # If spacing coeff are all within 0.3 mm of 0.5 mm, we can ignore preprocessing. To do that, we have to set the spacing to 0.5 mm artificially
+    props = {"spacing": tuple(np.abs(np.diag(cta_affine, k=0)[:3][::-1]))}
+    if np.allclose(np.abs(np.diag(cta_affine, k=0)[:3][::-1]), 0.5, atol=0.3):
+        print("Spacing coeff are all within 0.3 mm of 0.5 mm, disabling preprocessing")
+        # We manually set the spacing to 0.5 mm to avoid preprocessing
+        props['spacing'] = (0.5, 0.5, 0.5)
+
+    img = np.expand_dims(cta_array.transpose([2, 1, 0]), axis=0).astype(np.float32)  # reverse axis order to match SITK (from nnunetv2 repo)
+
+    # Read device
+    device = torch.device("cpu") # This will take forever on 'cpu', only to be used for debugging
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+
+    print(f"Using device: {device}")
+
+    # Instantiate the nnUNetPredictor
+    predictor = nnUNetPredictor(
+        tile_step_size=0.75,
+        use_gaussian=True,
+        use_mirroring=True,
+        perform_everything_on_device=True,
+        device=device,
+        verbose=True,
+        verbose_preprocessing=False,
+        allow_tqdm=True
+    )
+    # Initializes the network architecture, loads the checkpoint
+    predictor.initialize_from_trained_model_folder(
+        os.path.join(os.environ["arterial_dir"], 'segmentation/models/totalsegmentator_mandible/nnUNetTrainer_DASegOrd0_NoMirroring__nnUNetPlans__3d_fullres'),
+        use_folds=("0"), 
+        checkpoint_name='checkpoint_final.pth',
+    )
+
+    # Perform inference
+    segmentation_array = predictor.predict_single_npy_array(img, props, None, None, False)
+    # Reverse axis order to match nibabel
+    segmentation_array = segmentation_array.transpose([2, 1, 0])
+
+    # Add segmentation to final mask
+    if only_upper_half:
+        final_mask[:, :, final_mask.shape[2] // 2:] = segmentation_array
+    else:
+        final_mask = segmentation_array
+    
+    # Get skull mask
+    cranium_mask = final_mask == 3
+    # Get largest connected component
+    cranium_mask = get_largest_connected_component(cranium_mask)
+
+    print("Time needed for cranium segmentation: {:.2f} s".format(time() - start))
+
+    return cranium_mask
+
+def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
+    """cranium_mask
     This funciton enables slicing of head and neck parts of the CTA ({case_id}.nii.gz)
     by using a Laplacian of Gaussian filter (scipy) to perform a segmentation
     of the cranium. That information is used to slice the original CTA
@@ -56,31 +146,54 @@ def slice_cta_head_and_neck(cta_array, cta_affine):
         Affine matrix of the head CTA.
 
     """    
-    # Apply laplacian-gaussian filter to upper half of the CTA image
-    half_s_coordinate = cta_array.shape[2] // 2
-    upper_half_cta_array = cta_array[:, :, half_s_coordinate:]    
-    filtered_upper_half_cta_array = gaussian_laplace(upper_half_cta_array, sigma = 0.0001, mode = "nearest")
+    if use_laplacian:
+        # Apply laplacian-gaussian filter to upper half of the CTA image
+        half_s_coordinate = cta_array.shape[2] // 2
+        upper_half_cta_array = cta_array[:, :, half_s_coordinate:]    
+        filtered_upper_half_cta_array = gaussian_laplace(upper_half_cta_array, sigma = 0.0001, mode = "nearest")
 
-    # Get cranium binary mask
-    tolerance = 0.43 * np.ptp(filtered_upper_half_cta_array)
-    threshold = np.min(filtered_upper_half_cta_array) + tolerance
-    cranium_mask = np.where(filtered_upper_half_cta_array <= threshold, np.max(cta_array), 0)
-    # Get largest connected component
-    cranium_mask = get_largest_connected_component(cranium_mask)
-    # Get lowest coordinate with a non-zero voxel from cranium mask 
-    nonzero_coordinates = np.nonzero(cranium_mask)
-    # Get s coordinate for slicing into head and neck
-    lower_slicing_i_coordinate = min(nonzero_coordinates[0])
-    upper_slicing_i_coordinate = max(nonzero_coordinates[0])
-    lower_slicing_j_coordinate = min(nonzero_coordinates[1])
-    upper_slicing_j_coordinate = max(nonzero_coordinates[1])
-    lower_slicing_k_coordinate = half_s_coordinate + min(nonzero_coordinates[2])
-    upper_slicing_k_coordinate = half_s_coordinate + max(nonzero_coordinates[2])
-    
+        # Get cranium binary mask
+        tolerance = 0.43 * np.ptp(filtered_upper_half_cta_array)
+        threshold = np.min(filtered_upper_half_cta_array) + tolerance
+        cranium_mask = np.where(filtered_upper_half_cta_array <= threshold, np.max(cta_array), 0)
+        # Get largest connected component
+        cranium_mask = get_largest_connected_component(cranium_mask)
+        # Get lowest coordinate with a non-zero voxel from cranium mask 
+        nonzero_coordinates = np.nonzero(cranium_mask)
+        print("cranium_mask.shape", cranium_mask.shape)
+        print("nonzero_coordinates", nonzero_coordinates)
+        # Get s coordinate for slicing into head and neck
+        lower_slicing_i_coordinate = min(nonzero_coordinates[0])
+        upper_slicing_i_coordinate = max(nonzero_coordinates[0])
+        lower_slicing_j_coordinate = min(nonzero_coordinates[1])
+        upper_slicing_j_coordinate = max(nonzero_coordinates[1])
+        lower_slicing_k_coordinate = half_s_coordinate + min(nonzero_coordinates[2])
+        upper_slicing_k_coordinate = half_s_coordinate + max(nonzero_coordinates[2])
+    else:
+        # Run TotalSegmentator directly, getting all head structures
+        try:
+            cranium_mask = run_cranium_segmentation_totalsegmentator(cta_array, cta_affine)
+        except Exception as e:
+            print(f"Error running TotalSegmentator: {e}")
+            print("TotalSegmentator failed, using laplacian-gaussian filter instead...")
+            return slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=True)
+
+        # Get lowest coordinate with a non-zero voxel from cranium mask 
+        nonzero_coordinates = np.nonzero(cranium_mask)
+        # Get s coordinate for slicing into head and neck
+        lower_slicing_i_coordinate = min(nonzero_coordinates[0])
+        upper_slicing_i_coordinate = max(nonzero_coordinates[0])
+        lower_slicing_j_coordinate = min(nonzero_coordinates[1])
+        upper_slicing_j_coordinate = max(nonzero_coordinates[1])
+        lower_slicing_k_coordinate = min(nonzero_coordinates[2])
+        upper_slicing_k_coordinate = max(nonzero_coordinates[2])
+
     # Slice cta into two (head and neck)
-    cta_head_array = cta_array[lower_slicing_i_coordinate:upper_slicing_i_coordinate, 
-                               lower_slicing_j_coordinate:upper_slicing_j_coordinate, 
-                               lower_slicing_k_coordinate:upper_slicing_k_coordinate]
+    cta_head_array = cta_array[
+        lower_slicing_i_coordinate:upper_slicing_i_coordinate, 
+        lower_slicing_j_coordinate:upper_slicing_j_coordinate, 
+        lower_slicing_k_coordinate:upper_slicing_k_coordinate
+        ]
     
     # For the neck (lower part of the image) we add some extra slices to have some overlap
     # This should smooth edge effects upon merge after separate segmentation

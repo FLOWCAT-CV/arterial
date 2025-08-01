@@ -63,10 +63,11 @@ def featurize_node(local_graph, node, access, cta_array, cta_affine, lpi_corner_
     local_graph.nodes[node][f"features {access}"]["direction polar"] = polar
     local_graph.nodes[node][f"features {access}"]["direction azimuth"] = azimuth
     # Other features
-    if branch_model_coordinates is not None and blanking is not None:
+    if len(branch_model_coordinates) > 0 and blanking is not None:
         local_graph.nodes[node][f"features {access}"]["blanking"] = blanking[find_point_id(node_pos, branch_model_coordinates)]
     else:
         local_graph.nodes[node][f"features {access}"]["blanking"] = 0
+
     # Tranform to ijk
     i, j, k = np.matmul(np.linalg.inv(cta_affine), np.append(node_pos + lpi_corner_coordinates, 1.0))[:3].astype(int)
     local_graph.nodes[node][f"features {access}"]["HU intensity"] = cta_array[i, j, k]
