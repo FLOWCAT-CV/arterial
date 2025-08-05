@@ -41,7 +41,7 @@ def extract_centerlines_full_cta(segmentation_model, segmentation_array, segment
         print("Number of cells after centerline cleaning:", centerlines.GetNumberOfCells())
         
     if centerlines.GetNumberOfCells() == 0:
-        return None, None, None
+        return None, None, None, None
     else:
         return centerlines, network, voronoi, endpoints_json
     
