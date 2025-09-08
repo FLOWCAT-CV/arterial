@@ -1,3 +1,5 @@
+#   Copyright 2025   Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+
 import os
 import numpy as np
 import torch
@@ -17,7 +19,21 @@ from model import load_trained_model_seg
 from io.load_and_save_operations import save_nifti
 
 class SingleCTADataset:
+    """
+    Dataset class for loading a single CTA image.
+    Parameters
+    ----------
+        folder_path (str): Path to the folder containing 'cta.nii.gz'.
+    Returns
+    -------
+        dict: A dictionary with keys 'volume', 'affine', and 'folder'.
+    """
     def __init__(self, folder_path: str):
+        """Initialize the dataset with the folder path.
+        Parameters
+        ----------
+            folder_path (str): Path to the folder containing 'cta.nii.gz'.
+        """
         self.folder_path = folder_path
 
     def __len__(self):
@@ -51,6 +67,17 @@ class SingleCTADataset:
         }
 
 class LandmarkAutomator:
+    """
+    Class for automating landmark extraction from CTA images.
+    Parameters
+    ----------
+        model_path (str): Path to the trained model file.
+        device (str, optional): Device to run the model on ('cpu' or 'cuda'). Defaults to None, which auto-selects.
+    Methods
+    -------
+        infer_folder(folder_path, output_folder, save_mask=True, save_json=True):
+            Perform inference on a folder containing 'cta.nii.gz' and save results.
+    """
     def __init__(self, model_path: str, device: str = None):
         self.device = torch.device(device if device else ("cuda" if torch.cuda.is_available() else "cpu"))
         self.model = load_trained_model_seg(model_path, self.device)
@@ -63,6 +90,17 @@ class LandmarkAutomator:
         return volume, sample
 
     def _postprocess_and_save(self, preds, sample, output_folder, save_mask=True, save_json=True):
+        """
+        Post-process the model predictions and save the results.
+        Parameters
+        ----------
+            preds (torch.Tensor): Model predictions.
+            sample (dict): Sample dictionary containing 'affine' and 'folder'.
+            output_folder (str): Folder to save the output results.
+            save_mask (bool, optional): Whether to save the predicted mask. Defaults to True.
+            save_json (bool, optional): Whether to save the predicted landmarks in JSON. Defaults to True.
+        
+        """
         preds = preds.cpu().numpy()[0]  # (7, D, H, W)
         combined = np.zeros(preds.shape[1:], dtype=np.uint8)
         confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)

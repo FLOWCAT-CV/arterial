@@ -26,6 +26,7 @@ setup(
         'vtk',
         'torchio',
         'cc3d',
-        'opencv-python'
+        'opencv-python',
+        'monai'
         ]
 )

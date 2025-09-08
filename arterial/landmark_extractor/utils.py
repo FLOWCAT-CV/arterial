@@ -1,3 +1,5 @@
+#   Copyright 2025 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+
 ####utils for CarotiCAT
 
 ###starting with preprocessing functions: resampling and cropping
@@ -65,6 +67,16 @@ def process_files_crop(folder_path, target_shape=(320, 320, 480)):
 ### adding origin changer functions required in the original setup of CarotiCAT
 ### this function is used to change the origin of the nifti file to a new origin
 def change_origin_preprocess(nifti_path, new_origin):
+    """
+    Change the origin of a NIfTI file to a new origin.
+    Parameters
+    ----------
+        nifti_path (str): The path to the NIfTI file.
+        new_origin (tuple): The new origin in mm (x, y, z).
+    Returns
+    -------
+        str: The path to the modified NIfTI file.
+    """
     img = nib.load(nifti_path)
     data = img.get_fdata()
     affine = img.affine
@@ -85,7 +97,8 @@ def change_origin_preprocess(nifti_path, new_origin):
 def process_files_change_origin(folder_path, new_origin=(0, 0, 0)):
     """
     Change the origin of all NIfTI files in the given folder to a new origin.
-    Args:
+    Parameters
+    ----------
         folder_path (str): The path to the folder containing NIfTI files.
         new_origin (tuple): The new origin in mm (x, y, z).
     """
@@ -97,11 +110,13 @@ def process_files_change_origin(folder_path, new_origin=(0, 0, 0)):
 def restore_centroids_to_original_origin(centroids_mm, affine_path, image_orientation):
     """
     Restore centroids to the original image space using the affine transformation.
-    Args:
+    Parameters
+    ----------
         centroids_mm (np.ndarray): Centroids in mm to be restored.
         affine_path (str): Path to the affine transformation file.
         image_orientation (tuple): Orientation of the image (e.g., ('L', 'P', 'S')).
-    Returns:
+    Returns
+    -------
         np.ndarray: Centroids restored to the original image space.
     """
     affine = np.loadtxt(affine_path)
@@ -127,7 +142,8 @@ def restore_centroids_to_original_origin(centroids_mm, affine_path, image_orient
 def actualizar_json_con_predicciones(predichas, output_json_path, original_json_path=None, template_json_path="configs/template_landmark.json"):
     """
     Update the JSON file with predicted control points.
-    Args:
+    Parameters
+    ----------
         predichas (np.ndarray): Predicted control points.
         output_json_path (str): Path to save the updated JSON file.
         original_json_path (str): Path to the original JSON file (if any).

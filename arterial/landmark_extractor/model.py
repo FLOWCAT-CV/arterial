@@ -1,3 +1,5 @@
+#   Copyright 2025 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+
 import torch
 import torch.nn as nn
 from monai.networks.nets import UNet
@@ -5,6 +7,19 @@ from monai.networks.layers import Norm
 import torch.nn.functional as F
 
 class MonaiUNet3DSeg(nn.Module):
+    """3D U-Net model for segmentation using MONAI.
+    Parameters
+    ----------
+        num_classes (int): Number of output classes for segmentation.
+        0: background
+        1: ICA-L
+        2: ICA-R
+        3: MCA-L
+        4: MCA-R
+        5: ACA-L
+        6: ACA-R
+    Returns
+    """
     def __init__(self, num_classes=7):
         super().__init__()
         self.unet = UNet(
