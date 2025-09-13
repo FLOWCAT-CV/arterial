@@ -18,7 +18,6 @@ class MonaiUNet3DSeg(nn.Module):
         4: MCA-R
         5: ACA-L
         6: ACA-R
-    Returns
     """
     def __init__(self, num_classes=7):
         super().__init__()

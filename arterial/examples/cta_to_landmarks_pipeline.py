@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""
+Minimal CTA to Landmarks Pipeline
+
+This script demonstrates how to extract landmarks from a CTA image using the arterial package.
+The pipeline requires:
+1. A folder containing 'cta.nii.gz' file
+2. A trained landmark extraction model
+3. The folder should also contain 'F.json' (template) and 'affine_before_origin_change.txt' files
+
+Example usage:
+    python cta_to_landmarks_pipeline.py --input_folder /path/to/cta/folder --output_folder /path/to/output --model_path /path/to/model.pth
+"""
+
+import os
+import sys
+import argparse
+import shutil
+import json
+import numpy as np
+
+# Add the parent directory to the path to import arterial modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from landmark_extraction.landmark_extractor import LandmarkAutomator
+
+
+def create_required_files(input_folder):
+    """
+    Create required files if they don't exist in the input folder.
+    
+    Parameters:
+    -----------
+    input_folder : str
+        Path to the folder containing the CTA file
+    """
+    # Check if F.json exists, if not create from template
+    f_json_path = os.path.join(input_folder, "F.json")
+    if not os.path.exists(f_json_path):
+        template_path = os.path.join(os.path.dirname(__file__), "..", "landmark_extraction", "template.json")
+        if os.path.exists(template_path):
+            shutil.copy(template_path, f_json_path)
+            print(f"Created F.json from template at {f_json_path}")
+        else:
+            print(f"Warning: Template file not found at {template_path}")
+    
+    # Create a dummy affine file if it doesn't exist
+    affine_path = os.path.join(input_folder, "affine_before_origin_change.txt")
+    if not os.path.exists(affine_path):
+        # Create identity affine transformation
+        identity_affine = np.eye(4)
+        np.savetxt(affine_path, identity_affine)
+        print(f"Created dummy affine file at {affine_path}")
+
+
+def validate_inputs(input_folder, model_path):
+    """
+    Validate that all required inputs exist.
+    
+    Parameters:
+    -----------
+    input_folder : str
+        Path to the folder containing the CTA file
+    model_path : str
+        Path to the trained model file
+        
+    Returns:
+    --------
+    bool
+        True if all inputs are valid, False otherwise
+    """
+    # Check if input folder exists
+    if not os.path.exists(input_folder):
+        print(f"Error: Input folder {input_folder} does not exist")
+        return False
+    
+    # Check if CTA file exists
+    cta_path = os.path.join(input_folder, "cta.nii.gz")
+    if not os.path.exists(cta_path):
+        print(f"Error: CTA file not found at {cta_path}")
+        return False
+    
+    # Check if model exists
+    if not os.path.exists(model_path):
+        print(f"Error: Model file not found at {model_path}")
+        return False
+    
+    return True
+
+
+def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, device='auto'):
+    """
+    Run the complete CTA to landmarks pipeline.
+    
+    Parameters:
+    -----------
+    input_folder : str
+        Path to the folder containing 'cta.nii.gz'
+    output_folder : str
+        Path to save the output landmarks and masks
+    model_path : str
+        Path to the trained landmark extraction model
+    device : str
+        Device to run inference on ('cpu', 'cuda', or 'auto')
+    """
+    
+    print("=" * 60)
+    print("CTA to Landmarks Pipeline")
+    print("=" * 60)
+    
+    # Validate inputs
+    if not validate_inputs(input_folder, model_path):
+        return False
+    
+    # Create required files if missing
+    create_required_files(input_folder)
+    
+    # Create output directory
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Initialize the landmark automator
+    print(f"Initializing LandmarkAutomator with model: {model_path}")
+    print(f"Using device: {device}")
+    
+    try:
+        landmark_automator = LandmarkAutomator(
+            model_path=model_path,
+            device=device if device != 'auto' else None
+        )
+        print("✓ LandmarkAutomator initialized successfully")
+    except Exception as e:
+        print(f"✗ Error initializing LandmarkAutomator: {e}")
+        return False
+    
+    # Run inference
+    print(f"Processing CTA from: {input_folder}")
+    print(f"Saving results to: {output_folder}")
+    
+    try:
+        landmark_automator.infer_folder(
+            folder_path=input_folder,
+            output_folder=output_folder,
+            save_mask=True,
+            save_json=True
+        )
+        print("✓ Landmark extraction completed successfully")
+        
+        # Print results summary
+        case_name = os.path.basename(input_folder)
+        output_case_folder = os.path.join(output_folder, case_name)
+        
+        print("\nResults saved:")
+        pred_mask_path = os.path.join(output_case_folder, "pred_mask.nii.gz")
+        pred_json_path = os.path.join(output_case_folder, "F_o.json")
+        
+        if os.path.exists(pred_mask_path):
+            print(f"  - Landmark mask: {pred_mask_path}")
+        if os.path.exists(pred_json_path):
+            print(f"  - Landmark coordinates: {pred_json_path}")
+            
+        return True
+        
+    except Exception as e:
+        print(f"✗ Error during landmark extraction: {e}")
+        return False
+
+
+def main():
+    """Main function to run the CTA to landmarks pipeline."""
+    
+    parser = argparse.ArgumentParser(
+        description="Minimal CTA to Landmarks Pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python cta_to_landmarks_pipeline.py --input_folder /data/case01 --output_folder /results --model_path /models/landmark_model.pth
+  python cta_to_landmarks_pipeline.py --input_folder /data/case01 --output_folder /results --model_path /models/landmark_model.pth --device cuda
+        """
+    )
+    
+    parser.add_argument(
+        '--input_folder',
+        type=str,
+        required=True,
+        help='Path to folder containing cta.nii.gz file'
+    )
+    
+    parser.add_argument(
+        '--output_folder', 
+        type=str,
+        required=True,
+        help='Path to save output landmarks and masks'
+    )
+    
+    parser.add_argument(
+        '--model_path',
+        type=str,
+        required=True,
+        help='Path to trained landmark extraction model (.pth file)'
+    )
+    
+    parser.add_argument(
+        '--device',
+        type=str,
+        default='auto',
+        choices=['auto', 'cpu', 'cuda'],
+        help='Device to run inference on (default: auto)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Run the pipeline
+    success = run_cta_to_landmarks_pipeline(
+        input_folder=args.input_folder,
+        output_folder=args.output_folder,
+        model_path=args.model_path,
+        device=args.device
+    )
+    
+    if success:
+        print("\n🎉 Pipeline completed successfully!")
+        sys.exit(0)
+    else:
+        print("\n❌ Pipeline failed!")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

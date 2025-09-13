@@ -1,6 +1,6 @@
 #   Copyright 2025 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-####utils for CarotiCAT
+####utils for CarotiCAT 
 
 ###starting with preprocessing functions: resampling and cropping
 
@@ -16,10 +16,12 @@ import shutil
 def resample_image(image, new_voxel_size):
     """
     Resample the image to a new voxel size.
-    Args:
+    Parameters
+    ----------
         image (torchio.ScalarImage): The input image to be resampled.
         new_voxel_size (tuple): The new voxel size in mm (x, y, z).
-    Returns:
+    Returns
+    -------
         torchio.ScalarImage: The resampled image.
     """
     return tio.Resample(new_voxel_size, scalars_only=True)(image)
@@ -27,10 +29,12 @@ def resample_image(image, new_voxel_size):
 def crop_or_pad_image(image, target_shape):
     """
     Crop or pad the image to a target shape.
-    Args:
+    Parameters
+    ----------
         image (torchio.ScalarImage): The input image to be cropped or padded.
         target_shape (tuple): The target shape for cropping or padding.
-    Returns:
+    Returns
+    -------
         torchio.ScalarImage: The cropped or padded image.
     """
     return tio.CropOrPad(target_shape)(image)
@@ -39,7 +43,8 @@ def crop_or_pad_image(image, target_shape):
 def process_files_resample(folder_path, new_voxel_size=(0.8, 0.8, 0.8)):
     """
     Resample all NIfTI files in the given folder to a new voxel size.
-    Args:
+    Parameters
+    ----------
         folder_path (str): The path to the folder containing NIfTI files.
         new_voxel_size (tuple): The new voxel size in mm (x, y, z).
     """
@@ -53,7 +58,8 @@ def process_files_resample(folder_path, new_voxel_size=(0.8, 0.8, 0.8)):
 def process_files_crop(folder_path, target_shape=(320, 320, 480)):
     """
     Crop or pad all NIfTI files in the given folder to a target shape.
-    Args:
+    Parameters
+    ----------
         folder_path (str): The path to the folder containing NIfTI files.
         target_shape (tuple): The target shape for cropping or padding.
     """
@@ -139,7 +145,7 @@ def restore_centroids_to_original_origin(centroids_mm, affine_path, image_orient
     return centroids_mm_restored
 
 #this one here reads the json template and updates the control points with the predicted values
-def actualizar_json_con_predicciones(predichas, output_json_path, original_json_path=None, template_json_path="configs/template_landmark.json"):
+def update_json_with_predictions(predichas, output_json_path, original_json_path=None, template_json_path="configs/template_landmark.json"):
     """
     Update the JSON file with predicted control points.
     Parameters

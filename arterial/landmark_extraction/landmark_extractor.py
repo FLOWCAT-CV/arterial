@@ -9,7 +9,7 @@ import cv2
 import torchio as tio
 
 from utils import (
-    actualizar_json_con_predicciones,
+    update_json_with_predictions,
     restore_centroids_to_original_origin,
     resample_image,
     crop_or_pad_image,
@@ -143,7 +143,7 @@ class LandmarkAutomator:
         if save_json:
             output_json_path = os.path.join(output_folder_img, "F_o.json")
             input_json_path = os.path.join(sample["folder"], "F.json")
-            actualizar_json_con_predicciones(input_json_path, centroids_mm, output_json_path)
+            update_json_with_predictions(input_json_path, centroids_mm, output_json_path)
 
         if save_mask:
             combined_img = np.transpose(combined_largest_components, (1, 2, 0))
