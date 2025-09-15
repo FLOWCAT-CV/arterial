@@ -8,9 +8,11 @@ import os
 import torchio as tio
 import os
 import nibabel as nib
-import numpy as np
 import json
+import numpy as np
 import shutil
+import cc3d
+import cv2
 
 ####individual version which is most likely the one more used since there's a patient at a time
 def resample_image(image, new_voxel_size):
@@ -157,8 +159,19 @@ def update_json_with_predictions(predichas, output_json_path, original_json_path
     """
     # Check if the original JSON file exists; if not, use the template
     json_to_use = original_json_path if original_json_path and os.path.exists(original_json_path) else template_json_path
-    with open(json_to_use, 'r') as f:
-        data = json.load(f)
+    
+    # Try to load from file first, then fallback to embedded template
+    try:
+        with open(json_to_use, 'r') as f:
+            data = json.load(f)
+    except (FileNotFoundError, IOError):
+        # Fallback to embedded template
+        try:
+            from template_embedded import load_template_from_embedded
+            data = load_template_from_embedded()
+            print(f"Warning: Could not load template from {json_to_use}, using embedded template")
+        except ImportError:
+            raise FileNotFoundError(f"Template file {json_to_use} not found and embedded template not available")
 
     label_to_index = {"l-tica": 0, "r-tica": 1, "l-eica": 2, "r-eica": 3, "r-mca": 4, "l-mca": 5}
     control_points = data["markups"][0]["controlPoints"]
@@ -170,3 +183,66 @@ def update_json_with_predictions(predichas, output_json_path, original_json_path
     os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
     with open(output_json_path, 'w') as f:
         json.dump(data, f, indent=4)
+
+
+def postprocess_heatmaps(heatmaps):
+    """
+    Post-process model output heatmaps to extract landmark coordinates.
+    
+    This function mimics the processing done in LandmarkAutomator._postprocess_and_save()
+    but returns only the landmark coordinates without saving files.
+    
+    Parameters
+    ----------
+        heatmaps (torch.Tensor or np.ndarray): Model output heatmaps with shape (C, D, H, W)
+                                               where C is number of classes (usually 7)
+    
+    Returns
+    -------
+        np.ndarray: Landmark coordinates in voxel space with shape (6, 3)
+                   representing [x, y, z] coordinates for each of the 6 landmarks
+    """
+    # Convert to numpy if needed and ensure correct shape
+    if hasattr(heatmaps, 'numpy'):
+        preds = heatmaps.numpy()
+    else:
+        preds = np.array(heatmaps)
+    
+    # If batch dimension exists, remove it
+    if len(preds.shape) == 5:
+        preds = preds[0]
+    
+    # Create combined mask by taking the class with highest confidence
+    combined = np.zeros(preds.shape[1:], dtype=np.uint8)
+    confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)
+
+    # Process each class (skip background class 0)
+    for c in range(1, preds.shape[0]):
+        mask = (preds[c] > -1) & ((preds[c] > confidence_map) | (combined == 0))
+        confidence_map[mask] = preds[c][mask]
+        combined[mask] = c
+
+    # Extract centroids for each landmark
+    centroids_voxel = np.zeros((6, 3), dtype=np.float32)
+    
+    for label in range(1, 7):  # Classes 1-6 (skip background)
+        binary_mask = (combined == label).astype(np.uint8)
+        
+        # Apply morphological operations to clean up the mask
+        kernel = np.ones((2, 2), np.uint8)
+        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+
+        # Find largest connected component
+        labels_cc = cc3d.largest_k(binary_mask, k=1, connectivity=26)
+        
+        # Calculate centroid
+        stats = cc3d.statistics(labels_cc)
+        if len(stats["centroids"]) > 1:  # Check if component was found
+            centroid = stats["centroids"][1]  # Index 1 is the largest component
+            # Convert from (z, y, x) to (x, y, z) and store
+            centroids_voxel[label - 1] = [centroid[1], centroid[2], centroid[0]]
+        else:
+            # If no component found, set to zero coordinates
+            centroids_voxel[label - 1] = [0, 0, 0]
+
+    return centroids_voxel

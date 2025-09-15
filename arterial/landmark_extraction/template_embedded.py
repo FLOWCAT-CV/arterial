@@ -1,0 +1,170 @@
+"""
+Embedded template data for landmark extraction.
+This file contains the template.json structure as a Python dictionary
+to avoid issues with gitignore or file access permissions.
+"""
+
+import json
+from typing import Dict, Any
+
+# Template structure embedded as Python dictionary
+LANDMARK_TEMPLATE = {
+    "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
+    "markups": [
+        {
+            "type": "Fiducial",
+            "coordinateSystem": "LPS",
+            "coordinateUnits": "mm",
+            "locked": False,
+            "fixedNumberOfControlPoints": False,
+            "labelFormat": "%N-%d",
+            "lastUsedControlPointNumber": 5,
+            "controlPoints": [
+                {
+                    "id": "2",
+                    "label": "r-tica",
+                    "description": "",
+                    "associatedNodeID": "vtkMRMLScalarVolumeNode1",
+                    "position": [120.83526839877332, -151.22999271750447, 252.46085238643673],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": True,
+                    "locked": False,
+                    "visibility": True,
+                    "positionStatus": "defined"
+                },
+                {
+                    "id": "3",
+                    "label": "l-tica",
+                    "description": "",
+                    "associatedNodeID": "vtkMRMLScalarVolumeNode1",
+                    "position": [150.37372800944914, -151.22999271750447, 255.62568734472347],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": True,
+                    "locked": False,
+                    "visibility": True,
+                    "positionStatus": "defined"
+                },
+                {
+                    "id": "4",
+                    "label": "r-eica",
+                    "description": "",
+                    "associatedNodeID": "vtkMRMLScalarVolumeNode1",
+                    "position": [103.37301335795672, -113.42999389767644, 166.61793392246136],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": True,
+                    "locked": False,
+                    "visibility": True,
+                    "positionStatus": "defined"
+                },
+                {
+                    "id": "5",
+                    "label": "l-eica",
+                    "description": "",
+                    "associatedNodeID": "vtkMRMLScalarVolumeNode1",
+                    "position": [162.89775854454166, -118.55564874050461, 163.94428905212402],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": True,
+                    "locked": False,
+                    "visibility": True,
+                    "positionStatus": "defined"
+                },
+                {
+                    "id": "6",
+                    "label": "l-mca",
+                    "description": "",
+                    "associatedNodeID": "",
+                    "position": [32.987992562753554, -208.9896271885305, 110.65052494309853],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": True,
+                    "locked": False,
+                    "visibility": True,
+                    "positionStatus": "defined"
+                },
+                {
+                    "id": "7",
+                    "label": "r-mca",
+                    "description": "",
+                    "associatedNodeID": "",
+                    "position": [-40.6152522477293, -207.81492441101526, 114.65077738222985],
+                    "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
+                    "selected": True,
+                    "locked": False,
+                    "visibility": True,
+                    "positionStatus": "defined"
+                }
+            ],
+            "measurements": [],
+            "display": {
+                "visibility": True,
+                "opacity": 1.0,
+                "color": [0.4, 1.0, 1.0],
+                "selectedColor": [1.0, 0.5000076295109483, 0.5000076295109483],
+                "activeColor": [0.4, 1.0, 0.0],
+                "propertiesLabelVisibility": False,
+                "pointLabelsVisibility": True,
+                "textScale": 3.0,
+                "glyphType": "Sphere3D",
+                "glyphScale": 3.0,
+                "glyphSize": 5.0,
+                "useGlyphScale": True,
+                "sliceProjection": False,
+                "sliceProjectionUseFiducialColor": True,
+                "sliceProjectionOutlinedBehindSlicePlane": False,
+                "sliceProjectionColor": [1.0, 1.0, 1.0],
+                "sliceProjectionOpacity": 0.6,
+                "lineThickness": 0.2,
+                "lineColorFadingStart": 1.0,
+                "lineColorFadingEnd": 10.0,
+                "lineColorFadingSaturation": 1.0,
+                "lineColorFadingHueOffset": 0.0,
+                "handlesInteractive": False,
+                "translationHandleVisibility": True,
+                "rotationHandleVisibility": True,
+                "scaleHandleVisibility": True,
+                "interactionHandleScale": 3.0,
+                "snapMode": "toVisibleSurface"
+            }
+        }
+    ]
+}
+
+
+def get_template_as_json() -> str:
+    """
+    Get the landmark template as a JSON string.
+    
+    Returns:
+        str: JSON string representation of the template
+    """
+    return json.dumps(LANDMARK_TEMPLATE, indent=4)
+
+
+def get_template_dict() -> Dict[str, Any]:
+    """
+    Get the landmark template as a Python dictionary.
+    
+    Returns:
+        Dict[str, Any]: Template as dictionary
+    """
+    return LANDMARK_TEMPLATE.copy()
+
+
+def save_template_to_file(filepath: str) -> None:
+    """
+    Save the template to a JSON file.
+    
+    Args:
+        filepath (str): Path where to save the template JSON file
+    """
+    with open(filepath, 'w') as f:
+        json.dump(LANDMARK_TEMPLATE, f, indent=4)
+
+
+def load_template_from_embedded() -> Dict[str, Any]:
+    """
+    Load template from embedded data (fallback when template.json is not available).
+    
+    Returns:
+        Dict[str, Any]: Template dictionary
+    """
+    return get_template_dict()
