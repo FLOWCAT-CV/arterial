@@ -12,7 +12,7 @@ dev
 *.pyc
 .*
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
-*.json
+
 *.zip
 
 copy_nnunet_models.py

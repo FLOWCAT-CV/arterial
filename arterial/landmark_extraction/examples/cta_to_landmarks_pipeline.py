@@ -16,13 +16,12 @@ import os
 import sys
 import argparse
 import shutil
-import json
 import numpy as np
 
 # Add the parent directory to the path to import arterial modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from landmark_extraction.landmark_extractor import LandmarkAutomator
+from arterial.landmark_extraction.landmark_extractor import LandmarkAutomator
 
 
 def create_required_files(input_folder):
@@ -37,7 +36,8 @@ def create_required_files(input_folder):
     # Check if F.json exists, if not create from template
     f_json_path = os.path.join(input_folder, "F.json")
     if not os.path.exists(f_json_path):
-        template_path = os.path.join(os.path.dirname(__file__), "..", "landmark_extraction", "template.json")
+        template_path = '/media/Disk_B/databases/david_projects/VHIR/landMARKS/arterial_update/arterial/landmark_extraction/template.json'
+        #template_path = os.path.join(os.path.dirname(__file__), "..", "landmark_extraction", "template.json")
         if os.path.exists(template_path):
             shutil.copy(template_path, f_json_path)
             print(f"Created F.json from template at {f_json_path}")
@@ -138,10 +138,9 @@ def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, devic
     
     try:
         landmark_automator.infer_folder(
-            folder_path=input_folder,
-            output_folder=output_folder,
+            folder_path=str(input_folder),
+            output_folder=str(output_folder),
             save_mask=True,
-            save_json=True
         )
         print("✓ Landmark extraction completed successfully")
         

@@ -16,7 +16,7 @@ from utils import (
     change_origin_preprocess,
 )
 from model import load_trained_model_seg
-from io.load_and_save_operations import save_nifti
+from arterial.io.load_and_save_operations import save_nifti
 
 class SingleCTADataset:
     """

@@ -35,7 +35,7 @@ class MonaiUNet3DSeg(nn.Module):
         return self.unet(x)
 
 def load_trained_model_seg(model_path, device):
-    model = MonaiUNet3DSeg(num_classes=5).to(device)
+    model = MonaiUNet3DSeg(num_classes=7).to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     return model
 
