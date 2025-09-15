@@ -25,7 +25,7 @@ setup(
         'mycolorpy',
         'vtk',
         'torchio',
-        'cc3d',
+        'connected-components-3d',
         'opencv-python',
         'monai'
         ]
