@@ -7,12 +7,7 @@ import torch
 import nibabel as nib
 import torchio as tio   
 
-from arterial.landmark_extraction import SingleCTADataset, LandmarkAutomator
-from arterial.io.load_and_save_operations import load_nifti
-from arterial.landmark_extraction.utils import (
-    create_required_files,
-)
-
+from arterial.landmark_extraction.landmark_extractor import LandmarkAutomator
 
 def validate_inputs(input_folder, model_path):
     """
@@ -79,9 +74,7 @@ def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, devic
     # Create temporary folder for processing
     temp_folder = os.path.join(output_folder, "temp")
     os.makedirs(temp_folder, exist_ok=True)
-    
-    # Create required files in the temporary folder
-    create_required_files(input_file, temp_folder)
+
     
     # Initialize the landmark automator
     print(f"Initializing LandmarkAutomator with model: {model_path}")
@@ -126,7 +119,7 @@ def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, devic
         return False
     finally:
         # Clean up temporary folder
-        shutil.rmtree(temp_folder, ignore_errors=True)
+        print("Cleaning up temporary folder")
 
 
 def main():
