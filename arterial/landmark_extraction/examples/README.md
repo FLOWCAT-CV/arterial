@@ -122,6 +122,9 @@ python cta_to_landmarks_pipeline.py \
     --output_folder /results/landmarks \
     --model_path /models/landmark_model.pth
 
+python cta_to_landmarks_pipeline.py --input_file /media/Disk_B/arterial_models/tets_landmark/input/cta.nii.gz --output_folder /media/Disk_B/arterial_models/tets_landmark/output/ --model_path /media/Disk_B/arterial_models/landmark_extraction/six_landmarks_11_7.pth
+
+
 # 3. Check results
 ls /results/landmarks/case01/
 # Should contain: pred_mask.nii.gz, F_o.json

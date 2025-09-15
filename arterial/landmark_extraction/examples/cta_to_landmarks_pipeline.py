@@ -4,12 +4,12 @@ Minimal CTA to Landmarks Pipeline
 
 This script demonstrates how to extract landmarks from a CTA image using the arterial package.
 The pipeline requires:
-1. A folder containing 'cta.nii.gz' file
+1. A 'cta.nii.gz' file as input
 2. A trained landmark extraction model
-3. The folder should also contain 'F.json' (template) and 'affine_before_origin_change.txt' files
+3. The output will be saved in the specified folder
 
 Example usage:
-    python cta_to_landmarks_pipeline.py --input_folder /path/to/cta/folder --output_folder /path/to/output --model_path /path/to/model.pth
+    python cta_to_landmarks_pipeline.py --input_file /path/to/cta.nii.gz --output_folder /path/to/output --model_path /path/to/model.pth
 """
 
 import os
@@ -24,43 +24,45 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from arterial.landmark_extraction.landmark_extractor import LandmarkAutomator
 
 
-def create_required_files(input_folder):
+def create_required_files(input_file, temp_folder):
     """
-    Create required files if they don't exist in the input folder.
+    Create required files in a temporary folder for processing.
     
     Parameters:
     -----------
-    input_folder : str
-        Path to the folder containing the CTA file
+    input_file : str
+        Path to the input NIfTI file
+    temp_folder : str
+        Path to the temporary folder for intermediate files
     """
+    # Copy the input file to the temporary folder
+    cta_path = os.path.join(temp_folder, "cta.nii.gz")
+    shutil.copy(input_file, cta_path)
+    
     # Check if F.json exists, if not create from template
-    f_json_path = os.path.join(input_folder, "F.json")
-    if not os.path.exists(f_json_path):
-        template_path = '/media/Disk_B/databases/david_projects/VHIR/landMARKS/arterial_update/arterial/landmark_extraction/template.json'
-        #template_path = os.path.join(os.path.dirname(__file__), "..", "landmark_extraction", "template.json")
-        if os.path.exists(template_path):
-            shutil.copy(template_path, f_json_path)
-            print(f"Created F.json from template at {f_json_path}")
-        else:
-            print(f"Warning: Template file not found at {template_path}")
+    f_json_path = os.path.join(temp_folder, "F.json")
+    template_path = '/media/Disk_B/databases/david_projects/VHIR/landMARKS/arterial_update/arterial/landmark_extraction/template.json'
+    if os.path.exists(template_path):
+        shutil.copy(template_path, f_json_path)
+        print(f"Created F.json from template at {f_json_path}")
+    else:
+        print(f"Warning: Template file not found at {template_path}")
     
     # Create a dummy affine file if it doesn't exist
-    affine_path = os.path.join(input_folder, "affine_before_origin_change.txt")
-    if not os.path.exists(affine_path):
-        # Create identity affine transformation
-        identity_affine = np.eye(4)
-        np.savetxt(affine_path, identity_affine)
-        print(f"Created dummy affine file at {affine_path}")
+    affine_path = os.path.join(temp_folder, "affine_before_origin_change.txt")
+    identity_affine = np.eye(4)
+    np.savetxt(affine_path, identity_affine)
+    print(f"Created dummy affine file at {affine_path}")
 
 
-def validate_inputs(input_folder, model_path):
+def validate_inputs(input_file, model_path):
     """
     Validate that all required inputs exist.
     
     Parameters:
     -----------
-    input_folder : str
-        Path to the folder containing the CTA file
+    input_file : str
+        Path to the input NIfTI file
     model_path : str
         Path to the trained model file
         
@@ -69,15 +71,9 @@ def validate_inputs(input_folder, model_path):
     bool
         True if all inputs are valid, False otherwise
     """
-    # Check if input folder exists
-    if not os.path.exists(input_folder):
-        print(f"Error: Input folder {input_folder} does not exist")
-        return False
-    
-    # Check if CTA file exists
-    cta_path = os.path.join(input_folder, "cta.nii.gz")
-    if not os.path.exists(cta_path):
-        print(f"Error: CTA file not found at {cta_path}")
+    # Check if input file exists
+    if not os.path.exists(input_file):
+        print(f"Error: Input file {input_file} does not exist")
         return False
     
     # Check if model exists
@@ -88,14 +84,14 @@ def validate_inputs(input_folder, model_path):
     return True
 
 
-def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, device='auto'):
+def run_cta_to_landmarks_pipeline(input_file, output_folder, model_path, device='auto'):
     """
     Run the complete CTA to landmarks pipeline.
     
     Parameters:
     -----------
-    input_folder : str
-        Path to the folder containing 'cta.nii.gz'
+    input_file : str
+        Path to the input NIfTI file
     output_folder : str
         Path to save the output landmarks and masks
     model_path : str
@@ -109,14 +105,15 @@ def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, devic
     print("=" * 60)
     
     # Validate inputs
-    if not validate_inputs(input_folder, model_path):
+    if not validate_inputs(input_file, model_path):
         return False
     
-    # Create required files if missing
-    create_required_files(input_folder)
+    # Create temporary folder for processing
+    temp_folder = os.path.join(output_folder, "temp")
+    os.makedirs(temp_folder, exist_ok=True)
     
-    # Create output directory
-    os.makedirs(output_folder, exist_ok=True)
+    # Create required files in the temporary folder
+    create_required_files(input_file, temp_folder)
     
     # Initialize the landmark automator
     print(f"Initializing LandmarkAutomator with model: {model_path}")
@@ -133,25 +130,22 @@ def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, devic
         return False
     
     # Run inference
-    print(f"Processing CTA from: {input_folder}")
+    print(f"Processing CTA from: {input_file}")
     print(f"Saving results to: {output_folder}")
     
     try:
         landmark_automator.infer_folder(
-            folder_path=str(input_folder),
-            output_folder=str(output_folder),
+            folder_path=temp_folder,
+            output_folder=output_folder,
             save_mask=True,
         )
         print("✓ Landmark extraction completed successfully")
         
         # Print results summary
-        case_name = os.path.basename(input_folder)
-        output_case_folder = os.path.join(output_folder, case_name)
+        pred_mask_path = os.path.join(output_folder, "pred_mask.nii.gz")
+        pred_json_path = os.path.join(output_folder, "F_o.json")
         
         print("\nResults saved:")
-        pred_mask_path = os.path.join(output_case_folder, "pred_mask.nii.gz")
-        pred_json_path = os.path.join(output_case_folder, "F_o.json")
-        
         if os.path.exists(pred_mask_path):
             print(f"  - Landmark mask: {pred_mask_path}")
         if os.path.exists(pred_json_path):
@@ -162,6 +156,9 @@ def run_cta_to_landmarks_pipeline(input_folder, output_folder, model_path, devic
     except Exception as e:
         print(f"✗ Error during landmark extraction: {e}")
         return False
+    finally:
+        # Clean up temporary folder
+        shutil.rmtree(temp_folder, ignore_errors=True)
 
 
 def main():
@@ -172,16 +169,16 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python cta_to_landmarks_pipeline.py --input_folder /data/case01 --output_folder /results --model_path /models/landmark_model.pth
-  python cta_to_landmarks_pipeline.py --input_folder /data/case01 --output_folder /results --model_path /models/landmark_model.pth --device cuda
+  python cta_to_landmarks_pipeline.py --input_file /data/cta.nii.gz --output_folder /results --model_path /models/landmark_model.pth
+  python cta_to_landmarks_pipeline.py --input_file /data/cta.nii.gz --output_folder /results --model_path /models/landmark_model.pth --device cuda
         """
     )
     
     parser.add_argument(
-        '--input_folder',
+        '--input_file',
         type=str,
         required=True,
-        help='Path to folder containing cta.nii.gz file'
+        help='Path to the input NIfTI file (cta.nii.gz)'
     )
     
     parser.add_argument(
@@ -210,7 +207,7 @@ Examples:
     
     # Run the pipeline
     success = run_cta_to_landmarks_pipeline(
-        input_folder=args.input_folder,
+        input_file=args.input_file,
         output_folder=args.output_folder,
         model_path=args.model_path,
         device=args.device
