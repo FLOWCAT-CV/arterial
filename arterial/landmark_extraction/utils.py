@@ -74,33 +74,47 @@ def process_files_crop(folder_path, target_shape=(320, 320, 480)):
 
 ### adding origin changer functions required in the original setup of CarotiCAT
 ### this function is used to change the origin of the nifti file to a new origin
-def change_origin_preprocess(nifti_path, new_origin):
+def change_origin_preprocess(nifti_path_or_tio_image, new_origin):
     """
-    Change the origin of a NIfTI file to a new origin.
+    Change the origin of a NIfTI file or TorchIO image to a new origin.
     Parameters
     ----------
-        nifti_path (str): The path to the NIfTI file.
+        nifti_path_or_tio_image (str or torchio.ScalarImage): The path to the NIfTI file or TorchIO image.
         new_origin (tuple): The new origin in mm (x, y, z).
     Returns
     -------
-        str: The path to the modified NIfTI file.
+        str or torchio.ScalarImage: The path to the modified NIfTI file or modified TorchIO image.
     """
-    img = nib.load(nifti_path)
-    data = img.get_fdata()
-    affine = img.affine
+    if isinstance(nifti_path_or_tio_image, str):
+        # Original file path version
+        nifti_path = nifti_path_or_tio_image
+        img = nib.load(nifti_path)
+        data = img.get_fdata()
+        affine = img.affine
 
-    new_affine = np.copy(affine)
-    np.savetxt(os.path.join(os.path.dirname(nifti_path), "affine_before_origin_change.txt"), affine)
-    new_affine[:3, 3] = new_origin
+        new_affine = np.copy(affine)
+        np.savetxt(os.path.join(os.path.dirname(nifti_path), "affine_before_origin_change.txt"), affine)
+        new_affine[:3, 3] = new_origin
 
-    new_img = nib.Nifti1Image(data, new_affine, header=img.header)
+        new_img = nib.Nifti1Image(data, new_affine, header=img.header)
+        new_img.set_qform(new_affine, code=1)
+        new_img.set_sform(new_affine, code=1)
 
-    # Force both qform and sform to match the new affine, with appropriate codes
-    new_img.set_qform(new_affine, code=1)  # NIFTI_XFORM_SCANNER_ANAT
-    new_img.set_sform(new_affine, code=1)
-
-    nib.save(new_img, nifti_path)
-    return nifti_path
+        nib.save(new_img, nifti_path)
+        return nifti_path
+    else:
+        # TorchIO image version - return modified copy
+        tio_image = nifti_path_or_tio_image
+        data = tio_image.data.numpy()
+        affine = tio_image.affine.numpy()
+        
+        new_affine = np.copy(affine)
+        new_affine[:3, 3] = new_origin
+        
+        # Create new TorchIO image with modified affine
+        import torch
+        new_tio_image = tio.ScalarImage(tensor=torch.from_numpy(data), affine=new_affine)
+        return new_tio_image
 
 def process_files_change_origin(folder_path, new_origin=(0, 0, 0)):
     """
@@ -127,6 +141,10 @@ def restore_centroids_to_original_origin(centroids_mm, affine_path, image_orient
     -------
         np.ndarray: Centroids restored to the original image space.
     """
+    if not os.path.exists(affine_path):
+        print(f"Warning: Affine file {affine_path} not found. Returning original centroids.")
+        return centroids_mm
+        
     affine = np.loadtxt(affine_path)
     centroids_mm_restored = np.copy(centroids_mm)
 
