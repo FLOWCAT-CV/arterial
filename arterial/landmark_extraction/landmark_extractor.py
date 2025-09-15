@@ -10,15 +10,13 @@ import torchio as tio
 import tempfile
 
 from utils import (
-    update_json_with_predictions,
+    actualizar_json_con_predicciones,
     restore_centroids_to_original_origin,
     resample_image,
     crop_or_pad_image,
     change_origin_preprocess,
-    postprocess_heatmaps,
 )
 from model import load_trained_model_seg
-from arterial.io.load_and_save_operations import save_nifti
 
 class SingleCTADataset:
     """
@@ -55,12 +53,12 @@ class SingleCTADataset:
         # Get as nibabel image directly (no disk write)
         img = final_image.as_nibabel()
 
-        # Normalize and shape
+        # Normalize and shape - match original training script
         volume = np.clip(img.get_fdata().astype(np.float32), 0, 700) / 700
-        volume = torch.tensor(
-            np.expand_dims(np.transpose(volume, (2, 0, 1)), axis=0),
-            dtype=torch.float32
-        )
+        # Transpose to match training: (H, W, D) -> (D, H, W) -> add batch/channel dims
+        volume = np.transpose(volume, (2, 0, 1))  # (D, H, W)
+        volume = np.expand_dims(volume, axis=0)    # (1, D, H, W) - add channel dim
+        volume = torch.tensor(volume, dtype=torch.float32)
 
         return {
             "volume": volume,
@@ -109,12 +107,12 @@ class SingleCTAFromArray:
         # Get as nibabel image directly (no disk write)
         img = final_image.as_nibabel()
 
-        # Normalize and shape
+        # Normalize and shape - match original training script
         volume = np.clip(img.get_fdata().astype(np.float32), 0, 700) / 700
-        volume = torch.tensor(
-            np.expand_dims(np.transpose(volume, (2, 0, 1)), axis=0),
-            dtype=torch.float32
-        )
+        # Transpose to match training: (H, W, D) -> (D, H, W) -> add batch/channel dims
+        volume = np.transpose(volume, (2, 0, 1))  # (D, H, W)
+        volume = np.expand_dims(volume, axis=0)    # (1, D, H, W) - add channel dim
+        volume = torch.tensor(volume, dtype=torch.float32)
 
         return {
             "volume": volume,
@@ -144,21 +142,23 @@ class LandmarkAutomator:
     def _prepare_input_folder(self, folder_path: str):
         dataset = SingleCTADataset(folder_path)
         sample = dataset[0]
-        volume = sample["volume"].unsqueeze(0).to(self.device)
+        volume = sample["volume"].unsqueeze(0).to(self.device)  # Add batch dimension
         return volume, sample
 
     def _prepare_input_array(self, data, affine=None, temp_folder=None):
         dataset = SingleCTAFromArray(data, affine, temp_folder)
         sample = dataset[0]
-        volume = sample["volume"].unsqueeze(0).to(self.device)
+        volume = sample["volume"].unsqueeze(0).to(self.device)  # Add batch dimension
         return volume, sample
 
     def _postprocess_and_save(self, preds, sample, output_folder, save_mask=True, save_json=True):
         """
         Post-process the model predictions and save the results.
+        Based on the original evaluate_on_test_seg_multiclass function.
+        
         Parameters
         ----------
-            preds (torch.Tensor): Model predictions.
+            preds (torch.Tensor): Model predictions with shape (1, 7, D, H, W).
             sample (dict): Sample dictionary containing 'affine' and 'folder'.
             output_folder (str): Folder to save the output results.
             save_mask (bool, optional): Whether to save the predicted mask. Defaults to True.
@@ -168,56 +168,79 @@ class LandmarkAutomator:
         -------
             np.ndarray: Landmark coordinates in mm space (6, 3).
         """
-        preds = preds.cpu().numpy()[0]  # (7, D, H, W)
+        preds = preds.cpu().numpy()[0]  # Remove batch dim: (7, D, H, W)
+        
+        # Create combined mask by taking the class with highest confidence
         combined = np.zeros(preds.shape[1:], dtype=np.uint8)
         confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)
-
-        for c in range(1, preds.shape[0]):
+        
+        for c in range(1, preds.shape[0]):  # Skip background (class 0)
+            # Only update voxels where current prediction is higher than previous ones
             mask = (preds[c] > -1) & ((preds[c] > confidence_map) | (combined == 0))
             confidence_map[mask] = preds[c][mask]
             combined[mask] = c
 
+        # Extract centroids for each landmark class
         centroids_voxel = np.zeros((6, 3), dtype=np.float32)
         all_largest_components = []
-        for label in range(1, 7):
+        
+        for label in range(1, 7):  # Classes 1-6
             binary_mask = (combined == label).astype(np.uint8)
+            
+            # Apply morphological operations to clean up the mask
             kernel = np.ones((2, 2), np.uint8)
             binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
 
+            # Find largest connected component
             labels_cc = cc3d.largest_k(binary_mask, k=1, connectivity=26)
             all_largest_components.append(labels_cc)
+            
+            # Calculate centroid
             stats = cc3d.statistics(labels_cc)
             if len(stats["centroids"]) > 1:
-                centroid = stats["centroids"][1]
+                centroid = stats["centroids"][1]  # Index 1 is the largest component
+                # Convert from (z, y, x) to (x, y, z) order to match original
                 centroids_voxel[label - 1] = [centroid[1], centroid[2], centroid[0]]
+            else:
+                # If no component found, set to zero coordinates
+                centroids_voxel[label - 1] = [0, 0, 0]
 
+        # Reconstruct combined mask with only largest components
         combined_largest_components = np.zeros(preds.shape[1:], dtype=np.uint8)
         for i, mask in enumerate(all_largest_components):
             combined_largest_components[mask] = i + 1
 
-        centroids_mm = centroids_voxel * 0.6
+        # Convert to mm coordinates (match original: voxel spacing is 0.8mm)
+        centroids_mm = centroids_voxel * 0.8
+        
+        # Handle orientation (match original training script)
         affine = sample["affine"]
         orientation = nib.aff2axcodes(affine)
-
         if orientation == ('L', 'A', 'S'):
             centroids_mm[:, 1] = -centroids_mm[:, 1]
 
+        # Restore to original origin if affine file exists
         affine_path = os.path.join(sample["folder"], "affine_before_origin_change.txt")
         if os.path.exists(affine_path):
             centroids_mm = restore_centroids_to_original_origin(centroids_mm, affine_path, orientation)
 
+        # Save results if output folder specified
         if output_folder:
-            output_folder_img = os.path.join(output_folder, "results")
+            output_folder_img = os.path.join(output_folder, os.path.basename(sample["folder"]))
             os.makedirs(output_folder_img, exist_ok=True)
 
             if save_json:
                 output_json_path = os.path.join(output_folder_img, "F_o.json")
                 input_json_path = os.path.join(sample["folder"], "F.json")
-                update_json_with_predictions(centroids_mm, output_json_path, input_json_path)
+                
+                # Use the original function name and parameter order
+                actualizar_json_con_predicciones(input_json_path, centroids_mm, output_json_path)
 
             if save_mask:
+                # Transpose back to (H, W, D) to match original saving format
                 combined_img = np.transpose(combined_largest_components, (1, 2, 0))
-                save_nifti(nib.Nifti1Image(combined_img, affine), os.path.join(output_folder_img, "pred_mask.nii.gz"))
+                output_mask_path = os.path.join(output_folder_img, "pred_mask.nii.gz")
+                nib.save(nib.Nifti1Image(combined_img, affine), output_mask_path)
 
         return centroids_mm
 
@@ -261,21 +284,65 @@ class LandmarkAutomator:
             dict: Dictionary containing:
                 - 'landmarks_mm': np.ndarray of shape (6, 3) with landmark coordinates in mm
                 - 'landmarks_voxel': np.ndarray of shape (6, 3) with landmark coordinates in voxel space
-                - 'heatmaps': np.ndarray of shape (6, D, H, W) with prediction heatmaps
+                - 'raw_predictions': np.ndarray of shape (7, D, H, W) with model output logits
         """
         volume, sample = self._prepare_input_array(data, affine)
         with torch.no_grad():
             preds = self.model(volume)
         
-        # Get landmarks in mm space
+        # Get landmarks in mm space using the same processing as folder method
         centroids_mm = self._postprocess_and_save(preds, sample, output_folder, save_mask=save_mask, save_json=save_json)
         
-        # Also get landmarks in voxel space using the utility function
-        centroids_voxel = postprocess_heatmaps(preds.cpu())
+        # Also extract voxel coordinates before mm conversion
+        preds_np = preds.cpu().numpy()[0]  # (7, D, H, W)
+        combined = np.zeros(preds_np.shape[1:], dtype=np.uint8)
+        confidence_map = np.zeros(preds_np.shape[1:], dtype=np.float32)
         
-        # Return both coordinate systems and the raw heatmaps
+        for c in range(1, preds_np.shape[0]):
+            mask = (preds_np[c] > -1) & ((preds_np[c] > confidence_map) | (combined == 0))
+            confidence_map[mask] = preds_np[c][mask]
+            combined[mask] = c
+
+        centroids_voxel = np.zeros((6, 3), dtype=np.float32)
+        for label in range(1, 7):
+            binary_mask = (combined == label).astype(np.uint8)
+            kernel = np.ones((2, 2), np.uint8)
+            binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+            labels_cc = cc3d.largest_k(binary_mask, k=1, connectivity=26)
+            stats = cc3d.statistics(labels_cc)
+            if len(stats["centroids"]) > 1:
+                centroid = stats["centroids"][1]
+                centroids_voxel[label - 1] = [centroid[1], centroid[2], centroid[0]]
+            else:
+                centroids_voxel[label - 1] = [0, 0, 0]
+        
         return {
             'landmarks_mm': centroids_mm,
             'landmarks_voxel': centroids_voxel,
-            'heatmaps': preds.cpu().numpy()[0]  # Remove batch dimension
+            'raw_predictions': preds_np  # Raw model logits
         }
+
+# Add the original JSON update function for compatibility
+def actualizar_json_con_predicciones(original_json_path, predichas, output_json_path):
+    """
+    Original function from training script.
+    Reads the original JSON and updates the position of each landmark with the predicted
+    coordinates (in mm, in LPS).
+    """
+    import json
+    
+    with open(original_json_path, 'r') as f:
+        data = json.load(f)
+    
+    labels = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
+    control_points = data["markups"][0]["controlPoints"]
+    
+    for landmark_idx, label in enumerate(labels):
+        for cp in control_points:
+            if cp["label"] == label:
+                cp["position"] = predichas[landmark_idx].tolist()
+                break
+    
+    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+    with open(output_json_path, 'w') as f:
+        json.dump(data, f, indent=4)

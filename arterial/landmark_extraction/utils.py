@@ -203,64 +203,24 @@ def update_json_with_predictions(predichas, output_json_path, original_json_path
         json.dump(data, f, indent=4)
 
 
-def postprocess_heatmaps(heatmaps):
+def actualizar_json_con_predicciones(original_json_path, predichas, output_json_path):
     """
-    Post-process model output heatmaps to extract landmark coordinates.
-    
-    This function mimics the processing done in LandmarkAutomator._postprocess_and_save()
-    but returns only the landmark coordinates without saving files.
-    
-    Parameters
-    ----------
-        heatmaps (torch.Tensor or np.ndarray): Model output heatmaps with shape (C, D, H, W)
-                                               where C is number of classes (usually 7)
-    
-    Returns
-    -------
-        np.ndarray: Landmark coordinates in voxel space with shape (6, 3)
-                   representing [x, y, z] coordinates for each of the 6 landmarks
+    Original function from training script.
+    Reads the original JSON and updates the position of each landmark with the predicted
+    coordinates (in mm, in LPS).
     """
-    # Convert to numpy if needed and ensure correct shape
-    if hasattr(heatmaps, 'numpy'):
-        preds = heatmaps.numpy()
-    else:
-        preds = np.array(heatmaps)
+    with open(original_json_path, 'r') as f:
+        data = json.load(f)
     
-    # If batch dimension exists, remove it
-    if len(preds.shape) == 5:
-        preds = preds[0]
+    labels = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
+    control_points = data["markups"][0]["controlPoints"]
     
-    # Create combined mask by taking the class with highest confidence
-    combined = np.zeros(preds.shape[1:], dtype=np.uint8)
-    confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)
-
-    # Process each class (skip background class 0)
-    for c in range(1, preds.shape[0]):
-        mask = (preds[c] > -1) & ((preds[c] > confidence_map) | (combined == 0))
-        confidence_map[mask] = preds[c][mask]
-        combined[mask] = c
-
-    # Extract centroids for each landmark
-    centroids_voxel = np.zeros((6, 3), dtype=np.float32)
+    for landmark_idx, label in enumerate(labels):
+        for cp in control_points:
+            if cp["label"] == label:
+                cp["position"] = predichas[landmark_idx].tolist()
+                break
     
-    for label in range(1, 7):  # Classes 1-6 (skip background)
-        binary_mask = (combined == label).astype(np.uint8)
-        
-        # Apply morphological operations to clean up the mask
-        kernel = np.ones((2, 2), np.uint8)
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
-
-        # Find largest connected component
-        labels_cc = cc3d.largest_k(binary_mask, k=1, connectivity=26)
-        
-        # Calculate centroid
-        stats = cc3d.statistics(labels_cc)
-        if len(stats["centroids"]) > 1:  # Check if component was found
-            centroid = stats["centroids"][1]  # Index 1 is the largest component
-            # Convert from (z, y, x) to (x, y, z) and store
-            centroids_voxel[label - 1] = [centroid[1], centroid[2], centroid[0]]
-        else:
-            # If no component found, set to zero coordinates
-            centroids_voxel[label - 1] = [0, 0, 0]
-
-    return centroids_voxel
+    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+    with open(output_json_path, 'w') as f:
+        json.dump(data, f, indent=4)
