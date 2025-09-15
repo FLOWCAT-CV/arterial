@@ -105,8 +105,11 @@ def change_origin_preprocess(nifti_path_or_tio_image, new_origin):
     else:
         # TorchIO image version - return modified copy
         tio_image = nifti_path_or_tio_image
+        print("utils iimage read")
         data = tio_image.data.numpy()
-        affine = tio_image.affine.numpy()
+        print("read the tio object")
+        affine = tio_image.affine
+        print("was the affine the one that failed?")
         
         new_affine = np.copy(affine)
         new_affine[:3, 3] = new_origin

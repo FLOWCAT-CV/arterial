@@ -9,14 +9,14 @@ import cv2
 import torchio as tio
 import tempfile
 
-from utils import (
+from arterial.landmark_extraction.utils import (
     actualizar_json_con_predicciones,
     restore_centroids_to_original_origin,
     resample_image,
     crop_or_pad_image,
     change_origin_preprocess,
 )
-from model import load_trained_model_seg
+from arterial.landmark_extraction.model import load_trained_model_seg
 
 class SingleCTADataset:
     """
@@ -41,28 +41,48 @@ class SingleCTADataset:
 
     def __getitem__(self, idx):
         cta_path = os.path.join(self.folder_path, "cta.nii.gz")
-
+        print("**********************************************************")
+        print(f"Loading CTA from: {cta_path}")
         # Load original image once
         tio_object = tio.ScalarImage(cta_path)
+        
+        # Store original affine before preprocessing
+        original_affine = tio_object.affine
 
-        # Preprocess in memory
+        # Preprocess in memory - EXACTLY like training script
         resampled = resample_image(tio_object, (0.8, 0.8, 0.8))
+        print(f"Resampled shape: {resampled.shape}, voxel size: {resampled.spacing}")
         cropped_or_padded = crop_or_pad_image(resampled, (320, 320, 480))
+        print(f"Cropped/Padded shape: {cropped_or_padded.shape}, voxel size: {cropped_or_padded.spacing}")  
+        
+        # Change origin and save affine info
+        print("is it here?")
+        temp_affine_path = os.path.join(self.folder_path, "affine_before_origin_change.txt")
+        print("or is it here?")
+        np.savetxt(temp_affine_path, resampled.affine)
+        print("affine saved")
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
+        print("origin changed to (0,0,0)")
 
         # Get as nibabel image directly (no disk write)
-        img = final_image.as_nibabel()
-
-        # Normalize and shape - match original training script
-        volume = np.clip(img.get_fdata().astype(np.float32), 0, 700) / 700
-        # Transpose to match training: (H, W, D) -> (D, H, W) -> add batch/channel dims
-        volume = np.transpose(volume, (2, 0, 1))  # (D, H, W)
+        img = final_image.numpy()
+        print(f"Final image shape: {img.shape}")  # Should be (1, 320, 320, 480)
+        #convert it to 320 x320x480
+        img = np.squeeze(img)  # Remove channel dim if exists
+        # Normalize and shape - match original training script EXACTLY
+        volume = np.clip(img, 0, 700) / 700
+        print("we clipped")
+        # Transpose to match training: (H, W, D) -> (D, H, W) -> add channel dim
+        volume = np.transpose(volume, (2, 0, 1))
+        print("transposed dimensions")  # (D, H, W)
         volume = np.expand_dims(volume, axis=0)    # (1, D, H, W) - add channel dim
         volume = torch.tensor(volume, dtype=torch.float32)
 
+        print(f"Preprocessed volume shape: {volume.shape}")  # Should be (1, 480, 320, 320)
+
         return {
             "volume": volume,
-            "affine": tio_object.affine,  # original affine for centroids
+            "affine": original_affine,  # original affine for centroids
             "folder": self.folder_path
         }
 
@@ -98,25 +118,36 @@ class SingleCTAFromArray:
         
         # Load with TorchIO
         tio_object = tio.ScalarImage(temp_nii_path)
+        
+        # Store original affine before preprocessing
+        original_affine = self.original_affine
 
-        # Preprocess in memory
+        # Preprocess in memory - EXACTLY like training script
         resampled = resample_image(tio_object, (0.8, 0.8, 0.8))
         cropped_or_padded = crop_or_pad_image(resampled, (320, 320, 480))
+        
+        # Change origin and save affine info
+        temp_affine_path = os.path.join(self.temp_folder, "affine_before_origin_change.txt")
+        np.savetxt(temp_affine_path, resampled.affine.numpy())
+        
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
 
         # Get as nibabel image directly (no disk write)
-        img = final_image.as_nibabel()
+        img = final_image.numpy()
+        img = np.squeeze(img)  # Remove channel dim if exists
 
-        # Normalize and shape - match original training script
-        volume = np.clip(img.get_fdata().astype(np.float32), 0, 700) / 700
-        # Transpose to match training: (H, W, D) -> (D, H, W) -> add batch/channel dims
+        # Normalize and shape - match original training script EXACTLY
+        volume = np.clip(img, 0, 700) / 700
+        # Transpose to match training: (H, W, D) -> (D, H, W) -> add channel dim
         volume = np.transpose(volume, (2, 0, 1))  # (D, H, W)
         volume = np.expand_dims(volume, axis=0)    # (1, D, H, W) - add channel dim
         volume = torch.tensor(volume, dtype=torch.float32)
 
+        print(f"Preprocessed volume shape: {volume.shape}")  # Should be (1, 480, 320, 320)
+
         return {
             "volume": volume,
-            "affine": self.original_affine,  # original affine for centroids
+            "affine": original_affine,  # original affine for centroids
             "folder": self.temp_folder
         }
 
@@ -233,8 +264,31 @@ class LandmarkAutomator:
                 output_json_path = os.path.join(output_folder_img, "F_o.json")
                 input_json_path = os.path.join(sample["folder"], "F.json")
                 
-                # Use the original function name and parameter order
-                actualizar_json_con_predicciones(input_json_path, centroids_mm, output_json_path)
+                # Use the embedded template function that handles missing files
+                from template_embedded import load_template_from_embedded
+                
+                if os.path.exists(input_json_path):
+                    # Use original JSON if it exists
+                    actualizar_json_con_predicciones(input_json_path, centroids_mm, output_json_path)
+                else:
+                    # Use embedded template if original doesn't exist
+                    print(f"Warning: {input_json_path} not found, using embedded template")
+                    data = load_template_from_embedded()
+                    
+                    # Update with predictions
+                    labels = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
+                    control_points = data["markups"][0]["controlPoints"]
+                    
+                    for landmark_idx, label in enumerate(labels):
+                        for cp in control_points:
+                            if cp["label"] == label:
+                                cp["position"] = centroids_mm[landmark_idx].tolist()
+                                break
+                    
+                    # Save the updated JSON
+                    import json
+                    with open(output_json_path, 'w') as f:
+                        json.dump(data, f, indent=4)
 
             if save_mask:
                 # Transpose back to (H, W, D) to match original saving format

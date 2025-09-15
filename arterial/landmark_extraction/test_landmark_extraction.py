@@ -16,7 +16,7 @@ import numpy as np
 import nibabel as nib
 import sys
 
-from landmark_extractor import LandmarkAutomator
+from arterial.landmark_extraction.landmark_extractor import LandmarkAutomator
 
 
 def test_folder_inference(model_path, input_folder, output_folder, device=None):
