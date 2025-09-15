@@ -41,8 +41,6 @@ class SingleCTADataset:
 
     def __getitem__(self, idx):
         cta_path = os.path.join(self.folder_path, "cta.nii.gz")
-        print("**********************************************************")
-        print(f"Loading CTA from: {cta_path}")
         # Load original image once
         tio_object = tio.ScalarImage(cta_path)
         
@@ -51,30 +49,21 @@ class SingleCTADataset:
 
         # Preprocess in memory - EXACTLY like training script
         resampled = resample_image(tio_object, (0.8, 0.8, 0.8))
-        print(f"Resampled shape: {resampled.shape}, voxel size: {resampled.spacing}")
         cropped_or_padded = crop_or_pad_image(resampled, (320, 320, 480))
-        print(f"Cropped/Padded shape: {cropped_or_padded.shape}, voxel size: {cropped_or_padded.spacing}")  
         
         # Change origin and save affine info
-        print("is it here?")
         temp_affine_path = os.path.join(self.folder_path, "affine_before_origin_change.txt")
-        print("or is it here?")
         np.savetxt(temp_affine_path, resampled.affine)
-        print("affine saved")
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
-        print("origin changed to (0,0,0)")
 
         # Get as nibabel image directly (no disk write)
-        img = final_image.numpy()
-        print(f"Final image shape: {img.shape}")  # Should be (1, 320, 320, 480)
+        img = final_image.numpy()  # Should be (1, 320, 320, 480)
         #convert it to 320 x320x480
         img = np.squeeze(img)  # Remove channel dim if exists
         # Normalize and shape - match original training script EXACTLY
         volume = np.clip(img, 0, 700) / 700
-        print("we clipped")
         # Transpose to match training: (H, W, D) -> (D, H, W) -> add channel dim
         volume = np.transpose(volume, (2, 0, 1))
-        print("transposed dimensions")  # (D, H, W)
         volume = np.expand_dims(volume, axis=0)    # (1, D, H, W) - add channel dim
         volume = torch.tensor(volume, dtype=torch.float32)
 
