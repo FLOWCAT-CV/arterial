@@ -155,6 +155,7 @@ Ensure you have the arterial package and its dependencies installed:
 - torchio
 - cv2 (opencv-python)
 - cc3d
+- monai
 
 ## Troubleshooting
 
