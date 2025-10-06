@@ -27,7 +27,7 @@ class VesselSegmenter():
     """
     def __init__(self, 
                  case_dir,
-                 mode = "extracranial_vesslels",
+                 mode = "extracranial_vessels",
                  cta_nifti_path = None,
                  fast_segmentation = False,
                  use_vanilla_nnunet = True,
@@ -78,6 +78,9 @@ class VesselSegmenter():
         self.cta_head_affine = None
         self.segmentation_head_array = None
         self.segmentation_neck_array = None
+        
+        self.probabilities_nifti = None
+        self.probabilities_nifti_path = os.path.join(self.case_dir, self.mode, "probabilities.nii.gz")
 
         self.use_vanilla_nnunet = use_vanilla_nnunet
         self.no_slicing = no_slicing
@@ -140,6 +143,67 @@ class VesselSegmenter():
         if save:
             print("Saving segmentation...")
             save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)
+            
+    def segment_vessels_from_cta_with_probabilities(self, save=True):
+        """
+        This method calls perform_inference to perform inference using a trained nnunetv2
+        model over the original CTA. At the end of the segmentation prediction, a nifti file 
+        with the format:
+        
+        >>> {self.case_dir}/{self.mode}/segmentation.nii.gz
+        
+        should be generated in the self.case_dir. 
+
+        In the case of `extracranial_vessels` and fast_segmentation=True, the 3d_lowres variant
+        from nnunetv2 is used. In the case of `extracranial_vessels` and fast_segmentation=False, or
+        `intracranial_vessels`, the 3d_fullres variant is used for the intracranial part of the image (head)
+        while the 3d_lowres is used for the rest of the image (neck).
+
+        Parmeters
+        ---------
+
+        Returns
+        -------
+
+        """
+        if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
+        if self.cta_array is None or self.cta_affine is None: self.load_cta_nifti()
+
+        if self.mode == "extracranial_vessels":
+            if self.fast_segmentation:
+                print("Performing fast segmentation...")
+                self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=True)
+            else:
+                if not self.no_slicing:
+                    print("Slicing CTA into head and neck...")
+                    self.slice_cta()
+                    print("Performing segmentation (head)...")
+                    _, self.segmentation_head_array, _ =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True)
+                    print("Performing segmentation (neck)...")
+                    _, self.segmentation_neck_array, _ =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=True)
+                    print("Joining segmentations...")
+                    self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
+                else:
+                    print("No slicing is True. Using the whole CTA volume for extracranial vessels segmentation (nnunet trained at full resolution).")
+                    self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True)
+            
+        elif self.mode == "intracranial_vessels":   
+            if not self.no_slicing:
+                print("Slicing CTA for intracranial vessel segmentation...")
+                self.slice_cta()
+                self.save_head_cta_nifti()
+            else:
+                print("No slicing is True. Using the whole CTA volume for intracranial vessels segmentation (nnunet trained at full resolution).")
+                self.cta_head_array = self.cta_array
+                self.cta_head_affine = self.cta_affine
+            print("Performing segmentation...")
+            self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True)
+        
+        if save:
+            print("Saving segmentation...")
+            save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)
+            print("Saving probabilities...")
+            save_nifti(self.probabilities_nifti,  self.probabilities_nifti_path)
 
     def slice_cta(self):
         """

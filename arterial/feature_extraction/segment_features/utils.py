@@ -880,8 +880,8 @@ def extract_segment_features(segment, use_blanking=True):
     polar, azimuthal = direction_angles(segment, proximal_node, distal_node)
     segment.graph["features"]["polar_angle"] = polar
     segment.graph["features"]["azimuthal_angle"] = azimuthal
-    # segment.graph["features"]["diameter_last_5mm"] = diameter_last_5mm(segment, distal_node)
-    # segment.graph["features"]["diameter_last_10mm"] = diameter_last_10mm(segment, distal_node)
+    segment.graph["features"]["diameter_last_5mm"] = diameter_last_5mm(segment, distal_node)
+    segment.graph["features"]["diameter_last_10mm"] = diameter_last_10mm(segment, distal_node)
     segment.graph["features"]["curvature_energy"] = curvature_energy(segment)
 
     return segment

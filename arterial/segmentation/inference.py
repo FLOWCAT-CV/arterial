@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings("ignore") # There is a warning that is wrong with nnunet 
                                   # (something about the version of trained model)
     
-def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True):
+def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=True):
     """
     Performs inference of the CTA in img_array with a trained nnunet models. The combination of
     mode and nnunet_mode should be consistent with the trained model that is going to be used. 
@@ -33,7 +33,8 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
         Nifti image with the segmentation mask.
     segmentation_array : numpy array
         3D numpy array representing the segmentation mask.
-    
+    probabilities_array : numpy array
+        3D numpy array representing the probabilities of the segmentation mask.
     """
     # We are not using the nnunet imageio readers as we do not want to unnecessarily load the
     # same image several times, and most of our pipeline is implemented using the nibabel library.
@@ -71,9 +72,30 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     )
 
     # Perform inference
-    segmentation_array = predictor.predict_single_npy_array(img, props, None, None, False)
-    # Reverse axis order to match nibabel
-    segmentation_array = segmentation_array.transpose([2, 1, 0])
-    segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
+    if return_probabilities or set_threshold_099:
+        segmentation_array, probabilities_array = predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities=True)
+        # Reverse axis order to match nibabel
+        segmentation_array = segmentation_array.transpose([2, 1, 0])
+        segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
+        print(f"Probabilities array shape: {probabilities_array.shape}")
+        probabilities_array = probabilities_array[1, :, :, :].transpose([2, 1, 0])
+        probabilities_nifti = nib.Nifti1Image(probabilities_array, img_affine)
+        
+        if set_threshold_099:
+            segmentation_array = np.zeros_like(probabilities_array)
+            segmentation_array[probabilities_array >= 0.99] = 1
+            segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
+            if return_probabilities:
+                return segmentation_nifti, segmentation_array, probabilities_nifti
+            else:
+                return segmentation_nifti, segmentation_array
+        else:
+            return segmentation_nifti, segmentation_array, probabilities_nifti
+    else:
+        segmentation_array = predictor.predict_single_npy_array(img, props, None, None, False)
+        # Reverse axis order to match nibabel
+        segmentation_array = segmentation_array.transpose([2, 1, 0])
+        segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
 
-    return segmentation_nifti, segmentation_array
+        return segmentation_nifti, segmentation_array
+        
