@@ -130,38 +130,18 @@ def process_files_change_origin(folder_path, new_origin=(0, 0, 0)):
             print(f"Origin changed: {root}/cta.nii.gz")
 
 def restore_centroids_to_original_origin(centroids_mm, affine_path, image_orientation):
-    """
-    Restore centroids to the original image space using the affine transformation.
-    Parameters
-    ----------
-        centroids_mm (np.ndarray): Centroids in mm to be restored.
-        affine_path (str): Path to the affine transformation file.
-        image_orientation (tuple): Orientation of the image (e.g., ('L', 'P', 'S')).
-    Returns
-    -------
-        np.ndarray: Centroids restored to the original image space.
-    """
-    if not os.path.exists(affine_path):
-        print(f"Warning: Affine file {affine_path} not found. Returning original centroids.")
-        return centroids_mm
-        
     affine = np.loadtxt(affine_path)
     centroids_mm_restored = np.copy(centroids_mm)
-
+    
     if image_orientation == ('L', 'P', 'S'):
         centroids_mm_restored[:, 0] -= affine[0, 3]
         centroids_mm_restored[:, 1] -= affine[1, 3]
         centroids_mm_restored[:, 2] += affine[2, 3]
     else:  # LAS
-        centroids_mm_restored[:, 0] -= affine[0, 3]
-        centroids_mm_restored[:, 1] = ((-centroids_mm[:, 1]) - affine[1, 3]) * -1
-        centroids_mm_restored[:, 2] += affine[2, 3]
-        
-        # Optional safety tweak
-        for i in range(centroids_mm_restored.shape[0]):
-            if np.abs(centroids_mm_restored[i, 1]) > 180:
-                centroids_mm_restored[i, 1] -= 2 * affine[1, 3]
-
+        centroids_mm_restored[:, 0] -= affine[0, 3]  # Subtract X
+        centroids_mm_restored[:, 1] -= affine[1, 3]  # Subtract Y
+        centroids_mm_restored[:, 2] += affine[2, 3]  # Add Z
+    
     return centroids_mm_restored
 
 #this one here reads the json template and updates the control points with the predicted values

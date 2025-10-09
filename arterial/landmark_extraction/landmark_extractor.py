@@ -53,7 +53,7 @@ class SingleCTADataset:
         
         # Change origin and save affine info
         temp_affine_path = os.path.join(self.folder_path, "affine_before_origin_change.txt")
-        np.savetxt(temp_affine_path, resampled.affine)
+        np.savetxt(temp_affine_path, cropped_or_padded.affine)
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
 
         # Get as nibabel image directly (no disk write)
@@ -71,7 +71,7 @@ class SingleCTADataset:
 
         return {
             "volume": volume,
-            "affine": original_affine,  # original affine for centroids
+            "affine": final_image.affine,  # original affine for centroids
             "folder": self.folder_path
         }
 
@@ -117,7 +117,7 @@ class SingleCTAFromArray:
         
         # Change origin and save affine info
         temp_affine_path = os.path.join(self.temp_folder, "affine_before_origin_change.txt")
-        np.savetxt(temp_affine_path, resampled.affine.numpy())
+        np.savetxt(temp_affine_path, cropped_or_padded.affine)
         
         final_image = change_origin_preprocess(cropped_or_padded, (0, 0, 0))
 
@@ -136,7 +136,7 @@ class SingleCTAFromArray:
 
         return {
             "volume": volume,
-            "affine": original_affine,  # original affine for centroids
+            "affine": final_image.affine,  # original affine for centroids
             "folder": self.temp_folder
         }
 
@@ -236,6 +236,9 @@ class LandmarkAutomator:
         # Handle orientation (match original training script)
         affine = sample["affine"]
         orientation = nib.aff2axcodes(affine)
+
+
+
         if orientation == ('L', 'A', 'S'):
             centroids_mm[:, 1] = -centroids_mm[:, 1]
 
