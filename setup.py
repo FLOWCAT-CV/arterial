@@ -12,7 +12,8 @@ setup(
     package_data={
         "arterial": [
             "segmentation/models/*",
-            "vessel_labelling/models/*"],
+            "vessel_labelling/models/*",
+            "landmark_extraction/models/*"],
         "tests": ["test_data/*"]
         },
     install_requires=[
