@@ -10,8 +10,6 @@ from scipy.ndimage import gaussian_laplace
 from skimage.measure import label
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
-from totalsegmentator.python_api import totalsegmentator
-
 def get_largest_connected_component(segmentation):
     """
     This function is used to filter the segmentation's smaller components
