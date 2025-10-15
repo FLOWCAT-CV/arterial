@@ -41,8 +41,8 @@ class TestVesselSegmenter(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz")))
 
     def test_extracranial_vessels_segmentation(self):
-        self.segmenter.set_mode("extracranial_vessels")
-        self.segmenter.set_segmentation_nifti_path(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz"))
+        self.segmenter._set_mode("extracranial_vessels")
+        self.segmenter._set_segmentation_nifti_path(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz"))
         self.segmenter.fast_segmentation = False
         if os.path.exists(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz")):
             os.remove(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz"))
@@ -66,8 +66,8 @@ class TestVesselSegmenter(unittest.TestCase):
         self.assertIsNotNone(self.segmenter.segmentation_neck_array)
 
     def test_intracranial_vessels_segmentation(self):
-        self.segmenter.set_mode("intracranial_vessels")
-        self.segmenter.set_segmentation_nifti_path(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz"))
+        self.segmenter._set_mode("intracranial_vessels")
+        self.segmenter._set_segmentation_nifti_path(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz"))
         if os.path.exists(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz")):
             os.remove(os.path.join(self.segmenter.case_dir, self.segmenter.mode, "segmentation.nii.gz"))
         self.segmenter.segmentation_nifti = None

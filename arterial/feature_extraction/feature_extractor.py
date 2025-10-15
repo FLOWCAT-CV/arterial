@@ -112,13 +112,15 @@ class FeatureExtractor():
         """
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
         if self.centerline_segments_array is None:
-            self.load_centerline_segments_array()
+            self._load_centerline_segments_array()
         if self.segments_graph is None:
-            self.load_segments_graph_pred()
+            self._load_segments_graph_pred()
         self.local_graph = build_local_graph(self.centerline_segments_array, self.segments_graph, self.sampling_distance_mm)
 
         if save:
+            print(f"Saving local graph to {self.local_graph_path}")
             save_pickle(self.local_graph, self.local_graph_path)
+            print(f"Saving local graph plot to {self.local_graph_plot_path}")
             make_graph_plot(self.local_graph, output_path=self.local_graph_plot_path)
     
     def extract_local_features(self, save=True):
@@ -135,12 +137,13 @@ class FeatureExtractor():
 
         """
         if self.cta_array is None or self.cta_affine is None:
-            self.load_cta_nifti()
+            self._load_cta_nifti_from_file()
         if self.branch_model is None:
-            self.load_branch_model()
+            self._load_branch_model()
         self.local_graph = perform_local_feature_extraction(self.local_graph, self.cta_array, self.cta_affine, self.branch_model)
         
         if save:
+            print(f"Saving local graph to {self.local_graph_path}")
             save_pickle(self.local_graph, self.local_graph_path)
 
     def extract_segment_features(self, save=True):
@@ -158,16 +161,20 @@ class FeatureExtractor():
         """
         if save: os.makedirs(self.single_segments_dir_path, exist_ok=True)
         if self.segments_graph is None:
-            self.load_segments_graph_pred()
+            self._load_segments_graph_pred()
         self.local_graph, self.segments_graph, self.segments_vessel_type_dict = perform_segment_feature_extraction(self.local_graph, self.segments_graph)
         self.segment_features = self.local_graph.graph["segment_features"]
 
         if save:
+            print(f"Saving local graph to {self.local_graph_path}")
             save_pickle(self.local_graph, self.local_graph_path)
+            print(f"Saving segments graph to {self.segments_graph_pred_path}")
             save_pickle(self.segments_graph, self.segments_graph_pred_path)
             for vessel_type in self.segments_vessel_type_dict.keys():
                 if self.segments_vessel_type_dict[vessel_type] is not None:
-                    save_pickle(self.segments_vessel_type_dict[vessel_type], os.path.join(self.single_segments_dir_path, "{}.pickle".format(vessel_type)))
+                    print(f"Saving segments vessel type to {os.path.join(self.single_segments_dir_path, '{}.pickle'.format(vessel_type))}")
+                    save_pickle(self.segments_vessel_type_dict[vessel_type], os.path.join(self.single_segments_dir_path, '{}.pickle'.format(vessel_type)))
+            print(f"Saving single segments plot to {self.single_segments_plot_path}")
             plot_single_segments(self.local_graph, self.segments_vessel_type_dict, output_path=self.single_segments_plot_path)
 
     def extract_global_features(self, save=True):
@@ -186,6 +193,7 @@ class FeatureExtractor():
         self.local_graph = perform_global_feature_extraction(self.local_graph)
 
         if save:
+            print(f"Saving local graph to {self.local_graph_path}")
             save_pickle(self.local_graph, self.local_graph_path)
 
     def extract_supersegments(self, save=True):
@@ -209,7 +217,9 @@ class FeatureExtractor():
 
         if save:
             for config, supersegment in self.supersegments.items():
+                print(f"Saving supersegment to {os.path.join(self.supersegments_dir_path, f'{config[0]} + {config[1]} + {config[2]}.pickle')}")
                 save_pickle(supersegment, os.path.join(self.supersegments_dir_path, f"{config[0]} + {config[1]} + {config[2]}.pickle"))
+            print(f"Saving supersegments plot to {self.supersegments_plot_path}")
             make_supersegment_plots(self.supersegments, local_graph=self.local_graph, output_path=self.supersegments_plot_path)
 
     def build_and_featurize_individual_centerline_graph(self, centerline_model, radius_array_name="MaximumInscribedSphereRadius", centerline_id=None, save=True):
@@ -233,13 +243,15 @@ class FeatureExtractor():
         """
         if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
         if self.cta_array is None or self.cta_affine is None:
-            self.load_cta_nifti()
+            self._load_cta_nifti_from_file()
         self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id)
         self.individual_centerline_graph = perform_local_feature_extraction_individual_centerline(self.individual_centerline_graph, self.cta_array, self.cta_affine)
         self.individual_centerline_graph = extract_segment_features(self.individual_centerline_graph, use_blanking=False)
 
         if save:
+            print(f"Saving individual centerline graph to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.pickle')}")
             save_pickle(self.individual_centerline_graph, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.pickle"))
+            print(f"Saving individual centerline graph plot to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.png')}")
             make_graph_plot(self.individual_centerline_graph, output_path=os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.png"))
 
     def is_local_featurized(self):
@@ -260,7 +272,7 @@ class FeatureExtractor():
         else:
             return False
 
-    def load_cta_nifti(self):
+    def _load_cta_nifti_from_file           (self):
         if not os.path.isfile(self.cta_nifti_path):
             raise FileNotFoundError(f"CTA nifti file not found in {self.cta_nifti_path}")
         
@@ -268,84 +280,84 @@ class FeatureExtractor():
         self.cta_array = self.cta_nifti.get_fdata()
         self.cta_affine = self.cta_nifti.affine
 
-    def load_centerline_segments_array(self):
+    def _load_centerline_segments_array(self):
         if not os.path.isfile(self.centerline_segments_array_path):
             raise FileNotFoundError(f"Centerline segments array not found in {self.centerline_segments_array_path}")
         
         self.centerline_segments_array = load_numpy(self.centerline_segments_array_path)
 
-    def load_branch_model(self):
+    def _load_branch_model(self):
         if not os.path.isfile(self.branch_model_path):
             raise FileNotFoundError(f"Branch model not found in {self.branch_model_path}")
 
         self.branch_model = load_vtkpolydata(self.branch_model_path)
 
-    def load_segments_graph_pred(self):
+    def _load_segments_graph_pred(self):
         if not os.path.isfile(self.segments_graph_pred_path):
             raise FileNotFoundError(f"Segments graph not found in {self.segments_graph_pred_path}")
         self.segments_graph = load_pickle(self.segments_graph_pred_path)
 
-    def set_case_dir(self, case_dir):
+    def _set_case_dir(self, case_dir):
         if not isinstance(case_dir, str):
             raise ValueError("case_dir should be a string.")
         self.case_dir = case_dir
     
-    def set_mode(self, mode):
+    def _set_mode(self, mode):
         if mode not in ["extracranial_vessels", "intracranial_vessels"]:
             raise ValueError("mode should be either 'extracranial_vessels' or 'intracranial_vessels'.")
         self.mode = mode
 
-    def set_sampling_distance_mm(self, sampling_distance_mm):
+    def _set_sampling_distance_mm(self, sampling_distance_mm):
         if not isinstance(sampling_distance_mm, (int, float)):
             raise ValueError("sampling_distance_mm should be an integer or a float.")
         self.sampling_distance_mm = sampling_distance_mm
 
-    def set_cta_nifti_path(self, path):
+    def _set_cta_nifti_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.cta_nifti_path = path
 
-    def set_centerline_segments_array_path(self, path):
+    def _set_centerline_segments_array_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.centerline_segments_array_path = path
 
-    def set_branch_model_path(self, path):
+    def _set_branch_model_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.branch_model_path = path
 
-    def set_segments_graph_pred_path(self, path):
+    def _set_segments_graph_pred_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segments_graph_pred_path = path
 
-    def set_local_graph_path(self, path):
+    def _set_local_graph_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.local_graph_path = path
 
-    def set_local_graph_plot_path(self, path):
+    def _set_local_graph_plot_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.local_graph_plot_path = path
 
-    def set_single_segments_dir_path(self, path):
+    def _set_single_segments_dir_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.single_segments_dir_path = path    
 
-    def set_single_segments_plot_path(self, path):  
+    def _set_single_segments_plot_path(self, path):  
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.single_segments_plot_path = path   
 
-    def set_supersegments_dir_path(self, path):
+    def _set_supersegments_dir_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.supersegments_dir_path = path
         
-    def set_supersegments_plot_path(self, path):
+    def _set_supersegments_plot_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.supersegments_plot_path = path

@@ -60,10 +60,10 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.vesssel_labeller.centerline_segments_array = None
         self.vesssel_labeller.segments_graph = None
 
-        self.vesssel_labeller.load_centerline_segments_array()
+        self.vesssel_labeller._load_centerline_segments_array()
         self.assertIsNotNone(self.vesssel_labeller.centerline_segments_array)
         
-        self.vesssel_labeller.load_segments_graph()
+        self.vesssel_labeller._load_segments_graph()
         self.assertIsNotNone(self.vesssel_labeller.segments_graph)
 
     @classmethod

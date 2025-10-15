@@ -1,0 +1,18 @@
+{
+    "channel_names": {
+        "0": "CT"
+    },
+    "labels": {
+        "background": 0,
+        "mandible": 1,
+        "teeth_lower": 2,
+        "skull": 3,
+        "head": 4,
+        "sinus_maxillary": 5,
+        "sinus_frontal": 6,
+        "teeth_upper": 7
+    },
+    "numTraining": 384,
+    "file_ending": ".nii.gz",
+    "overwrite_image_reader_writer": "NibabelIOWithReorient"
+}

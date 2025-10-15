@@ -595,7 +595,7 @@ class CenterlineComputationLogic(object):
 
         return [centerlines, voronoi]
     
-def build_endpoints_json(endpoint_list, segmentation_affine):
+def build_endpoints_json(endpoint_list, segmentation_affine, endpoint_labels=None):
     """
     Builds a JSON object with the endpoints in the format compatible with the Markups module in 3D Slicer.
 
@@ -617,13 +617,22 @@ def build_endpoints_json(endpoint_list, segmentation_affine):
     # with how nibabel reads the orientation of the nifti file compared to sitk
     coordinate_system = ''.join(str(axis) for axis in nib.orientations.aff2axcodes(segmentation_affine))
     if "R" in coordinate_system:
+        sign_r = -1
         coordinate_system = coordinate_system.replace("R", "L")
     else:
+        sign_r = 1
         coordinate_system = coordinate_system.replace("L", "R")
     if "A" in coordinate_system:
+        sign_a = -1
         coordinate_system = coordinate_system.replace("A", "P")
     else:
+        sign_a = 1
         coordinate_system = coordinate_system.replace("P", "A")
+    if "S" in coordinate_system:
+        sign_s = 1
+    else:
+        sign_s = -1
+
     endpoints_json = {
         "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
         "markups": [
@@ -631,28 +640,28 @@ def build_endpoints_json(endpoint_list, segmentation_affine):
                 "type": "Fiducial",
                 "coordinateSystem": coordinate_system,
                 "coordinateUnits": "mm",
-                "locked": "false",
-                "fixedNumberOfControlPoints": "false",
+                "locked": False,
+                "fixedNumberOfControlPoints": False,
                 "labelFormat": "%N-%d",
                 "lastUsedControlPointNumber": 0,
                 "controlPoints": [],
                 "measurements": [],
                 "display": {
-                    "visibility": "true",
+                    "visibility": True,
                     "opacity": 1.0,
                     "color": [0.4, 1.0, 1.0],
                     "selectedColor": [1.0, 0.5000076295109483, 0.5000076295109483],
                     "activeColor": [0.4, 1.0, 0.0],
-                    "propertiesLabelVisibility": "false",
-                    "pointLabelsVisibility": "false",
+                    "propertiesLabelVisibility": True,
+                    "pointLabelsVisibility": True,
                     "textScale": 3.0,
                     "glyphType": "Sphere3D",
                     "glyphScale": 3.0,
                     "glyphSize": 2.5,
-                    "useGlyphScale": "true",
-                    "sliceProjection": "false",
-                    "sliceProjectionUseFiducialColor": "true",
-                    "sliceProjectionOutlinedBehindSlicePlane": "false",
+                    "useGlyphScale": True,
+                    "sliceProjection": False,
+                    "sliceProjectionUseFiducialColor": True,
+                    "sliceProjectionOutlinedBehindSlicePlane": False,
                     "sliceProjectionColor": [1.0, 1.0, 1.0],
                     "sliceProjectionOpacity": 0.6,
                     "lineThickness": 0.2,
@@ -660,10 +669,10 @@ def build_endpoints_json(endpoint_list, segmentation_affine):
                     "lineColorFadingEnd": 10.0,
                     "lineColorFadingSaturation": 1.0,
                     "lineColorFadingHueOffset": 0.0,
-                    "handlesInteractive": "false",
-                    "translationHandleVisibility": "true",
-                    "rotationHandleVisibility": "true",
-                    "scaleHandleVisibility": "true",
+                    "handlesInteractive": False,
+                    "translationHandleVisibility": True,
+                    "rotationHandleVisibility": True,
+                    "scaleHandleVisibility": True,
                     "interactionHandleScale": 3.0,
                     "snapMode": "toVisibleSurface"
                 }
@@ -672,20 +681,32 @@ def build_endpoints_json(endpoint_list, segmentation_affine):
     }
 
     # Pass from vtkPoints to list
-    endpoint_list_ = [list(endpoint_list.GetPoint(idx)) for idx in range(endpoint_list.GetNumberOfPoints())]
+    if isinstance(endpoint_list, list):
+        endpoint_list_ = endpoint_list
+    elif isinstance(endpoint_list, np.ndarray):
+        endpoint_list_ = [list(endpoint_list[idx]) for idx in range(len(endpoint_list))]
+    else:    
+        endpoint_list_ = [list(endpoint_list.GetPoint(idx)) for idx in range(endpoint_list.GetNumberOfPoints())]
 
     for idx, endpoint in enumerate(endpoint_list_):
+        if isinstance(endpoint_labels, list):
+            if len(endpoint_labels) == len(endpoint_list_):
+                label = endpoint_labels[idx]
+            else:
+                label = f"Endpoint-{idx + 1}"
+        else:
+            label = f"Endpoint-{idx + 1}"
         endpoints_json["markups"][0]["controlPoints"].append(
             {
                 "id": str(idx + 1),
-                "label": "Endpoints-1",
+                "label": label,
                 "description": "",
                 "associatedNodeID": "",
                 "position": list(endpoint),
-                "orientation": [-1.0, -0.0, -0.0, -0.0, -1.0, -0.0, 0.0, 0.0, 1.0],
-                "selected": "false",
-                "locked": "false",
-                "visibility": "true",
+                "orientation": [float(sign_r), -0.0, -0.0, -0.0, float(sign_a), -0.0, 0.0, 0.0, float(sign_s)],
+                "selected": False,
+                "locked": False,
+                "visibility": True,
                 "positionStatus": "defined"
             }
         )

@@ -107,15 +107,18 @@ class CenterlineExtractor():
             os.makedirs(self.segmentations_dir_path, exist_ok=True)
 
         if self.segmentation_array is None or self.segmentation_affine is None:
-            self.load_segmentation_nifti()
+            self._load_segmentation_nifti_from_file()
         if self.mode == "extracranial_vessels" and volume_check:
             volume_sanity_check(self.segmentation_array, self.segmentation_affine)
         self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine, self.fast_segmentation)
         
         if save:
+            print(f"Saving segmentation model to {self.segmentation_path}")
             save_vtkpolydata(self.segmentation_model, self.segmentation_path)
+            print(f"Saving segmentation model as STL to {self.segmentation_path_stl}")
             save_vtkpolydata_as_stl(self.segmentation_model, self.segmentation_path_stl)
             for idx, segmentation_model in enumerate(self.segmentation_model_list):
+                print(f"Saving segmentation model {idx} to {os.path.join(self.segmentations_dir_path, f'segmentation_{idx}.vtk')}")
                 save_vtkpolydata(segmentation_model, os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk"))
     
     def perform_centerline_extraction(self, save=True):
@@ -146,7 +149,7 @@ class CenterlineExtractor():
         if self.segmentation_model is None:
             self.perform_preprocessing()
         if self.segmentation_array is None or self.segmentation_affine is None:
-            self.load_segmentation_nifti()
+            self._load_segmentation_nifti_from_file()
 
         segmentation_idx_to_remove = []
 
@@ -169,8 +172,11 @@ class CenterlineExtractor():
 
         if save:
             for idx, centerline_model in enumerate(self.centerline_model_list):
+                print(f"Saving centerline model {idx} to {os.path.join(self.centerlines_dir_path, f'centerlines_{idx}.vtk')}")
                 save_vtkpolydata(centerline_model, os.path.join(self.centerlines_dir_path, f"centerlines_{idx}.vtk"))
+                print(f"Saving network model {idx} to {os.path.join(self.networks_dir_path, f'network_{idx}.vtk')}")
                 save_vtkpolydata(self.network_list[idx], os.path.join(self.networks_dir_path, f"network_{idx}.vtk"))
+                print(f"Saving endpoints model {idx} to {os.path.join(self.endpoints_dir_path, f'endpoints_{idx}.json')}")
                 save_json(self.endpoints_json_list[idx], os.path.join(self.endpoints_dir_path, f"endpoints_{idx}.json"))
         
     def perform_branch_model_extraction(self, save=True):
@@ -191,30 +197,32 @@ class CenterlineExtractor():
 
         """
         if len(self.centerline_model_list) == 0: 
-            self.load_centerline_model_list()
+            self._load_centerline_model_list()
         
         if save: os.makedirs(self.branch_models_dir_path, exist_ok=True)
 
         for idx, centerline_model in enumerate(self.centerline_model_list):
             print(f"Extracting branch model from centerline model {idx}...")
-            # branch_model_ = extract_branch_model(centerline_model)
-            # if branch_model_ is None and idx == 0:
-            #     raise ValueError("Branch model could not be extracted for first model. Interrupting computation, as this "\
-            #                      "is a critical error for all the posterior pipeline.")
-            # elif branch_model_ is not None:
-            #     self.branch_model_list.append(branch_model_)
-            #     if save:
-            #         save_vtkpolydata(branch_model_, os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk"))
-            # else:
-            #     print(f"Branch model could not be extracted for centerline model {idx}. Skipping...")
-            if os.path.isfile(os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk")):
-                self.branch_model_list.append(load_vtkpolydata(os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk")))
+            branch_model_ = extract_branch_model(centerline_model)
+            if branch_model_ is None and idx == 0:
+                raise ValueError("Branch model could not be extracted for first model. Interrupting computation, as this "\
+                                 "is a critical error for all the posterior pipeline.")
+            elif branch_model_ is not None:
+                self.branch_model_list.append(branch_model_)
+                if save:
+                    print(f"Saving branch model {idx} to {os.path.join(self.branch_models_dir_path, f'branch_model_{idx}.vtk')}")
+                    save_vtkpolydata(branch_model_, os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk"))
             else:
                 print(f"Branch model could not be extracted for centerline model {idx}. Skipping...")
+            # if os.path.isfile(os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk")):
+            #     self.branch_model_list.append(load_vtkpolydata(os.path.join(self.branch_models_dir_path, f"branch_model_{idx}.vtk")))
+            # else:
+            #     print(f"Branch model could not be extracted for centerline model {idx}. Skipping...")
         
         print("Unifying branch models...")
         self.branch_model = unify_branch_models(self.branch_model_list)
         if save:
+            print(f"Saving branch model to {self.branch_model_path}")
             save_vtkpolydata(self.branch_model, self.branch_model_path)
 
     def perform_clipped_model_extraction(self, save=True):
@@ -235,9 +243,9 @@ class CenterlineExtractor():
 
         """
         if len(self.segmentation_model_list) == 0: 
-            self.load_segmentation_model_list()
+            self._load_segmentation_model_list()
         if len(self.branch_model_list) == 0: 
-            self.load_branch_model_list()
+            self._load_branch_model_list()
 
         if save: os.makedirs(self.clipped_models_dir_path, exist_ok=True)
 
@@ -252,6 +260,7 @@ class CenterlineExtractor():
         print("Unifying clipped models...")
         self.clipped_model = unify_clipped_models(self.clipped_model_list)
         if save:
+            print(f"Saving clipped model to {self.clipped_model_path}")
             save_vtkpolydata(self.clipped_model, self.clipped_model_path)
 
     def perform_centerline_postprocessing(self, save=True):
@@ -270,10 +279,10 @@ class CenterlineExtractor():
         
         """
         if len(self.centerline_model_list) == 0: 
-            self.load_centerline_model_list()
+            self._load_centerline_model_list()
         
         if self.segmentation_nifti is None or self.segmentation_affine is None or self.image_shape is None:
-            self.load_segmentation_nifti()
+            self._load_segmentation_nifti_from_file()
 
         print("Computing centerline segments array...")
         self.centerline_segments_array = compute_centerline_segments_array(
@@ -284,6 +293,7 @@ class CenterlineExtractor():
             )
 
         if save:
+            print(f"Saving centerline segments array to {self.centerline_segments_array_path}")
             save_numpy(self.centerline_segments_array, self.centerline_segments_array_path)
 
     def extract_centerline_between_endpoints(self, startpoint, endpoint, centerline_id=None, save=True):
@@ -302,7 +312,7 @@ class CenterlineExtractor():
         if self.segmentation_model is None:
             self.perform_preprocessing(volume_check=False)
         if self.segmentation_array is None or self.segmentation_affine is None:
-            self.load_segmentation_nifti()
+            self._load_segmentation_nifti_from_file()
 
         if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
         if centerline_id is None:
@@ -312,9 +322,10 @@ class CenterlineExtractor():
         self.individual_centerlines_list.append(individual_centerline)
 
         if save:
+            print(f"Saving individual centerline to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.vtk')}")
             save_vtkpolydata(individual_centerline, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.vtk"))
 
-    def load_segmentation_nifti(self):
+    def _load_segmentation_nifti_from_file(self):
         if not os.path.isfile(self.segmentation_nifti_path): 
             raise FileNotFoundError(f"Segmentation nifti file not found: {self.segmentation_nifti_path}. \nPlease run segmentation first.")
 
@@ -323,7 +334,13 @@ class CenterlineExtractor():
         self.segmentation_affine = self.segmentation_nifti.affine
         self.image_shape = self.segmentation_nifti.shape
 
-    def load_centerline_model_list(self):
+    def _load_segmentation_nifti_from_nib(self, segmentation_nib):
+        self.segmentation_nib = segmentation_nib
+        self.segmentation_array = segmentation_nib.get_fdata()
+        self.segmentation_affine = segmentation_nib.affine
+        self.image_shape = segmentation_nib.shape
+
+    def _load_centerline_model_list(self):
         if not os.path.isdir(self.centerlines_dir_path): 
             raise FileNotFoundError(f"Centerlines directory not found: {self.centerlines_dir_path}. \nPlease run centerline extraction first.")
         if len(os.listdir(self.centerlines_dir_path)) == 0: 
@@ -331,7 +348,7 @@ class CenterlineExtractor():
 
         self.centerline_model_list = load_vtk_list_from_dir(self.centerlines_dir_path)
     
-    def load_segmentation_model_list(self):
+    def _load_segmentation_model_list(self):
         if not os.path.isdir(self.segmentations_dir_path): 
             raise FileNotFoundError(f"Segmentations directory not found: {self.segmentations_dir_path}. \nPlease run centerline extraction first.")
         if len(os.listdir(self.segmentations_dir_path)) == 0: 
@@ -339,51 +356,51 @@ class CenterlineExtractor():
 
         self.segmentation_model_list = load_vtk_list_from_dir(self.segmentations_dir_path)
 
-    def load_segmentation(self):
+    def _load_segmentation(self):
         if not os.path.isfile(self.segmentation_path):
             raise FileNotFoundError(f"Segmentation file not found: {self.segmentation_path}. \nPlease run centerline extraction first.")
         self.segmentation_model = load_vtkpolydata(self.segmentation_path)
 
-    def load_branch_model_list(self):
+    def _load_branch_model_list(self):
         if not os.path.isdir(self.branch_models_dir_path):
             raise FileNotFoundError(f"Branch models directory not found: {self.branch_models_dir_path}. \nPlease run centerline extraction and branch model extraction first.")
         if len(os.listdir(self.branch_models_dir_path)) == 0: 
             raise ValueError(f"Branch models directory is empty: {self.branch_models_dir_path}. \nPlease run centerline extraction and branch model extraction first.")
         self.branch_model_list = load_vtk_list_from_dir(self.branch_models_dir_path)
     
-    def load_branch_model(self):
+    def _load_branch_model(self):
         if not os.path.isfile(self.branch_model_path):
             raise FileNotFoundError(f"Branch model file not found: {self.branch_model_path}. \nPlease run centerline extraction and branch model extraction first.")
         self.branch_model = load_vtkpolydata(self.branch_model_path)
 
-    def load_clipped_model_list(self):
+    def _load_clipped_model_list(self):
         if not os.path.isdir(self.clipped_models_dir_path):
             raise FileNotFoundError(f"Clipped models directory not found: {self.clipped_models_dir_path}. \nPlease run centerline extraction and clipped model extraction first.")
         if len(os.listdir(self.clipped_models_dir_path)) == 0:
             raise ValueError(f"Clipped models directory is empty: {self.clipped_models_dir_path}. \nPlease run centerline extraction and clipped model extraction first.")
         self.clipped_model_list = load_vtk_list_from_dir(self.clipped_models_dir_path)
     
-    def load_clipped_model(self):
+    def _load_clipped_model(self):
         if not os.path.isfile(self.clipped_model_path):
             raise FileNotFoundError(f"Clipped model file not found: {self.clipped_model_path}. \nPlease run centerline extraction and clipped model extraction first.")
         self.clipped_model = load_vtkpolydata(self.clipped_model_path)
 
-    def set_case_dir(self, case_dir):
+    def _set_case_dir(self, case_dir):
         if not isinstance(case_dir, str):
             raise ValueError("case_dir should be a string.")
         self.case_dir = case_dir
 
-    def set_mode(self, mode):
+    def _set_mode(self, mode):
         if mode not in ["extracranial_vessels", "intracranial_vessels"]:
             raise ValueError("mode should be either 'extracranial_vessels' or 'intracranial_vessels'.")
         self.mode = mode
 
-    def set_segmentation_nifti_path(self, path):
+    def _set_segmentation_nifti_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segmentation_nifti_path = path
 
-    def set_fast_segmentation(self, fast_segmentation):
+    def _set_fast_segmentation(self, fast_segmentation):
         if not isinstance(fast_segmentation, bool):
             raise ValueError("fast_segmentation should be a boolean variable.")
         self.fast_segmentation = fast_segmentation
@@ -398,8 +415,10 @@ class CenterlineExtractor():
             os.remove(os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk"))
         # Rename the rest of the segmentations
         for idx_, segmentation_model in enumerate(self.segmentation_model_list):
+            print(f"Saving segmentation model {idx_} to {os.path.join(self.segmentations_dir_path, f'segmentation_{idx_}.vtk')}")
             save_vtkpolydata(segmentation_model, os.path.join(self.segmentations_dir_path, f"segmentation_{idx_}.vtk"))
         # Remove the last segmentation (it will have been renamed)
         if os.path.isfile(os.path.join(self.segmentations_dir_path, f"segmentation_{idx_ + 1}.vtk")):
+            print(f"Removing segmentation model {idx_ + 1} to {os.path.join(self.segmentations_dir_path, f'segmentation_{idx_ + 1}.vtk')}")
             os.remove(os.path.join(self.segmentations_dir_path, f"segmentation_{idx_ + 1}.vtk"))
         
