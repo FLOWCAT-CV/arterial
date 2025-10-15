@@ -46,45 +46,28 @@ def run_landmark_detection_batch_processing(src_dir, mode, cta_nifti_path_conven
 
     """
     landmarks_ras_mm_dict = {}
-    landmarks_slicer_json_path = {}
-    predicted_mask_nifti_path = {}
+    landmarks_slicer_json_path_dict = {}
+    predicted_mask_nifti_path_dict = {}
 
     for case_dir in os.listdir(src_dir):
         if cta_nifti_path_convention is not None:
             cta_nifti_path = os.path.join(case_dir, cta_nifti_path_convention)
         else:
             cta_nifti_path = None # Will default to case_dir/cta.nii.gz
-        # Initialize the landmark detector
-        landmark_detector = LandmarkDetector(case_dir, mode, cta_nifti_path)
-        # Detect landmarks on the CTA
-        landmark_detector.detect_landmarks_on_cta(return_mask=True, save=True) # Will save the landmarks in RAS coordinates, Slicer format, and predicted mask in the case_dir/mode directory
+        # Run landmark detection for the current case
+        landmarks_ras_mm_dict_, landmarks_slicer_json_path_, predicted_mask_nifti_path_ = run_landmark_detection_single_case(case_dir, mode, cta_nifti_path)
 
         # Output objects are stored as attributes of the landmark_detector object
-        landmarks_ras_mm_dict[case_dir] = landmark_detector.landmarks_ras_mm_dict
-        landmarks_slicer_json_path[case_dir] = landmark_detector.landmarks_slicer_json_path
-        predicted_mask_nifti_path[case_dir] = landmark_detector.predicted_mask_nifti_pat
+        landmarks_ras_mm_dict[case_dir] = landmarks_ras_mm_dict_
+        landmarks_slicer_json_path_dict[case_dir] = landmarks_slicer_json_path_
+        predicted_mask_nifti_path_dict[case_dir] = predicted_mask_nifti_path_
 
-    return landmarks_ras_mm_dict, landmarks_slicer_json_path, predicted_mask_nifti_path
+    return landmarks_ras_mm_dict, landmarks_slicer_json_path_dict, predicted_mask_nifti_path_dict
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-cd", "--case_dir", type=str, required=True,
-        help="Path to directory containing the CTA nifti file. Assumes that the CTA nifti file has the basename of the dir.")
-    parser.add_argument("-cnp", "--cta_nifti_path", type=str, default=None,
-        help="Path to the CTA nifti file. Assumes case_dir/cta.nii.gz if not provided.")
-    parser.add_argument("-m", "--mode", type=str, default="extracranial_vessels",
-        help="Mode is defined coherently with the rest of Arterial, although CarotiCAT only supports extracranial_vessels (i.e. head and neck CTA) for now.")
-    args = parser.parse_args()
-
-    case_dir = args.case_dir 
-    cta_nifti_path = args.cta_nifti_path 
-    mode = args.mode 
+    input_dir = "/path/to/input_dir"
+    mode = "extracranial_vessels"
+    cta_nifti_path_convention = "cta.nii.gz"
     
-    landmarks_ras_mm_dict, landmarks_slicer_json_path, predicted_mask_nifti_path = run_landmark_extraction(case_dir, mode, cta_nifti_path)
-
-    print("Landmarks:", landmarks_ras_mm_dict)
-    print("Landmarks in Slicer format saved in:", landmarks_slicer_json_path)
-    print("Predicted mask saved in:", predicted_mask_nifti_path)
+    run_landmark_detection_batch_processing(input_dir, mode, cta_nifti_path_convention)
