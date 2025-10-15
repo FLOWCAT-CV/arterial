@@ -130,7 +130,7 @@ class TestAccessPredictor(unittest.TestCase):
         # Reset the cta_nifti attribute
         self.access_predictor.cta_nifti = None
         # Run the actual load_cta_nifti method
-        self.access_predictor.load_cta_nifti()
+        self.access_predictor._load_cta_nifti_from_file()
         
         # Check that the CTA nifti was loaded
         self.assertIsNotNone(self.access_predictor.cta_nifti)

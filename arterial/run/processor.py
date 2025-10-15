@@ -163,13 +163,13 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
         
-        >>> case_dir/centerlines/{self.mode}_centerlines_{idx}.vtk
-        >>> case_dir/segmentations/{self.mode}_segmentation_{idx}.vtk
-        >>> case_dir/branch_models/{self.mode}_branch_model_{idx}.vtk
-        >>> case_dir/{self.mode}_branch_model.vtk
-        >>> case_dir/clipped_models/{self.mode}_clipped_model_{idx}.vtk
-        >>> case_dir/{self.mode}_clipped_model.vtk
-        >>> case_dir/{self.mode}_centerline_segments_array.npy
+        >>> case_dir/{self.mode}/centerlines/centerlines_{idx}.vtk
+        >>> case_dir/{self.mode}/segmentations/segmentation_{idx}.vtk
+        >>> case_dir/{self.mode}/branch_models/branch_model_{idx}.vtk
+        >>> case_dir/{self.mode}/branch_model.vtk
+        >>> case_dir/{self.mode}/clipped_models/clipped_model_{idx}.vtk
+        >>> case_dir/{self.mode}/clipped_model.vtk
+        >>> case_dir/{self.mode}/centerline_segments_array.npy
 
         Parmeters
         ---------
@@ -210,10 +210,10 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
 
-        >>> case_dir/{self.mode}_segments_graph.pickle
-        >>> case_dir/{self.mode}_segments_graph.png
-        >>> case_dir/{self.mode}_segments_graph_pred.pickle
-        >>> case_dir/{self.mode}_segments_graph_pred.png
+        >>> case_dir/{self.mode}/segments_graph.pickle
+        >>> case_dir/{self.mode}/segments_graph.png
+        >>> case_dir/{self.mode}/segments_graph_pred.pickle
+        >>> case_dir/{self.mode}/segments_graph_pred.png
 
         Parmeters
         ---------
@@ -240,11 +240,11 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
 
-        >>> case_dir/graph.pickle
-        >>> case_dir/graph.png
-        >>> case_dir/single_segments.png
-        >>> case_dir/supersegments/{configuration_name}.pickle
-        >>> case_dir/supersegments.png
+        >>> case_dir/{self.mode}/graph.pickle
+        >>> case_dir/{self.mode}/graph.png
+        >>> case_dir/{self.mode}/single_segments.png
+        >>> case_dir/{self.mode}/supersegments/{configuration_name}.pickle
+        >>> case_dir/{self.mode}/supersegments.png
 
         Additionally, if a patient_configuration.json file is available, the following files should be
         generated:

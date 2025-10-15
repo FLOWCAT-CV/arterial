@@ -3,37 +3,41 @@
 import os
 import numpy as np
 
-from arterial.landmark_extraction.landmark_extraction import infer_landmarks_from_array
+from arterial.landmark_detection.landmark_detection import infer_landmarks_from_array
 
 from arterial.io.load_and_save_operations import load_nifti, save_nifti, save_json
 
-class LandmarkExtractor:
+class LandmarkDetector:
     """
-    Class for automating landmark extraction from CTA images.
+    Class for automating landmark detection from CTA images.
 
-    Parameters
-    ----------
-        model_path (str): Path to the trained model file.
-        device (str, optional): Device to run the model on ('cpu' or 'cuda'). Defaults to None, which auto-selects.
-    
-    Methods
-    -------
-        infer_folder(folder_path, output_folder, save_mask=True, save_json=True):
-            Perform inference on a folder containing 'cta.nii.gz' and save results.
-        infer_from_array(data, affine=None, output_folder=None, save_mask=False, save_json=False):
-            Perform inference on numpy array or nibabel image and return landmarks.
     """
     def __init__(self,
                  case_dir,
                  mode = "extracranial_vessels",
                  cta_nifti_path = None
                  ):
+        """
+        Initializes object of the LandmarkDetector class.
+
+        Parameters
+        ----------
+        case_dir : string or path-like object
+            Path to case directory.
+        mode : string, optional
+            Mode of the vessel labeller. The default is "extracranial_vessels", it can also be "intracranial_vessels".
+        cta_nifti_path : string or path-like object, optional
+            Path to the CTA nifti file. If not provided, it will be assumed that the CTA nifti file is in the case_dir, with the name 'cta.nii.gz'.
+
+
+        """
         assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
         assert mode in ["extracranial_vessels"], "mode should be either 'extracranial_vessels'. 'intracranial_vessels' is not supported yet."
 
         self.case_dir = case_dir
         self.mode = mode
         if cta_nifti_path is None:
+            print(f"'cta_nifti_path' not provided. Assuming it is in {self.case_dir}/cta.nii.gz")
             self.cta_nifti_path = os.path.join(self.case_dir, "cta.nii.gz")
         else:
             self.cta_nifti_path = cta_nifti_path
@@ -63,22 +67,24 @@ class LandmarkExtractor:
         
         Returns
         -------
-            None
 
         """
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
-        if self.cta_array is None or self.cta_affine is None: self.load_cta_nifti()
+        if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti_from_file()
 
         print(f"Detecting landmarks on CTA...")
         self.landmarks_ras_mm_dict, self.landmarks_slicer_json, self.predicted_mask_nib = infer_landmarks_from_array(self.cta_array, self.cta_affine, return_mask)
 
         if save:
+            print(f"Saving landmarks in RAS coordinates to {self.landmarks_ras_json_path}")
             save_json(self.landmarks_ras_mm_dict, self.landmarks_ras_json_path)
+            print(f"Saving landmarks in Slicer format to {self.landmarks_slicer_json_path}")
             save_json(self.landmarks_slicer_json, self.landmarks_slicer_json_path)
             if return_mask:
+                print(f"Saving predicted mask to {self.predicted_mask_nifti_path}")
                 save_nifti(self.predicted_mask_nib, self.predicted_mask_nifti_path)
 
-    def load_cta_nifti(self):
+    def _load_cta_nifti_from_file(self):
         if not os.path.isfile(self.cta_nifti_path):
             raise FileNotFoundError(f"CTA nifti file not found in {self.cta_nifti_path}")
         self.cta_nifti = load_nifti(self.cta_nifti_path)

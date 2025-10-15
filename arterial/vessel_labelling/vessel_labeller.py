@@ -67,13 +67,15 @@ class VesselLabeller():
 
         """        
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
-        self.load_centerline_segments_array()
+        self._load_centerline_segments_array()
         # Build segments graph from centerline segments array
         print("Building segments graph...")
         self.segments_graph = build_nx_graph_from_segments_array(self.centerline_segments_array)
 
         if save:
+            print(f"Saving segments graph to {self.segments_graph_path}")
             save_pickle(self.segments_graph, self.segments_graph_path)
+            print(f"Saving segments graph plot to {self.segments_graph_plot_path}")
             make_graph_plot(self.segments_graph, label="cell_id", output_path=self.segments_graph_plot_path)
 
     def predict_vessel_types(self, ensemble=True, save=True):
@@ -95,7 +97,7 @@ class VesselLabeller():
         """
         if self.segments_graph is None:
             if os.path.isfile(self.segments_graph_path):
-                self.load_segments_graph()
+                self._load_segments_graph()
             else:
                 self.build_segments_graph()
 
@@ -106,7 +108,9 @@ class VesselLabeller():
         self.segments_graph_pred = perform_inference(self.segments_graph, self.mode, ensemble)
 
         if save:
+            print(f"Saving predicted segments graph to {self.segments_graph_pred_path}")
             save_pickle(self.segments_graph_pred, self.segments_graph_pred_path)
+            print(f"Saving predicted segments graph plot to {self.segments_graph_pred_plot_path}")
             make_graph_plot(self.segments_graph_pred, label="vessel_type_name", output_path=self.segments_graph_pred_plot_path)
 
     def segments_graph_sanity_check(self):
@@ -126,53 +130,53 @@ class VesselLabeller():
         if len(self.segments_graph.edges) < 2:
             raise ValueError("Segment graph has less than 2 edges. This is a critical error, processing is interrupted.")
 
-    def load_centerline_segments_array(self):
+    def _load_centerline_segments_array(self):
         if not os.path.isfile(self.centerline_segments_array_path):
             raise FileNotFoundError(f"Centerline segments array not found in {self.centerline_segments_array_path}")
         
         self.centerline_segments_array = load_numpy(self.centerline_segments_array_path)
 
-    def load_segments_graph(self):
+    def _load_segments_graph(self):
         if not os.path.isfile(self.segments_graph_path):
             raise FileNotFoundError(f"Segments graph not found in {self.segments_graph_path}")
         self.segments_graph = load_pickle(self.segments_graph_path)
 
-    def load_segments_graph_pred(self):
+    def _load_segments_graph_pred(self):
         if not os.path.isfile(self.segments_graph_pred_path):
             raise FileNotFoundError(f"Predicted segments graph not found in {self.segments_graph_pred_path}")
         self.segments_graph_pred = load_pickle(self.segments_graph_pred_path)
 
-    def set_case_dir(self, case_dir):
+    def _set_case_dir(self, case_dir):
         if not isinstance(case_dir, str):
             raise ValueError("case_dir should be a string.")
         self.case_dir = case_dir
 
-    def set_mode(self, mode):
+    def _set_mode(self, mode):
         if mode not in ["extracranial_vessels", "intracranial_vessels"]:
             raise ValueError("mode should be either 'extracranial_vessels' or 'intracranial_vessels'.")
         self.mode = mode
 
-    def set_centerline_segments_array_path(self, path):
+    def _set_centerline_segments_array_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.centerline_segments_array_path = path
     
-    def set_segments_graph_path(self, path):
+    def _set_segments_graph_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segments_graph_path = path
     
-    def set_segments_graph_pred_path(self, path):
+    def _set_segments_graph_pred_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segments_graph_pred_path = path
 
-    def set_segments_graph_plot_path(self, path):
+    def _set_segments_graph_plot_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segments_graph_plot_path = path
 
-    def set_segments_graph_pred_plot_path(self, path):
+    def _set_segments_graph_pred_plot_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segments_graph_pred_plot_path = path
@@ -183,12 +187,14 @@ class VesselLabeller():
                 self.segments_graph = load_pickle(self.segments_graph_path)
             else:
                 self.build_segments_graph()
+        print(f"Saving segments graph plot to {self.segments_graph_plot_path}")
         make_graph_plot(self.segments_graph, label="cell_id", output_path=self.segments_graph_plot_path)
     
     def make_segments_graph_pred_plot(self):
         if self.segments_graph_pred is None:
             if os.path.isfile(self.segments_graph_pred_path):
-                self.load_segments_graph_pred()
+                self._load_segments_graph_pred()
             else:
                 self.predict_vessel_types()
+        print(f"Saving segments predicted graph plot to {self.segments_graph_pred_plot_path}")
         make_graph_plot(self.segments_graph_pred, label="vessel_type_name", output_path=self.segments_graph_pred_plot_path)

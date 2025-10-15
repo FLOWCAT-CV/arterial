@@ -77,30 +77,30 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.centerline_extractor.clipped_model = None
         self.centerline_extractor.centerline_segments_array = None
 
-        self.centerline_extractor.load_segmentation_nifti()
+        self.centerline_extractor._load_segmentation_nifti_from_file()
         self.assertIsNotNone(self.centerline_extractor.segmentation_nifti)
         self.assertIsNotNone(self.centerline_extractor.segmentation_affine)
         self.assertIsNotNone(self.centerline_extractor.image_shape)
 
-        self.centerline_extractor.load_centerline_model_list()
+        self.centerline_extractor._load_centerline_model_list()
         self.assertNotEqual(self.centerline_extractor.centerline_model_list, [])
 
-        self.centerline_extractor.load_segmentation_model_list()
+        self.centerline_extractor._load_segmentation_model_list()
         self.assertNotEqual(self.centerline_extractor.segmentation_model_list, [])
 
-        self.centerline_extractor.load_segmentation()
+        self.centerline_extractor._load_segmentation()
         self.assertIsNotNone(self.centerline_extractor.segmentation_model)
 
-        self.centerline_extractor.load_branch_model_list()
+        self.centerline_extractor._load_branch_model_list()
         self.assertNotEqual(self.centerline_extractor.branch_model_list, [])
 
-        self.centerline_extractor.load_branch_model()
+        self.centerline_extractor._load_branch_model()
         self.assertIsNotNone(self.centerline_extractor.branch_model)
 
-        # self.centerline_extractor.load_clipped_model_list()
+        # self.centerline_extractor._load_clipped_model_list()
         # self.assertNotEqual(self.centerline_extractor.clipped_model_list, [])
 
-        # self.centerline_extractor.load_clipped_model()
+        # self.centerline_extractor._load_clipped_model()
         # self.assertIsNotNone(self.centerline_extractor.clipped_model)
 
     def test_fast_pipeline(self):
@@ -112,7 +112,7 @@ class TestCenterlineExtractor(unittest.TestCase):
         self.centerline_extractor.clipped_model_list = []
         self.centerline_extractor.clipped_model = None
         self.centerline_extractor.centerline_segments_array = None
-        self.centerline_extractor.set_fast_segmentation(True)
+        self.centerline_extractor._set_fast_segmentation(True)
 
         self.centerline_extractor.perform_centerline_extraction()
         self.assertNotEqual(self.centerline_extractor.centerline_model_list, [])

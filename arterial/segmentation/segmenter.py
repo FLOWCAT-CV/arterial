@@ -31,7 +31,8 @@ class VesselSegmenter():
                  cta_nifti_path = None,
                  fast_segmentation = False,
                  use_vanilla_nnunet = True,
-                 no_slicing = False
+                 no_slicing = False,
+                 set_threshold_099 = False
                  ):
         """
         Initializes object of the Segmenter class.
@@ -84,6 +85,7 @@ class VesselSegmenter():
 
         self.use_vanilla_nnunet = use_vanilla_nnunet
         self.no_slicing = no_slicing
+        self.set_threshold_099 = set_threshold_099
 
     def segment_vessels_from_cta(self, save=True):
         """
@@ -110,25 +112,25 @@ class VesselSegmenter():
 
         """
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
-        if self.cta_array is None or self.cta_affine is None: self.load_cta_nifti()
+        if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti_from_file()
 
         if self.mode == "extracranial_vessels":
             if self.fast_segmentation:
                 print("Performing fast segmentation...")
-                self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
+                self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, set_threshold_099=self.set_threshold_099)
             else:
                 if not self.no_slicing:
                     print("Slicing CTA into head and neck...")
                     self.slice_cta()
                     print("Performing segmentation (head)...")
-                    _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet)
+                    _, self.segmentation_head_array =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, set_threshold_099=self.set_threshold_099)
                     print("Performing segmentation (neck)...")
-                    _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet)
+                    _, self.segmentation_neck_array =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, set_threshold_099=self.set_threshold_099)
                     print("Joining segmentations...")
                     self.segmentation_nifti, self.segmentation_array = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
                 else:
                     print("No slicing is True. Using the whole CTA volume for extracranial vessels segmentation (nnunet trained at full resolution).")
-                    self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet)
+                    self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, set_threshold_099=self.set_threshold_099)
             
         elif self.mode == "intracranial_vessels":   
             if not self.no_slicing:
@@ -140,10 +142,10 @@ class VesselSegmenter():
                 self.cta_head_array = self.cta_array
                 self.cta_head_affine = self.cta_affine
             print("Performing segmentation...")
-            self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet)
+            self.segmentation_nifti, self.segmentation_array = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, set_threshold_099=self.set_threshold_099)
         
         if save:
-            print("Saving segmentation...")
+            print(f"Saving segmentation to {self.segmentation_nifti_path}")
             save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)
             
     def segment_vessels_from_cta_with_probabilities(self, save=True):
@@ -169,25 +171,25 @@ class VesselSegmenter():
 
         """
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
-        if self.cta_array is None or self.cta_affine is None: self.load_cta_nifti()
+        if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti()
 
         if self.mode == "extracranial_vessels":
             if self.fast_segmentation:
                 print("Performing fast segmentation...")
-                self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=True)
+                self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=True, set_threshold_099=self.set_threshold_099)
             else:
                 if not self.no_slicing:
                     print("Slicing CTA into head and neck...")
                     self.slice_cta()
                     print("Performing segmentation (head)...")
-                    _, self.segmentation_head_array, _ =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True)
+                    _, self.segmentation_head_array, _ =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True, set_threshold_099=self.set_threshold_099)
                     print("Performing segmentation (neck)...")
-                    _, self.segmentation_neck_array, _ =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=True)
+                    _, self.segmentation_neck_array, _ =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=True, set_threshold_099=self.set_threshold_099)
                     print("Joining segmentations...")
                     self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
                 else:
                     print("No slicing is True. Using the whole CTA volume for extracranial vessels segmentation (nnunet trained at full resolution).")
-                    self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True)
+                    self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True, set_threshold_099=self.set_threshold_099)
             
         elif self.mode == "intracranial_vessels":   
             if not self.no_slicing:
@@ -199,12 +201,12 @@ class VesselSegmenter():
                 self.cta_head_array = self.cta_array
                 self.cta_head_affine = self.cta_affine
             print("Performing segmentation...")
-            self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True)
+            self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, return_probabilities=True, set_threshold_099=self.set_threshold_099)
         
         if save:
-            print("Saving segmentation...")
+            print(f"Saving segmentation to {self.segmentation_nifti_path}")
             save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)
-            print("Saving probabilities...")
+            print(f"Saving probabilities to {self.probabilities_nifti_path}")
             save_nifti(self.probabilities_nifti,  self.probabilities_nifti_path)
 
     def slice_cta(self):
@@ -222,11 +224,11 @@ class VesselSegmenter():
         
         """
         if self.cta_array is None or self.cta_affine is None:
-            self.load_cta_nifti()
+            self._load_cta_nifti()
 
         self.cta_head_array, self.cta_neck_array, self.cta_head_affine = slice_cta_head_and_neck(self.cta_array, self.cta_affine)
 
-    def load_cta_nifti(self):
+    def _load_cta_nifti_from_file(self):
         if not os.path.isfile(self.cta_nifti_path):
             raise FileNotFoundError(f"CTA nifti file not found in {self.cta_nifti_path}")
         
@@ -234,27 +236,27 @@ class VesselSegmenter():
         self.cta_array = self.cta_nifti.get_fdata()
         self.cta_affine = self.cta_nifti.affine
 
-    def set_case_dir(self, case_dir):
+    def _set_case_dir(self, case_dir):
         if not isinstance(case_dir, str):
             raise ValueError("case_dir should be a string.")
         self.case_dir = case_dir
 
-    def set_cta_nifti_path(self, path):
+    def _set_cta_nifti_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.cta_nifti_path = path
 
-    def set_mode(self, mode):
+    def _set_mode(self, mode):
         if mode not in ["extracranial_vessels", "intracranial_vessels"]:
             raise ValueError("mode should be either 'extracranial_vessels' or 'intracranial_vessels'.")
         self.mode = mode
 
-    def set_fast_segmentation(self, fast_segmentation):
+    def _set_fast_segmentation(self, fast_segmentation):
         if not isinstance(fast_segmentation, bool):
             raise ValueError("fast_segmentation should be a boolean variable.")
         self.fast_segmentation = fast_segmentation
 
-    def set_segmentation_nifti_path(self, path):
+    def _set_segmentation_nifti_path(self, path):
         if not isinstance(path, str):
             raise ValueError("path should be a string.")
         self.segmentation_nifti_path = path

@@ -9,7 +9,7 @@ import torchio as tio
 
 class SingleCTADataset:
     """
-    Dataset class for loading a single CTA for the landmark extraction model.
+    Dataset class for loading a single CTA for the landmark detection model.
 
     Parameters
     ----------
@@ -51,7 +51,7 @@ class SingleCTADataset:
 
         return volume, tio_img.affine
 
-def preprocess_for_landmark_extraction(cta_array, cta_affine, device='cpu'):
+def preprocess_for_landmark_detection(cta_array, cta_affine, device='cpu'):
     """
     Prepare the input array for the model.
 
@@ -78,7 +78,7 @@ def preprocess_for_landmark_extraction(cta_array, cta_affine, device='cpu'):
 
 def resample_mask_to_original_cta(predicted_mask_array, predicted_mask_affine, cta_array, cta_affine):
     """
-    Resample the predicted mask to the original CTA space. Reverses operations performed in preprocess_for_landmark_extraction.
+    Resample the predicted mask to the original CTA space. Reverses operations performed in preprocess_for_landmark_detection.
 
     Parameters
     ----------
@@ -134,7 +134,7 @@ def postprocess_preds(preds, affine, return_mask=False):
         confidence_map[mask] = preds[c][mask]
         combined[mask] = c
 
-    # Extract centroids for each landmark class
+    # detect centroids for each landmark class
     centroids_ijk = np.zeros((6, 3), dtype=np.float32)
     all_largest_components = []
     

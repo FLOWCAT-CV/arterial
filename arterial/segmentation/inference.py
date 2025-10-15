@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings("ignore") # There is a warning that is wrong with nnunet 
                                   # (something about the version of trained model)
     
-def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=True):
+def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False):
     """
     Performs inference of the CTA in img_array with a trained nnunet models. The combination of
     mode and nnunet_mode should be consistent with the trained model that is going to be used. 
@@ -77,7 +77,6 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
         # Reverse axis order to match nibabel
         segmentation_array = segmentation_array.transpose([2, 1, 0])
         segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
-        print(f"Probabilities array shape: {probabilities_array.shape}")
         probabilities_array = probabilities_array[1, :, :, :].transpose([2, 1, 0])
         probabilities_nifti = nib.Nifti1Image(probabilities_array, img_affine)
         

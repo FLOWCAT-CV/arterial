@@ -5,8 +5,8 @@ import torch
 
 import nibabel as nib
 
-from arterial.landmark_extraction.model import load_trained_model_seg
-from arterial.landmark_extraction.utils import preprocess_for_landmark_extraction, postprocess_preds, resample_mask_to_original_cta
+from arterial.landmark_detection.model import load_trained_model_seg
+from arterial.landmark_detection.utils import preprocess_for_landmark_detection, postprocess_preds, resample_mask_to_original_cta
 from arterial.centerline_extraction.utils import build_endpoints_json
 
 def infer_landmarks_from_array(cta_array, cta_affine, return_mask=False):
@@ -40,16 +40,16 @@ def infer_landmarks_from_array(cta_array, cta_affine, return_mask=False):
     print(f"Using device: {device}")
 
     # Load model
-    model_path = os.environ["arterial_dir"] + "/landmark_extraction/models/six_landmarks_11_7.pth"
+    model_path = os.environ["arterial_dir"] + "/landmark_detection/models/six_landmarks_11_7.pth"
     model = load_trained_model_seg(model_path, device)
     model.eval()
 
     # Prepare input
-    print("Preprocessing CTA volume for landmark extraction...")
-    preprocessed_volume, preprocessed_affine = preprocess_for_landmark_extraction(cta_array, cta_affine, device=device)
+    print("Preprocessing CTA volume for landmark detection...")
+    preprocessed_volume, preprocessed_affine = preprocess_for_landmark_detection(cta_array, cta_affine, device=device)
 
     # Perform inference
-    print("Performing landmark extraction on preprocessed CTA volume...")
+    print("Performing landmark detection on preprocessed CTA volume...")
     with torch.no_grad():
         pred = model(preprocessed_volume)
 
