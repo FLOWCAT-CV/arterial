@@ -39,7 +39,7 @@ def load_trained_model_seg(model_path, device):
     model.load_state_dict(torch.load(model_path, map_location=device))
     return model
 
-###while training will not be conducted, this is inference-ready, it doesn't hurt to have it
+### While training will not be conducted, this is inference-ready, it doesn't hurt to have it
 def combined_loss(preds, mask, dice_weight=1.0, ce_weight=1.0):
     """
     Combined loss function that computes the weighted sum of Dice loss and Cross-Entropy loss.

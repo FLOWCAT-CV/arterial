@@ -102,6 +102,8 @@ class VesselSegmenter():
 
         Parmeters
         ---------
+        save: bool
+            Whether to save the segmentation.
 
         Returns
         -------
