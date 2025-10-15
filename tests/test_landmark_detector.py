@@ -45,7 +45,7 @@ class TestLandmarkDetector(unittest.TestCase):
         # Check that landmarks were detected
         self.assertIsNotNone(self.landmark_detector.landmarks_ras_mm_dict)
         self.assertIsNotNone(self.landmark_detector.landmarks_slicer_json)
-        self.assertIsNone(self.landmark_detector.predicted_mask_nib)
+        self.assertIsNone(self.landmark_detector.predicted_mask_nifti)
         
         # Check that landmark dict has expected structure
         expected_landmarks = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
@@ -73,7 +73,7 @@ class TestLandmarkDetector(unittest.TestCase):
         # Check that landmarks and mask were detected
         self.assertIsNotNone(self.landmark_detector.landmarks_ras_mm_dict)
         self.assertIsNotNone(self.landmark_detector.landmarks_slicer_json)
-        self.assertIsNotNone(self.landmark_detector.predicted_mask_nib)
+        self.assertIsNotNone(self.landmark_detector.predicted_mask_nifti)
         
         # Check that all files were saved including mask
         self.assertTrue(os.path.exists(self.landmark_detector.landmarks_ras_json_path))
