@@ -13,9 +13,13 @@ load data directly from the py objects, not from the files.
 
 """
 
+import os
+
 from arterial.segmentation.segmenter import VesselSegmenter
-from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
 from arterial.landmark_detection.landmark_detector import LandmarkDetector
+from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
+from arterial.feature_extraction.feature_extractor import FeatureExtractor
+from arterial.io.load_and_save_operations import load_vtkpolydata
 
 def run_segmentation(case_dir, mode="extracranial_vessels", cta_nifti_path=None, fast_segmentation=False, no_slicing=False):
     # Initialize the segmentation model
@@ -65,10 +69,22 @@ def run_centerline_extraction(case_dir, segmentation_nifti, landmarks_dict, mode
     for landmark_pair_key in landmark_pairs.keys():
         centerline_extractor.extract_centerline_between_endpoints(landmarks_dict[landmark_pairs[landmark_pair_key][0]], landmarks_dict[landmark_pairs[landmark_pair_key][1]], landmark_pair_key, save=True)
 
+    return list(landmark_pairs.keys())
+
+def run_feature_extraction(case_dir, cta_nifti_path, centerline_ids, mode="extracranial_vessels"):
+    # Initialize the feature extractor
+    feature_extractor = FeatureExtractor(case_dir, mode, cta_nifti_path=cta_nifti_path)
+    for centerline_id in centerline_ids:
+        if os.path.isfile(os.path.join(case_dir, f"{mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk")):
+            print(f"Building and featurizing {centerline_id}")
+            centerline_model = load_vtkpolydata(os.path.join(case_dir, f"{mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk"))
+            feature_extractor.build_and_featurize_individual_centerline_graph(centerline_model, centerline_id=centerline_id, save=True)
+
 def main(case_dir, mode, cta_nifti_path):
     segmentation_nifti = run_segmentation(case_dir, mode, cta_nifti_path)
     landmarks_dict = run_landmark_detection(case_dir, mode, cta_nifti_path)
-    run_centerline_extraction(case_dir, segmentation_nifti, landmarks_dict, mode)
+    centerline_ids = run_centerline_extraction(case_dir, segmentation_nifti, landmarks_dict, mode)
+    run_feature_extraction(case_dir, cta_nifti_path, centerline_ids, mode)
 
 if __name__ == "__main__":
     import argparse
