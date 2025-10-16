@@ -11,15 +11,15 @@ For Ubuntu:
 
 ```bash
 # <=3.9 necessary for vmtk, otherwise it won't install
-conda create -n foo python=3.9
+conda create -n foo python=3.11
 conda activate foo
 conda install -c conda-forge vmtk
 
-pip install torch=2.2.2 torch_geometric==2.5.2
-pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6.3 torch_spline_conv==1.2.2 -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
+pip install torch==2.6.0 torch_geometric==2.6.1 monai torchio nnunetv2
+pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6.3 torch_spline_conv==1.2.2 -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
 ```
 
-For MacOS:
+For MacOS (outdated, not tested):
 
 ```bash
 # <=3.9 necessary for vmtk, otherwise it won't install

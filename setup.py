@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="arterial",
-    version="2.0",
+    version="2.1",
     description="Arterial: framework for vascular tortuosity analysis",
     author="Pere Canals",
     author_email="perecanalscanals@gmail.com",
@@ -17,7 +17,6 @@ setup(
         "tests": ["test_data/*"]
         },
     install_requires=[
-        'nnunetv2',
         'nibabel',
         'networkx',
         'numpy',
@@ -25,9 +24,7 @@ setup(
         'scikit-image',
         'mycolorpy',
         'vtk',
-        'torchio',
         'connected-components-3d',
-        'opencv-python',
-        'monai'
+        'opencv-python'
         ]
 )

@@ -742,5 +742,5 @@ def nx_graph_to_point_dict(G):
     """
     point_dict = {}
     point_dict["points"] = [G.nodes[node]["pos"].tolist() if isinstance(G.nodes[node]["pos"], np.ndarray) else list(G.nodes[node]["pos"])  for node in G.nodes]
-    point_dict["attention_weight"] = [G.nodes[node]["features femoral"]["attention_weight"] for node in G.nodes]
+    point_dict["attention_weight"] = [float(G.nodes[node]["features femoral"]["attention_weight"]) for node in G.nodes]
     return point_dict

@@ -107,16 +107,16 @@ class AccessPredictor():
                     
                     os.makedirs(os.path.join(self.access_prediction_dir_path, f"{access}_{side}"), exist_ok=True)
                     
-                    print(f"Saving global features of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "global_features.json")}")
-                    save_json(self.preprocessed_supersegment_dict[(access, side)]["global_features"], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "global_features.json"))
-                    print(f"Saving segment graph of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "segment_supersegment.pickle")}")
-                    save_pickle(self.preprocessed_supersegment_dict[(access, side)]["segment_graph"], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "segment_supersegment.pickle"))
-                    print(f"Saving dense graph of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "dense_supersegment.pickle")}")
-                    save_pickle(self.preprocessed_supersegment_dict[(access, side)]["dense_graph"], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "dense_supersegment.pickle"))
-                    print(f"Saving preprocessed supersegment dict of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "preprocessed_supersegment_dict.pickle")}")
-                    save_pickle(self.preprocessed_supersegment_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "preprocessed_supersegment_dict.pickle"))
-                    print(f"Saving combined plot of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "combined_plot.png")}")
-                    make_combined_plot(side, self.preprocessed_supersegment_dict[(access, side)]["segment_graph"], self.preprocessed_supersegment_dict[(access, side)]["dense_graph"], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "combined_plot.png"))
+                    print(f"Saving global features of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'global_features.json')}")
+                    save_json(self.preprocessed_supersegment_dict[(access, side)]["global_features"], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'global_features.json'))
+                    print(f"Saving segment graph of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'segment_supersegment.pickle')}")
+                    save_pickle(self.preprocessed_supersegment_dict[(access, side)]["segment_graph"], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'segment_supersegment.pickle'))
+                    print(f"Saving dense graph of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'dense_supersegment.pickle')}")
+                    save_pickle(self.preprocessed_supersegment_dict[(access, side)]["dense_graph"], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'dense_supersegment.pickle'))
+                    print(f"Saving preprocessed supersegment dict of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'preprocessed_supersegment_dict.pickle')}")
+                    save_pickle(self.preprocessed_supersegment_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'preprocessed_supersegment_dict.pickle'))
+                    print(f"Saving combined plot of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'combined_plot.png')}")
+                    make_combined_plot(side, self.preprocessed_supersegment_dict[(access, side)]["segment_graph"], self.preprocessed_supersegment_dict[(access, side)]["dense_graph"], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'combined_plot.png'))
 
     def predict_accessibility(self, return_attention_map=True, save=True):
         """
@@ -159,17 +159,17 @@ class AccessPredictor():
                     self.attention_maps_vtk_dict[(access, side)] = nx_graph_to_vtk_polydata(self.attention_maps_dict[(access, side)])
                     self.attention_maps_point_dict[(access, side)] = nx_graph_to_point_dict(self.attention_maps_dict[(access, side)])
                 if save:
-                    print(f"Saving access prediction of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "access_prediction.json")}")
-                    save_json(self.predictions_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "access_prediction.json"))
+                    print(f"Saving access prediction of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json')}")
+                    save_json(self.predictions_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json'))
                     if return_attention_map:
-                        print(f"Saving attention map of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.pickle")}")
-                        save_pickle(self.attention_maps_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.pickle"))
-                        print(f"Saving attention map plot of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.png")}")
-                        make_graph_plot(self.attention_maps_dict[(access, side)], feature="attention_weight", output_path=os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.png"))
-                        print(f"Saving attention map vtk of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.vtk")}")
-                        save_vtkpolydata(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map.vtk"))
-                        print(f"Saving attention map points of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map_points.json")}")
-                        save_json(self.attention_maps_point_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f"{access}_{side}", "attention_map_points.json"))
+                        print(f"Saving attention map of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.pickle')}")
+                        save_pickle(self.attention_maps_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.pickle'))
+                        print(f"Saving attention map plot of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.png')}")
+                        make_graph_plot(self.attention_maps_dict[(access, side)], feature="attention_weight", output_path=os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.png'))
+                        print(f"Saving attention map vtk of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.vtk')}")
+                        save_vtkpolydata(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.vtk'))
+                        print(f"Saving attention map points of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map_points.json')}")
+                        save_json(self.attention_maps_point_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map_points.json'))
 
     def compute_lpi_corner_coordinates(self):
         """
