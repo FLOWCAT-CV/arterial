@@ -7,6 +7,7 @@ from arterial.centerline_extraction.centerline_extractor import CenterlineExtrac
 from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
 from arterial.access_prediction.access_predictor import AccessPredictor
+from arterial.landmark_detection.landmark_detector import LandmarkDetector
 
 from time import time
 
@@ -63,6 +64,7 @@ class ArterialProcessor():
         self.skip_vessel_labelling = args.skip_vessel_labelling
         self.skip_feature_extraction = args.skip_feature_extraction
         self.skip_access_prediction = args.skip_access_prediction
+        self.skip_landmark_detection = args.skip_landmark_detection
         self.use_vanilla_nnunet = not args.cl_dice_nnunet
         self.no_slicing = args.no_slicing
 
@@ -89,6 +91,10 @@ class ArterialProcessor():
                                                 ['femoral'],
                                                 ['left', 'right'])
 
+        self.landmark_detector = LandmarkDetector(self.case_dir,
+                                                  self.mode,
+                                                  self.cta_nifti_path)
+
     def perform_analysis(self):
         """
         Calls wrapper method from each of the Arterial modules.
@@ -110,27 +116,32 @@ class ArterialProcessor():
         step2 = time()
         vessel_labelling_time = step2 - step1
         print("Vessel labelling took {:.2f} s".format(step2 - step1))
+        self.perform_landmark_detection()
+        step3 = time()
+        landmark_detection_time = step3 - step2
+        print("Landmark detection took {:.2f} s".format(step3 - step2))
         feature_extraction_time = 0
         access_prediction_time = 0
         if self.mode == "extracranial_vessels":
             self.perform_feature_extraction()   
-            step3 = time()
-            feature_extraction_time = step3 - step2
-            print("Feature extraction took {:.2f} s".format(step3 - step2))
             step4 = time()
+            feature_extraction_time = step4 - step3
+            print("Feature extraction took {:.2f} s".format(step4 - step3))
+            step5 = time()
             self.perform_access_prediction()
-            access_prediction_time = step4 - step3
-            print("Access prediction took {:.2f} s".format(step4 - step3))
-        step5 = time()
-        print("Total time for analysis: {:.2f} s".format(step5 - start))
+            access_prediction_time = step5 - step4
+            print("Access prediction took {:.2f} s".format(step5 - step4))
+        final_time = time()
+        print("Total time for analysis: {:.2f} s".format(final_time - start))
 
         times = {
             "segmentation_time": segmentation_time,
             "centerline_extraction_time": centerline_extraction_time,
             "vessel_labelling_time": vessel_labelling_time,
+            "landmark_detection_time": landmark_detection_time,
             "feature_extraction_time": feature_extraction_time,
             "access_prediction_time": access_prediction_time,
-            "total_time": step5 - start
+            "total_time": final_time - start
         }
 
         return times
@@ -307,3 +318,35 @@ class ArterialProcessor():
         if not self.skip_access_prediction:
             # Perform access prediction
             self.access_predictor.predict_accessibility()
+
+    def perform_landmark_detection(self, run_centerline_extraction=True):
+        """
+        Wrapper method of the landmark_detection module. Calls methods to perform landmark detection,
+        including preprocessing and inference.
+
+        At the end of the execution, the following files should be generated:
+
+        >>> case_dir/{self.mode}/landmarks/landmarks.json
+        """
+        if not self.skip_landmark_detection:
+            print("Performing landmark detection...")
+            self.landmark_detector.detect_landmarks_on_cta()
+            print("done \n")
+            if run_centerline_extraction:
+                # Extract centerlines between detected landmarks/endpoints
+                landmark_pairs = {
+                    'l-ica': ('l-eica', 'l-tica'),
+                    'r-ica': ('r-eica', 'r-tica'),
+                    'l-mca': ('l-tica', 'l-mca'),
+                    'r-mca': ('r-tica', 'r-mca'),
+                    'l-ica_mca': ('l-eica', 'l-mca'),
+                    'r-ica_mca': ('r-eica', 'r-mca')
+                }
+                for landmark_pair_key in landmark_pairs.keys():
+                    try:
+                        self.centerline_extractor.extract_centerline_between_endpoints(self.landmark_detector.landmarks_ras_mm_dict[landmark_pairs[landmark_pair_key][0]], self.landmark_detector.landmarks_ras_mm_dict[landmark_pairs[landmark_pair_key][1]], landmark_pair_key, save=True)
+                    except Exception as e:
+                        print(f"Error extracting centerline between {landmark_pairs[landmark_pair_key][0]} and {landmark_pairs[landmark_pair_key][1]}: {e}")
+                        continue
+        else:
+            print("Skipping landmark detection \n")
