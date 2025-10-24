@@ -81,19 +81,22 @@ class ArterialProcessor():
                                                         self.fast_segmentation)
         self.vessel_labeller = VesselLabeller(self.case_dir,
                                               self.mode)
+        if self.mode == "extracranial_vessels":
+            self.landmark_detector = LandmarkDetector(self.case_dir,
+                                                    self.mode,
+                                                    self.cta_nifti_path)
+        else:
+            self.landmark_detector = None
+
         self.feature_extractor = FeatureExtractor(self.case_dir,
-                                                  self.mode,
-                                                  self.sampling_distance_mm,
-                                                  self.cta_nifti_path)
+                                                self.mode,
+                                                self.sampling_distance_mm,
+                                                self.cta_nifti_path)
         self.access_predictor = AccessPredictor(self.case_dir,
                                                 self.cta_nifti_path,
                                                 None,
                                                 ['femoral'],
                                                 ['left', 'right'])
-
-        self.landmark_detector = LandmarkDetector(self.case_dir,
-                                                  self.mode,
-                                                  self.cta_nifti_path)
 
     def perform_analysis(self):
         """
@@ -116,13 +119,14 @@ class ArterialProcessor():
         step2 = time()
         vessel_labelling_time = step2 - step1
         print("Vessel labelling took {:.2f} s".format(step2 - step1))
-        self.perform_landmark_detection()
-        step3 = time()
-        landmark_detection_time = step3 - step2
-        print("Landmark detection took {:.2f} s".format(step3 - step2))
+        landmark_extraction_time = 0
         feature_extraction_time = 0
         access_prediction_time = 0
         if self.mode == "extracranial_vessels":
+            self.perform_landmark_detection()
+            step3 = time()
+            landmark_detection_time = step3 - step2
+            print("Landmark detection took {:.2f} s".format(step3 - step2))
             self.perform_feature_extraction()   
             step4 = time()
             feature_extraction_time = step4 - step3
@@ -326,8 +330,13 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
 
-        >>> case_dir/{self.mode}/landmarks/landmarks.json
+        >>> case_dir/extracranial_vessels/landmarks/landmarks.json
+        >>> case_dir/extracranial_vessels/landmarks/landmarks_slicer.json
+        >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.vtk
+        >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.pickle
+        >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.png
         """
+        from arterial.io.load_and_save_operations import load_vtkpolydata
         if not self.skip_landmark_detection:
             print("Performing landmark detection...")
             self.landmark_detector.detect_landmarks_on_cta()
@@ -348,5 +357,11 @@ class ArterialProcessor():
                     except Exception as e:
                         print(f"Error extracting centerline between {landmark_pairs[landmark_pair_key][0]} and {landmark_pairs[landmark_pair_key][1]}: {e}")
                         continue
+
+                for centerline_id in list(landmark_pairs.keys()):
+                    if os.path.isfile(os.path.join(self.case_dir, f"{self.mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk")):
+                        print(f"Building and featurizing {centerline_id}")
+                        centerline_model = load_vtkpolydata(os.path.join(self.case_dir, f"{self.mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk"))
+                        self.feature_extractor.build_and_featurize_individual_centerline_graph(centerline_model, centerline_id=centerline_id, save=True)
         else:
             print("Skipping landmark detection \n")

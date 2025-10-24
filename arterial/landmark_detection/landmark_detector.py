@@ -32,7 +32,7 @@ class LandmarkDetector:
 
         """
         assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
-        assert mode in ["extracranial_vessels"], "mode should be either 'extracranial_vessels'. 'intracranial_vessels' is not supported yet."
+        assert mode in ["extracranial_vessels"], "mode should be 'extracranial_vessels'. 'intracranial_vessels' is not supported yet."
 
         self.case_dir = case_dir
         self.mode = mode
