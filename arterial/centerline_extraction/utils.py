@@ -704,7 +704,7 @@ def build_endpoints_json(endpoint_list, segmentation_affine, endpoint_labels=Non
                 "associatedNodeID": "",
                 "position": list(endpoint),
                 "orientation": [float(sign_r), -0.0, -0.0, -0.0, float(sign_a), -0.0, 0.0, 0.0, float(sign_s)],
-                "selected": False,
+                "selected": True,
                 "locked": False,
                 "visibility": True,
                 "positionStatus": "defined"

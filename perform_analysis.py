@@ -40,6 +40,8 @@ def main():
     parser.add_argument("-ns", "--no_slicing", action="store_true",
         help="Boolean argument to determine if the image should be sliced or not. Meant to be used in case of intracranial_vessels segmentation for head CTA. "
         "Not required, default = False.")
+    parser.add_argument("-s99", "--set_threshold_099", action="store_true",
+        help="Boolean argument to determine if the segmentation logit threshold should be set to 0.99 or not. Not required, default = False.")
     
     parser = parser.parse_args()
 

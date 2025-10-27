@@ -67,6 +67,7 @@ class ArterialProcessor():
         self.skip_landmark_detection = args.skip_landmark_detection
         self.use_vanilla_nnunet = not args.cl_dice_nnunet
         self.no_slicing = args.no_slicing
+        self.set_threshold_099 = args.set_threshold_099
 
         # Initialize module classes
         self.vessel_segmenter = VesselSegmenter(self.case_dir,
@@ -74,20 +75,17 @@ class ArterialProcessor():
                                                 self.cta_nifti_path,
                                                 self.fast_segmentation,
                                                 self.use_vanilla_nnunet,
-                                                self.no_slicing)
+                                                self.no_slicing,
+                                                self.set_threshold_099)
         self.centerline_extractor = CenterlineExtractor(self.case_dir, 
                                                         self.mode, 
                                                         None, 
                                                         self.fast_segmentation)
         self.vessel_labeller = VesselLabeller(self.case_dir,
                                               self.mode)
-        if self.mode == "extracranial_vessels":
-            self.landmark_detector = LandmarkDetector(self.case_dir,
-                                                    self.mode,
-                                                    self.cta_nifti_path)
-        else:
-            self.landmark_detector = None
-
+        self.landmark_detector = LandmarkDetector(self.case_dir,
+                                                self.mode,
+                                                self.cta_nifti_path)
         self.feature_extractor = FeatureExtractor(self.case_dir,
                                                 self.mode,
                                                 self.sampling_distance_mm,
@@ -115,18 +113,17 @@ class ArterialProcessor():
         step1 = time()
         centerline_extraction_time = step1 - step0
         print("Centerline extraction took {:.2f} s".format(step1 - step0))
-        self.perform_vessel_labelling()
+        self.perform_landmark_detection()
         step2 = time()
-        vessel_labelling_time = step2 - step1
-        print("Vessel labelling took {:.2f} s".format(step2 - step1))
-        landmark_extraction_time = 0
+        landmark_detection_time = step2 - step1
+        print("Landmark detection took {:.2f} s".format(step2 - step1))
+        self.perform_vessel_labelling()
+        step3 = time()
+        vessel_labelling_time = step3 - step2
+        print("Vessel labelling took {:.2f} s".format(step3 - step2))
         feature_extraction_time = 0
         access_prediction_time = 0
         if self.mode == "extracranial_vessels":
-            self.perform_landmark_detection()
-            step3 = time()
-            landmark_detection_time = step3 - step2
-            print("Landmark detection took {:.2f} s".format(step3 - step2))
             self.perform_feature_extraction()   
             step4 = time()
             feature_extraction_time = step4 - step3
@@ -141,8 +138,8 @@ class ArterialProcessor():
         times = {
             "segmentation_time": segmentation_time,
             "centerline_extraction_time": centerline_extraction_time,
-            "vessel_labelling_time": vessel_labelling_time,
             "landmark_detection_time": landmark_detection_time,
+            "vessel_labelling_time": vessel_labelling_time,
             "feature_extraction_time": feature_extraction_time,
             "access_prediction_time": access_prediction_time,
             "total_time": final_time - start
@@ -343,14 +340,20 @@ class ArterialProcessor():
             print("done \n")
             if run_centerline_extraction:
                 # Extract centerlines between detected landmarks/endpoints
-                landmark_pairs = {
-                    'l-ica': ('l-eica', 'l-tica'),
-                    'r-ica': ('r-eica', 'r-tica'),
-                    'l-mca': ('l-tica', 'l-mca'),
-                    'r-mca': ('r-tica', 'r-mca'),
-                    'l-ica_mca': ('l-eica', 'l-mca'),
-                    'r-ica_mca': ('r-eica', 'r-mca')
-                }
+                if self.mode == "extracranial_vessels":
+                    landmark_pairs = {
+                        'l-ica': ('l-eica', 'l-tica'),
+                        'r-ica': ('r-eica', 'r-tica'),
+                        'l-mca': ('l-tica', 'l-mca'),
+                        'r-mca': ('r-tica', 'r-mca'),
+                        'l-ica_mca': ('l-eica', 'l-mca'),
+                        'r-ica_mca': ('r-eica', 'r-mca')
+                    }
+                elif self.mode == "intracranial_vessels":
+                    landmark_pairs = {
+                        'l-mca': ('l-tica', 'l-mca'),
+                        'r-mca': ('r-tica', 'r-mca'),
+                    }
                 for landmark_pair_key in landmark_pairs.keys():
                     try:
                         self.centerline_extractor.extract_centerline_between_endpoints(self.landmark_detector.landmarks_ras_mm_dict[landmark_pairs[landmark_pair_key][0]], self.landmark_detector.landmarks_ras_mm_dict[landmark_pairs[landmark_pair_key][1]], landmark_pair_key, save=True)

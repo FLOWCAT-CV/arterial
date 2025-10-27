@@ -3,13 +3,14 @@
 import os
 import torch
 
+import numpy as np
 import nibabel as nib
 
 from arterial.landmark_detection.model import load_trained_model_seg
 from arterial.landmark_detection.utils import preprocess_for_landmark_detection, postprocess_preds, resample_mask_to_original_cta
 from arterial.centerline_extraction.utils import build_endpoints_json
 
-def infer_landmarks_from_array(cta_array, cta_affine, return_mask=False):
+def infer_landmarks_from_array(cta_array, cta_affine, mode="extracranial_vessels", return_mask=False):
     """
     Infer landmarks from a CTA volume.
 
@@ -56,15 +57,18 @@ def infer_landmarks_from_array(cta_array, cta_affine, return_mask=False):
     # Postprocess predictions to get landmarks in RAS coordinates
     print("Postprocessing predictions to get landmarks in RAS coordinates...")
     landmarks_ras_mm, predicted_mask_array = postprocess_preds(pred, preprocessed_affine, return_mask)
-    landmarks_labels = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
+    if mode == "intracranial_vessels":
+        landmarks_ras_mm = np.delete(landmarks_ras_mm, [2, 3], axis=0)
+        landmarks_labels = ["l-tica", "r-tica", "r-mca", "l-mca"]
+    else:
+        landmarks_labels = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
     landmarks_ras_mm_dict = {label: tuple(landmarks_ras_mm[i]) for i, label in enumerate(landmarks_labels)}
+
+    # TODO: implement the robust endpoint relocation step here if segmentation is available
 
     # We build the json in Slicer format as well
     landmarks_slicer_json = build_endpoints_json(landmarks_ras_mm, cta_affine, landmarks_labels) # affine only used for orientation, can use either preprocessed or original affine
 
-    # TODO: implement a sanity check to remove landmarks that are not found? 
-    #       What happens when I pass a head CTA without the Neck? Probably that should be introdued during training? 
-    #       Patch-based method to account for this variability with the same model? Monai supports sliding window inference.
     
     if return_mask:
         print("Resampling mask back to CTA native space...")

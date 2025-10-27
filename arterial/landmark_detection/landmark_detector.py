@@ -32,7 +32,7 @@ class LandmarkDetector:
 
         """
         assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
-        assert mode in ["extracranial_vessels"], "mode should be 'extracranial_vessels'. 'intracranial_vessels' is not supported yet."
+        assert mode in ["extracranial_vessels", "intracranial_vessels"], "mode should be either 'extracranial_vessels' or 'intracranial_vessels'."
 
         self.case_dir = case_dir
         self.mode = mode
@@ -73,8 +73,7 @@ class LandmarkDetector:
         if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti_from_file()
 
         print(f"Detecting landmarks on CTA...")
-        self.landmarks_ras_mm_dict, self.landmarks_slicer_json, self.predicted_mask_nib = infer_landmarks_from_array(self.cta_array, self.cta_affine, return_mask)
-
+        self.landmarks_ras_mm_dict, self.landmarks_slicer_json, self.predicted_mask_nib = infer_landmarks_from_array(self.cta_array, self.cta_affine, self.mode, return_mask)
         if save:
             print(f"Saving landmarks in RAS coordinates to {self.landmarks_ras_json_path}")
             save_json(self.landmarks_ras_mm_dict, self.landmarks_ras_json_path)

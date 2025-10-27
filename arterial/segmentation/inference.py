@@ -87,7 +87,7 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
             if return_probabilities:
                 return segmentation_nifti, segmentation_array, probabilities_nifti
             else:
-                return segmentation_nifti, segmentation_array
+                return segmentation_nifti, segmentation_array, None
         else:
             return segmentation_nifti, segmentation_array, probabilities_nifti
     else:
@@ -96,5 +96,5 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
         segmentation_array = segmentation_array.transpose([2, 1, 0])
         segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
 
-        return segmentation_nifti, segmentation_array
+        return segmentation_nifti, segmentation_array, None
         

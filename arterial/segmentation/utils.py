@@ -211,23 +211,36 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
 
     return cta_head_array, cta_neck_array, cta_head_affine
 
-def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_array, segmentation_neck_array, head_affine):
+def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_array, segmentation_neck_array, head_affine, is_probabilities=False):
     """
     Joins segmentation niftis for head and neck. Since there is an overlap across 
     segmentations, it selects the overlapping slice with the highest Dice similarity
     to join both segmentations.
 
-    It generates an additional nifti file:
-
-    >>> case_dir/{os.path.basename(case_dir)}_segmentation.nii.gz
+    This function joins the head and neck segmentations into a single segmentation.
+    If the segmentations are probabilities, it joins them using the highest probability.
 
     Parameters
     ----------
-    case_dir : string or path-like object
-        Path to case directory. 
+    cta_array : numpy.ndarray or array-like object
+        Numpy array with the CTA image.
+    cta_affine : numpy.ndarray
+        Affine matrix of the CTA.
+    segmentation_head_array : numpy.ndarray or array-like object
+        Numpy array with the head segmentation.
+    segmentation_neck_array : numpy.ndarray or array-like object
+        Numpy array with the neck segmentation.
+    head_affine : numpy.ndarray
+        Affine matrix of the head.
+    is_probabilities : bool
+        Whether the segmentations are probabilities.
 
     Returns
     -------
+    segmentation_nifti : nibabel.nifti1.Nifti1Image
+        Nifti image with the joined segmentation mask.
+    segmentation_array : numpy array
+        3D numpy array representing the joined segmentation mask.
 
     """
     def compute_dice(a, b):
@@ -265,8 +278,17 @@ def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_ar
     # Initialize dice list to get slice with maximum similarity (smoothest transition)
     dice = []
     # Check all slices in the middle for the one with the highest similarity in terms of Dice coefficient
-    for idx in range(segmentation_neck_array.shape[2] - head_origin_k):
-        dice.append(compute_dice(segmentation_neck_array[:, :, head_origin_k + idx], segmentation_head_array_[:, :, idx]))
+    if is_probabilities:
+        # Convert the probabilities to binary masks
+        segmentation_head_array_binary = np.zeros_like(segmentation_head_array_)
+        segmentation_head_array_binary[segmentation_head_array_ >= 0.5] = 1
+        segmentation_neck_array_binary = np.zeros_like(segmentation_neck_array)
+        segmentation_neck_array_binary[segmentation_neck_array >= 0.5] = 1
+        for idx in range(segmentation_neck_array_binary.shape[2] - head_origin_k):   
+            dice.append(compute_dice(segmentation_neck_array_binary[:, :, head_origin_k + idx], segmentation_head_array_binary[:, :, idx]))
+    else:
+        for idx in range(segmentation_neck_array.shape[2] - head_origin_k):
+            dice.append(compute_dice(segmentation_neck_array[:, :, head_origin_k + idx], segmentation_head_array_[:, :, idx]))
 
     # Get s coordinate for highest similarity
     slice_difference = np.argmax(dice)
