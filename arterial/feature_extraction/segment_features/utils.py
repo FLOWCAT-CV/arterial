@@ -1488,6 +1488,8 @@ def diameter_last_5mm(segment, distal_node):
 
     node_diameters = []
 
+    idx = 0
+
     while accumulated_distance < 5:
         for neighbor in segment.neighbors(node):
             if neighbor not in nodes_visited:
@@ -1499,8 +1501,15 @@ def diameter_last_5mm(segment, distal_node):
         if len(nodes_visited) == len(segment):
             # print("Warning: diameter_last_5mm did not find 5 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
             break
+        idx += 1
+        if idx > 200:
+            break
 
-    return np.mean(node_diameters)
+    if len(node_diameters) > 0:
+        return np.mean(node_diameters)
+    else:
+        print("Warning: diameter_last_5mm could not be measured. No nodes found.")
+        return np.nan
 
 def diameter_last_10mm(segment, distal_node):
     """
@@ -1511,6 +1520,8 @@ def diameter_last_10mm(segment, distal_node):
     nodes_visited = [distal_node]
 
     node_diameters = []
+
+    idx = 0
 
     while accumulated_distance < 10:
         for neighbor in segment.neighbors(node):
@@ -1523,8 +1534,15 @@ def diameter_last_10mm(segment, distal_node):
         if len(nodes_visited) == len(segment):
             # print("Warning: diameter_last_10mm did not find 10 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
             break
+        idx += 1
+        if idx > 200:
+            break
 
-    return np.mean(node_diameters)
+    if len(node_diameters) > 0:
+        return np.mean(node_diameters)
+    else:
+        print("Warning: diameter_last_10mm could not be measured. No nodes found.")
+        return np.nan
 
 def curvature_energy(segment):
     """
