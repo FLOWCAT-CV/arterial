@@ -20,6 +20,25 @@ from vtk.util import numpy_support
 
 from arterial.io.load_and_save_operations import load_json
 
+def supersegment_sanity_check(supersegment):
+    """
+    Performs a sanity check on a supersegment based on minimum length.
+
+    Parameters
+    ----------
+    supersegment : networkx.Graph
+        Supersegment to check.
+
+    Returns
+    -------
+    bool: True if the supersegment is valid, False otherwise.
+
+    """
+    if len(supersegment) < 10:
+        return False
+    return True
+
+
 class ArterialGNetDatasetInference(Dataset):
     """
     Dataset class for the Arterial Maps dataset, containing a set of objects encoding

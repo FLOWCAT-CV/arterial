@@ -88,7 +88,7 @@ class CenterlineExtractor():
         self.individual_centerlines_dir_path = os.path.join(self.case_dir, self.mode, "individual_centerlines")
         self.individual_centerlines_list = []
 
-    def perform_preprocessing(self, volume_check=True, save=True):
+    def perform_preprocessing(self, volume_check=True, save=True, apply_bottom_cutting_to_first_model=False, bottom_height_mm=5.0):
         """
         Performs preprocessing of the segmentation nifti file to generate a vtkpolydata 
         of the segmentation's surface mode, as well as the segmentation model list (each of the
@@ -108,9 +108,9 @@ class CenterlineExtractor():
 
         if self.segmentation_array is None or self.segmentation_affine is None:
             self._load_segmentation_nifti_from_file()
-        if self.mode == "extracranial_vessels" and volume_check:
-            volume_sanity_check(self.segmentation_array, self.segmentation_affine)
-        self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine, self.fast_segmentation)
+        if volume_check:
+            volume_sanity_check(self.segmentation_array, self.segmentation_affine, self.mode)
+        self.segmentation_model, self.segmentation_model_list = preprocess_segmentation_for_centerline_extraction(self.segmentation_array, self.segmentation_affine, self.fast_segmentation, apply_bottom_cutting_to_first_model=apply_bottom_cutting_to_first_model, bottom_height_mm=bottom_height_mm)
         
         if save:
             print(f"Saving segmentation model to {self.segmentation_path}")
@@ -157,6 +157,16 @@ class CenterlineExtractor():
         for idx, segmentation_model_idx in enumerate(self.segmentation_model_list):
             print(f"\nExtracting centerline ({idx + 1}/{len(self.segmentation_model_list)})")
             centerlines, network, voronoi_diagram, endpoints_json = extract_centerlines_full_cta(segmentation_model_idx, self.segmentation_array, self.segmentation_affine, is_first_model=True if idx == 0 else False)
+            if centerlines is None and idx == 0:
+                print("WARNING! Centerline could not be extracted for first model. We attempt to repeat preprocessing step, removing the bottom-most partof the aortic arch segmentation mesh and repeating the centerline extraction process.")
+                bottom_height_mm = 5.0
+                while centerlines is None and bottom_height_mm <= 10.0:
+                    print(f"Attempting to extract centerline with bottom height {bottom_height_mm} mm...")
+                    self.perform_preprocessing(apply_bottom_cutting_to_first_model=True, bottom_height_mm=bottom_height_mm)
+                    bottom_height_mm += 1.0
+                    centerlines, network, voronoi_diagram, endpoints_json = extract_centerlines_full_cta(self.segmentation_model_list[0], self.segmentation_array, self.segmentation_affine, is_first_model=True)
+                    if centerlines is None and bottom_height_mm > 10.0:
+                        raise ValueError("Centerline could not be extracted for first model. Interrupting computation, as this is a critical error for all the posterior pipeline.")
             if centerlines is None:
                 print(f"Centerline could not be extracted for segmentation model {idx}. Skipping...")
                 segmentation_idx_to_remove.append(idx)

@@ -334,6 +334,7 @@ class ArterialProcessor():
         >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.png
         """
         from arterial.io.load_and_save_operations import load_vtkpolydata
+        feature_extractor_for_landmark_detection = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path)
         if not self.skip_landmark_detection:
             print("Performing landmark detection...")
             self.landmark_detector.detect_landmarks_on_cta()
@@ -365,6 +366,9 @@ class ArterialProcessor():
                     if os.path.isfile(os.path.join(self.case_dir, f"{self.mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk")):
                         print(f"Building and featurizing {centerline_id}")
                         centerline_model = load_vtkpolydata(os.path.join(self.case_dir, f"{self.mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk"))
-                        self.feature_extractor.build_and_featurize_individual_centerline_graph(centerline_model, centerline_id=centerline_id, save=True)
+                        if centerline_model.GetNumberOfPoints() < 5:
+                            print(f"Skipping graph building and featurization of {centerline_id} because it has less than 5 points")
+                            continue
+                        feature_extractor_for_landmark_detection.build_and_featurize_individual_centerline_graph(centerline_model, centerline_id=centerline_id, save=True)
         else:
             print("Skipping landmark detection \n")
