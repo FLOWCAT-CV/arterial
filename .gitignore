@@ -12,7 +12,6 @@ dev
 *.pyc
 .*
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
-*scripts/
 *stanford/
 
 *.zip
