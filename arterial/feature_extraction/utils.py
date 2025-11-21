@@ -748,14 +748,14 @@ def build_segments_array_for_individual_centerline_graph(centerline_model, affin
         centerline_segments_array_[idx, 1] = radius_array[idx]
     centerline_segments_array = np.append(centerline_segments_array, centerline_segments_array_, axis=0)
 
-    centerline_coordinate_array = centerline_segments_array[:, 0]
-    centerline_radius_array = centerline_segments_array[:, 1]
-    centerline_coordinate_array = np.expand_dims(centerline_coordinate_array, axis=0)
-    centerline_radius_array = np.expand_dims(centerline_radius_array, axis=0)
+    # centerline_coordinate_array = centerline_segments_array[:, 0]
+    # centerline_radius_array = centerline_segments_array[:, 1]
+    # centerline_coordinate_array = np.expand_dims(centerline_coordinate_array, axis=0)
+    # centerline_radius_array = np.expand_dims(centerline_radius_array, axis=0)
 
     return centerline_segments_array
 
-def centerline_sanity_check(centerline_model, cta_array, cta_affine, radius_array_name="MaximumInscribedSphereRadius"):
+def centerline_sanity_check(centerline_model, cta_array, cta_affine):
     """
     Check if the centerline model is valid. Checks if all points of the centerline model are within the image volume.
 
@@ -776,9 +776,7 @@ def centerline_sanity_check(centerline_model, cta_array, cta_affine, radius_arra
     if centerline_model.GetNumberOfPoints() < 5:
         print("Skipping graph building and featurization of centerline because it has less than 5 points")
         return False
-    # Get coordinates array from centerline_model
-    centerline_segments_array = build_segments_array_for_individual_centerline_graph(centerline_model, cta_affine, cta_array.shape, radius_array_name)
-    centerline_coordinate_array = centerline_segments_array[:, 0]
+
     # Get the bounds in RAS coordinates for the image volume
     zero_ras_corner_coordinates = np.dot(cta_affine, np.array([0, 0, 0, 1]))[:3]
     one_ras_corner_coordinates = np.dot(cta_affine, np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, cta_array.shape[2] - 1, 1]))[:3]
@@ -788,8 +786,10 @@ def centerline_sanity_check(centerline_model, cta_array, cta_affine, radius_arra
     max_r = np.max([zero_ras_corner_coordinates[0], one_ras_corner_coordinates[0]])
     max_a = np.max([zero_ras_corner_coordinates[1], one_ras_corner_coordinates[1]])
     max_s = np.max([zero_ras_corner_coordinates[2], one_ras_corner_coordinates[2]])
+
     # Check if all points are within the image volume
-    for coord in centerline_coordinate_array:
+    for point_idx in range(centerline_model.GetNumberOfPoints()):
+        coord = centerline_model.GetPoint(point_idx)
         if coord[0] < min_r or coord[0] > max_r or coord[1] < min_a or coord[1] > max_a or coord[2] < min_s or coord[2] > max_s:
             print("Skipping graph building and featurization of because it is not contained within the image volume")
             return False
