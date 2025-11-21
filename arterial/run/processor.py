@@ -366,9 +366,10 @@ class ArterialProcessor():
                     if os.path.isfile(os.path.join(self.case_dir, f"{self.mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk")):
                         print(f"Building and featurizing {centerline_id}")
                         centerline_model = load_vtkpolydata(os.path.join(self.case_dir, f"{self.mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk"))
-                        if centerline_model.GetNumberOfPoints() < 5:
-                            print(f"Skipping graph building and featurization of {centerline_id} because it has less than 5 points")
+                        try:
+                            feature_extractor_for_landmark_detection.build_and_featurize_individual_centerline_graph(centerline_model, centerline_id=centerline_id, save=True)
+                        except Exception as e:
+                            print(f"Error building and featurizing {centerline_id}: {e}")
                             continue
-                        feature_extractor_for_landmark_detection.build_and_featurize_individual_centerline_graph(centerline_model, centerline_id=centerline_id, save=True)
         else:
             print("Skipping landmark detection \n")
