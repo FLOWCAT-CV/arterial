@@ -780,11 +780,17 @@ def centerline_sanity_check(centerline_model, cta_array, cta_affine, radius_arra
     centerline_segments_array = build_segments_array_for_individual_centerline_graph(centerline_model, cta_affine, cta_array.shape, radius_array_name)
     centerline_coordinate_array = centerline_segments_array[:, 0]
     # Get the bounds in RAS coordinates for the image volume
-    min_ras = np.dot(cta_affine, np.array([0, 0, 0, 1]))[:3]
-    max_ras = np.dot(cta_affine, np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, cta_array.shape[2] - 1, 1]))[:3]
+    zero_ras_corner_coordinates = np.dot(cta_affine, np.array([0, 0, 0, 1]))[:3]
+    one_ras_corner_coordinates = np.dot(cta_affine, np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, cta_array.shape[2] - 1, 1]))[:3]
+    min_r = np.min([zero_ras_corner_coordinates[0], one_ras_corner_coordinates[0]])
+    min_a = np.min([zero_ras_corner_coordinates[1], one_ras_corner_coordinates[1]])
+    min_s = np.min([zero_ras_corner_coordinates[2], one_ras_corner_coordinates[2]])
+    max_r = np.max([zero_ras_corner_coordinates[0], one_ras_corner_coordinates[0]])
+    max_a = np.max([zero_ras_corner_coordinates[1], one_ras_corner_coordinates[1]])
+    max_s = np.max([zero_ras_corner_coordinates[2], one_ras_corner_coordinates[2]])
     # Check if all points are within the image volume
     for coord in centerline_coordinate_array:
-        if coord[0] < min_ras[0] or coord[0] > max_ras[0] or coord[1] < min_ras[1] or coord[1] > max_ras[1] or coord[2] < min_ras[2] or coord[2] > max_ras[2]:
+        if coord[0] < min_r or coord[0] > max_r or coord[1] < min_a or coord[1] > max_a or coord[2] < min_s or coord[2] > max_s:
             print("Skipping graph building and featurization of because it is not contained within the image volume")
             return False
     return True
