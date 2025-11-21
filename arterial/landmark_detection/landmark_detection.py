@@ -68,7 +68,6 @@ def infer_landmarks_from_array(cta_array, cta_affine, mode="extracranial_vessels
 
     # We build the json in Slicer format as well
     landmarks_slicer_json = build_endpoints_json(landmarks_ras_mm, cta_affine, landmarks_labels) # affine only used for orientation, can use either preprocessed or original affine
-
     
     if return_mask:
         print("Resampling mask back to CTA native space...")

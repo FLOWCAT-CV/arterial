@@ -4,7 +4,7 @@ import numpy as np
 
 from arterial.centerline_extraction.preprocessing.utils import get_bounding_box_limits_3d, numpy_array_to_vtk_image_data, add_affine_information, split_segmentation, extract_surface
 
-def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor, **surface_extraction_parameters):
+def compute_segmentation_model(segmentation_array, segmentation_affine, reduction_factor, apply_bottom_cutting=False, bottom_height_mm=5.0, **surface_extraction_parameters):
     """
     Computes the segmentation surface of a binary array. The binary array is first converted to
     a VTK ImageData object. The VTK ImageData object is then resampled to reduce its resolution,
@@ -20,6 +20,10 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
         Affine transformation of the binary array.
     reduction_factor : float, optional
         The factor by which to reduce the resolution of the segmentation surfaces. The default is 0.5.
+    apply_bottom_cutting : bool, optional
+        Whether to cut the bottom region. The default is False.
+    bottom_height_mm : float, optional
+        Height of the bottom region to remove in mm. The default is 5.0 mm.
     surface_extraction_parameters : dict
         Parameters to be passed to the extract_segmentation_surface function.
 
@@ -36,11 +40,11 @@ def compute_segmentation_model(segmentation_array, segmentation_affine, reductio
 
     print("Extracting segmentation surface...")
     surface_extraction_parameters["extract_largest_only"] = False
-    segmentation_model = extract_surface(vtk_image, reduction_factor=reduction_factor, **surface_extraction_parameters)
+    segmentation_model = extract_surface(vtk_image, reduction_factor=reduction_factor, apply_bottom_cutting=apply_bottom_cutting, bottom_height_mm=bottom_height_mm, **surface_extraction_parameters)
 
     return segmentation_model
 
-def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, fast_segmentation=False, minimum_island_voxel_size=8000, **surface_extraction_parameters):
+def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmentation_affine, fast_segmentation=False, minimum_island_voxel_size=8000, apply_bottom_cutting_to_first_model=False, bottom_height_mm=5.0, **surface_extraction_parameters):
     """
     Computes the segmentation surfaces of a binary array. The binary array is first split into
     different islands, and then each island is converted to a VTK ImageData object. The VTK ImageData
@@ -60,6 +64,10 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         the analysis is focused on the extracranial region. The default is False.
     minimum_island_voxel_size : int, optional
         Minimum number of voxels for an island to be considered. The default is 8000 in native resolution (found empirically).
+    apply_bottom_cutting_to_first_model : bool, optional
+        Whether to apply bottom cutting to the first model. The default is False.
+    bottom_height_mm : float, optional
+        Height of the bottom region to remove in mm. The default is 5.0 mm.
     surface_extraction_parameters : dict
         Parameters to be passed to the extract_segmentation_surface function.
 
@@ -80,7 +88,7 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
         clean_segmentation_array += segmentation_array_
 
     print("\nProcessing complete array...")
-    segmentation_model = compute_segmentation_model(clean_segmentation_array, segmentation_affine, reduction_factor=0.8, **surface_extraction_parameters)
+    segmentation_model = compute_segmentation_model(clean_segmentation_array, segmentation_affine, reduction_factor=0.8, apply_bottom_smoothing=False, **surface_extraction_parameters)
 
     # For fast segmentation processing, we remove the upper 10% of the segmentation bonding box voxels. This typically simplifies endpoint extraction 
     # and centerline tracing 
@@ -94,6 +102,10 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
     for idx, segmentation_array_ in enumerate(segmentation_array_list):
         print(f"Processing island {idx + 1}/{len(segmentation_array_list)}...")
         surface_extraction_parameters["pass_band"] = 0.1
-        segmentation_model_list.append(compute_segmentation_model(segmentation_array_, segmentation_affine, reduction_factor=0.9, **surface_extraction_parameters))
+        if idx == 0 and apply_bottom_cutting_to_first_model:
+            apply_bottom_cutting = True
+        else:
+            apply_bottom_cutting = False
+        segmentation_model_list.append(compute_segmentation_model(segmentation_array_, segmentation_affine, reduction_factor=0.9, apply_bottom_cutting=apply_bottom_cutting, bottom_height_mm=bottom_height_mm, **surface_extraction_parameters))
 
     return segmentation_model, segmentation_model_list

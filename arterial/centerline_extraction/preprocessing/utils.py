@@ -150,7 +150,45 @@ def add_affine_information(vtk_image_data, affine=None):
     )
     return vtk_image_data
 
-def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_parameters):
+def cut_bottom_region(polydata, bottom_height_mm=5.0):
+    """
+    Cuts the bottom region of a mesh by making a perpendicular cut.
+
+    Parameters
+    ----------
+    polydata : vtkPolyData
+        The input mesh.
+    bottom_height_mm : float, optional
+        Height of the bottom region to remove in mm. The default is 5.0 mm.
+
+    Returns
+    -------
+    cut_bottom_region_input_port : vtkOutputPort
+        The input port of the cut bottom region filter.
+
+    """
+    bounds = polydata.GetBounds()
+    z_min = bounds[4]
+    
+    # Define cutting plane at z_min + bottom_height_mm
+    cut_position = z_min + bottom_height_mm
+    
+    print(f"    Cutting bottom {bottom_height_mm} mm from mesh...")
+    
+    # Create a plane perpendicular to z-axis
+    plane = vtk.vtkPlane()
+    plane.SetOrigin(0.0, 0.0, cut_position)
+    plane.SetNormal(0.0, 0.0, 1.0)
+    
+    # Clip the mesh using the plane (keeps everything above the plane)
+    clipper = vtk.vtkClipPolyData()
+    clipper.SetInputData(polydata)
+    clipper.SetClipFunction(plane)
+    clipper.Update()
+    
+    return clipper.GetOutput()
+
+def extract_surface(vtk_image_data, reduction_factor=0.8, apply_bottom_cutting=False, bottom_height_mm=5.0, **surface_extraction_parameters):
     """
     Extract the surface vtkPolyData from a vtkImageData object.
     First caps the holes in the surface, then smooths the surface, 
@@ -158,8 +196,14 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
 
     Parameters
     ----------
-    vtk_image_data_reader : vtkNIFTIImageReader
-        Nifti image reader class. Assumes loaded image.
+    vtk_image_data : vtkImageData
+        VTK image data object to extract surface from.
+    reduction_factor : float, optional
+        The factor by which to reduce the resolution of the surface. The default is 0.8.
+    apply_bottom_cutting : bool, optional
+        Whether to apply aggressive smoothing to the bottom region. The default is False.
+    bottom_height_mm : float, optional
+        Height of the bottom region to remove in mm. The default is 5.0 mm.
     n_iteration_smoothing : int
         The number of iterations for the vtkWindowedSincPolyDataFilter 
         smoothing algorithm.
@@ -247,5 +291,16 @@ def extract_surface(vtk_image_data, reduction_factor=0.8, **surface_extraction_p
     cleaner = vtk.vtkCleanPolyData()
     cleaner.SetInputConnection(connectivity_filter.GetOutputPort())
     cleaner.Update()
-    
-    return cleaner.GetOutput()
+
+    # Cut the bottom region if requested
+    if apply_bottom_cutting:
+        cut_bottom_region_output = cut_bottom_region(cleaner.GetOutput(), bottom_height_mm=bottom_height_mm)
+        # Close the opening from the cut
+        fill_holes = vtk.vtkFillHolesFilter()
+        fill_holes.SetInputData(cut_bottom_region_output)
+        fill_holes.SetHoleSize(1000.0)
+        fill_holes.Update()
+        
+        return fill_holes.GetOutput()
+    else:
+        return cleaner.GetOutput()

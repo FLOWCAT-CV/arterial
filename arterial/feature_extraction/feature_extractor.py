@@ -2,7 +2,7 @@
 
 import os
 from arterial.feature_extraction.graph_builder import build_local_graph, build_individual_centerline_graph_from_vtkpolydata
-from arterial.feature_extraction.utils import make_graph_plot
+from arterial.feature_extraction.utils import make_graph_plot, centerline_sanity_check
 from arterial.feature_extraction.local_features.feature_extraction import perform_local_feature_extraction, perform_local_feature_extraction_individual_centerline
 from arterial.feature_extraction.segment_features.feature_extraction import perform_segment_feature_extraction
 from arterial.feature_extraction.segment_features.utils import plot_single_segments, extract_segment_features
@@ -244,15 +244,18 @@ class FeatureExtractor():
         if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
         if self.cta_array is None or self.cta_affine is None:
             self._load_cta_nifti_from_file()
-        self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id)
-        self.individual_centerline_graph = perform_local_feature_extraction_individual_centerline(self.individual_centerline_graph, self.cta_array, self.cta_affine)
-        self.individual_centerline_graph = extract_segment_features(self.individual_centerline_graph, use_blanking=False)
+        if centerline_sanity_check(centerline_model, self.cta_array, self.cta_affine):
+            raise ValueError("Centerline model is not valid. It is not within the image volume.")
+        else:
+            self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id)
+            self.individual_centerline_graph = perform_local_feature_extraction_individual_centerline(self.individual_centerline_graph, self.cta_array, self.cta_affine)
+            self.individual_centerline_graph = extract_segment_features(self.individual_centerline_graph, use_blanking=False)
 
-        if save:
-            print(f"Saving individual centerline graph to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.pickle')}")
-            save_pickle(self.individual_centerline_graph, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.pickle"))
-            print(f"Saving individual centerline graph plot to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.png')}")
-            make_graph_plot(self.individual_centerline_graph, output_path=os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.png"))
+            if save:
+                print(f"Saving individual centerline graph to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.pickle')}")
+                save_pickle(self.individual_centerline_graph, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.pickle"))
+                print(f"Saving individual centerline graph plot to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.png')}")
+                make_graph_plot(self.individual_centerline_graph, output_path=os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.png"))
 
     def is_local_featurized(self):
         if "features femoral" in self.local_graph.nodes[0].keys():

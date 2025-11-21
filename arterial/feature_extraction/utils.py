@@ -754,3 +754,37 @@ def build_segments_array_for_individual_centerline_graph(centerline_model, affin
     centerline_radius_array = np.expand_dims(centerline_radius_array, axis=0)
 
     return centerline_segments_array
+
+def centerline_sanity_check(centerline_model, cta_array, cta_affine, radius_array_name="MaximumInscribedSphereRadius"):
+    """
+    Check if the centerline model is valid. Checks if all points of the centerline model are within the image volume.
+
+    Parameters
+    ----------
+    centerline_model : vtk.vtkPolyData
+        Centerline model to check.
+    affine : numpy.array
+        Affine matrix of the image.
+    image_shape : tuple
+        Shape of the image.
+
+    Returns
+    -------
+    bool: True if the centerline model is valid, False otherwise.
+
+    """
+    if centerline_model.GetNumberOfPoints() < 5:
+        print("Skipping graph building and featurization of centerline because it has less than 5 points")
+        return False
+    # Get coordinates array from centerline_model
+    centerline_segments_array = build_segments_array_for_individual_centerline_graph(centerline_model, cta_affine, cta_array.shape, radius_array_name)
+    centerline_coordinate_array = centerline_segments_array[:, 0]
+    # Get the bounds in RAS coordinates for the image volume
+    min_ras = np.dot(cta_affine, np.array([0, 0, 0, 1]))[:3]
+    max_ras = np.dot(cta_affine, np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, cta_array.shape[2] - 1, 1]))[:3]
+    # Check if all points are within the image volume
+    for coord in centerline_coordinate_array:
+        if coord[0] < min_ras[0] or coord[0] > max_ras[0] or coord[1] < min_ras[1] or coord[1] > max_ras[1] or coord[2] < min_ras[2] or coord[2] > max_ras[2]:
+            print("Skipping graph building and featurization of because it is not contained within the image volume")
+            return False
+    return True

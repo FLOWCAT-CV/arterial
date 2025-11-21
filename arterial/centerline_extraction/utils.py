@@ -105,7 +105,7 @@ class CenterlineComputationLogic(object):
                 raise ValueError("No endpoints found for first model. This is a critical error. Please check the segmentation.")
             else:
                 print("No endpoints were found in a secondary island, returning empty centerlines")
-                return None, None, None
+                return None, None, None, None
         
         print(f"Found {endpoints.GetNumberOfPoints()} endpoints.")
 
@@ -750,7 +750,7 @@ def get_bounding_box_limits_3d(array):
 
     return min_lr, max_lr, min_pa, max_pa, min_is, max_is
 
-def volume_sanity_check(segmentation_array, segmentation_affine):
+def volume_sanity_check(segmentation_array, segmentation_affine, mode="extracranial_vessels"):
     """
     Check that the volume of the segmentation is within the expected range.
     Otherwise, image will be read as an artifact and an error will be raised.
@@ -772,14 +772,18 @@ def volume_sanity_check(segmentation_array, segmentation_affine):
     voxel_size = np.abs(np.prod([segmentation_affine[idx, idx] for idx in range(3)]))
     segmentation_volume = np.sum(segmentation_array > 0) * voxel_size
     bouding_box_volume = (max_lr - min_lr) * (max_pa - min_pa) * (max_is - min_is) * voxel_size
-    if segmentation_volume < 3.5e4: # Empirically tested
-        raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
-    if bouding_box_volume < 2.5e6: # Empirically tested
-        raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
-    if bouding_box_volume > 3.5e7: # Empirically tested
-        raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
-    if segmentation_volume < 4e4 and bouding_box_volume < 4e6: # Empirically tested
-        raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
+    if mode == "extracranial_vessels":
+        if segmentation_volume < 3.5e4: # Empirically tested
+            raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
+        if bouding_box_volume < 2.5e6: # Empirically tested
+            raise ValueError("Bounding box volume is too small: {:.2f} mm3".format(bouding_box_volume))
+        if bouding_box_volume > 3.5e7: # Empirically tested
+            raise ValueError("Bounding box volume is too large: {:.2f} mm3".format(bouding_box_volume))
+        if segmentation_volume < 4e4 and bouding_box_volume < 4e6: # Empirically tested
+            raise ValueError("Combination of segmentation volume and bounding box volume is too small: \nSegmentation volume: {:.2f} mm3 \nBounding box volume: {:.2f}".format(segmentation_volume, bouding_box_volume))
+    else:
+        if segmentation_volume < 1e3: # Arbitrary
+            raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
 
 def robust_endpoint_relocation(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):
     """

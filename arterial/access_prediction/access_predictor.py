@@ -4,7 +4,7 @@ import os
 
 from arterial.access_prediction.preprocessing.preprocessing import preprocess_supersegment
 from arterial.access_prediction.inference import perform_inference
-from arterial.access_prediction.utils import make_combined_plot, get_lpi_corner_coordinates, nx_graph_to_vtk_polydata, nx_graph_to_point_dict
+from arterial.access_prediction.utils import make_combined_plot, get_lpi_corner_coordinates, nx_graph_to_vtk_polydata, nx_graph_to_point_dict, supersegment_sanity_check
 
 from arterial.io.load_and_save_operations import load_pickle, save_json, save_pickle, load_nifti, save_vtkpolydata
 from arterial.feature_extraction.utils import make_graph_plot
@@ -151,25 +151,29 @@ class AccessPredictor():
                     self.preprocess_supersegments(save=save)
                 print(f"\nPerforming inference for {access} {side} supersegment...")
                 self.predictions_dict[(access, side)] = {}
-                out = perform_inference(self.preprocessed_supersegment_dict[(access, side)], self.lpi_corner_coordinates, return_attention_map=return_attention_map)
-                self.predictions_dict[(access, side)]["mean"] = out[0]
-                self.predictions_dict[(access, side)]["std"] = out[1]
-                if return_attention_map:
-                    self.attention_maps_dict[(access, side)] = out[2]
-                    self.attention_maps_vtk_dict[(access, side)] = nx_graph_to_vtk_polydata(self.attention_maps_dict[(access, side)])
-                    self.attention_maps_point_dict[(access, side)] = nx_graph_to_point_dict(self.attention_maps_dict[(access, side)])
-                if save:
-                    print(f"Saving access prediction of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json')}")
-                    save_json(self.predictions_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json'))
+                if supersegment_sanity_check(self.preprocessed_supersegment_dict[(access, side)]):
+                    out = perform_inference(self.preprocessed_supersegment_dict[(access, side)], self.lpi_corner_coordinates, return_attention_map=return_attention_map)
+                    self.predictions_dict[(access, side)]["mean"] = out[0]
+                    self.predictions_dict[(access, side)]["std"] = out[1]
                     if return_attention_map:
-                        print(f"Saving attention map of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.pickle')}")
-                        save_pickle(self.attention_maps_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.pickle'))
-                        print(f"Saving attention map plot of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.png')}")
-                        make_graph_plot(self.attention_maps_dict[(access, side)], feature="attention_weight", output_path=os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.png'))
-                        print(f"Saving attention map vtk of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.vtk')}")
-                        save_vtkpolydata(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.vtk'))
-                        print(f"Saving attention map points of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map_points.json')}")
-                        save_json(self.attention_maps_point_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map_points.json'))
+                        self.attention_maps_dict[(access, side)] = out[2]
+                        self.attention_maps_vtk_dict[(access, side)] = nx_graph_to_vtk_polydata(self.attention_maps_dict[(access, side)])
+                        self.attention_maps_point_dict[(access, side)] = nx_graph_to_point_dict(self.attention_maps_dict[(access, side)])
+                    if save:
+                        print(f"Saving access prediction of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json')}")
+                        save_json(self.predictions_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json'))
+                        if return_attention_map:
+                            print(f"Saving attention map of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.pickle')}")
+                            save_pickle(self.attention_maps_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.pickle'))
+                            print(f"Saving attention map plot of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.png')}")
+                            make_graph_plot(self.attention_maps_dict[(access, side)], feature="attention_weight", output_path=os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.png'))
+                            print(f"Saving attention map vtk of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.vtk')}")
+                            save_vtkpolydata(self.attention_maps_vtk_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map.vtk'))
+                            print(f"Saving attention map points of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map_points.json')}")
+                            save_json(self.attention_maps_point_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'attention_map_points.json'))
+                else:
+                    print(f"Supersegment {access} {side} is too short. Skipping access prediction.")
+                    continue
 
     def compute_lpi_corner_coordinates(self):
         """
