@@ -151,7 +151,7 @@ class AccessPredictor():
                     self.preprocess_supersegments(save=save)
                 print(f"\nPerforming inference for {access} {side} supersegment...")
                 self.predictions_dict[(access, side)] = {}
-                if supersegment_sanity_check(self.preprocessed_supersegment_dict[(access, side)]):
+                if supersegment_sanity_check(self.preprocessed_supersegment_dict[(access, side)]['dense_graph']):
                     out = perform_inference(self.preprocessed_supersegment_dict[(access, side)], self.lpi_corner_coordinates, return_attention_map=return_attention_map)
                     self.predictions_dict[(access, side)]["mean"] = out[0]
                     self.predictions_dict[(access, side)]["std"] = out[1]

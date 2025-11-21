@@ -244,7 +244,7 @@ class FeatureExtractor():
         if save: os.makedirs(self.individual_centerlines_dir_path, exist_ok=True)
         if self.cta_array is None or self.cta_affine is None:
             self._load_cta_nifti_from_file()
-        if centerline_sanity_check(centerline_model, self.cta_array, self.cta_affine):
+        if not centerline_sanity_check(centerline_model, self.cta_array, self.cta_affine):
             raise ValueError("Centerline model is not valid. It is not within the image volume.")
         else:
             self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id)
