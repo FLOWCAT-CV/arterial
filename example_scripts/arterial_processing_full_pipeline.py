@@ -111,7 +111,7 @@ def main(parameters_file_path):
         if not os.path.exists(os.path.join(case_dir, "arterial_processing_params.json")):
             shutil.copy(parameters_file_path, os.path.join(case_dir, "arterial_processing_params.json"))
 
-        dcm = print_dcm_info(cta_dicom_path)
+        # dcm = print_dcm_info(cta_dicom_path)
 
         # if dcm.SliceThickness > 1.5:
         #     print("Skipping case because slice thickness is greater than 1.5 mm")
