@@ -174,7 +174,8 @@ class VesselSegmenter():
         -------
         
         """
-        if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti_from_file()
+        if self.cta_array is None or self.cta_affine is None:
+            self._load_cta_nifti_from_file()
 
         self.cta_head_array, self.cta_neck_array, self.cta_head_affine = slice_cta_head_and_neck(self.cta_array, self.cta_affine)
 
