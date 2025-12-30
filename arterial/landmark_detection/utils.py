@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import torchio as tio
 from scipy import ndimage
-from skimage.morphology import skeletonize_3d
+from skimage.morphology import skeletonize
 
 
 class SingleCTADataset:
@@ -265,7 +265,7 @@ class _LandmarkRefiner:
         if self._centerline is None:
             cleaned = cc3d.largest_k(self.segmentation, k=10, connectivity=26)
             cleaned = (cleaned > 0).astype(np.uint8)
-            self._centerline = skeletonize_3d(cleaned).astype(np.uint8)
+            self._centerline = skeletonize(cleaned).astype(np.uint8)
         return self._centerline
     
     @property
