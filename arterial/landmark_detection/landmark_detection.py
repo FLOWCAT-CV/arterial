@@ -7,12 +7,7 @@ import numpy as np
 import nibabel as nib
 
 from arterial.landmark_detection.model import load_trained_model_seg
-from arterial.landmark_detection.utils import (
-    preprocess_for_landmark_detection, 
-    postprocess_preds, 
-    resample_mask_to_original_cta,
-    refine_landmarks_with_segmentation
-)
+from arterial.landmark_detection.utils import preprocess_for_landmark_detection, postprocess_preds, resample_mask_to_original_cta, refine_landmarks_with_segmentation
 from arterial.centerline_extraction.utils import build_endpoints_json
 
 
