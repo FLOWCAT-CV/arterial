@@ -2,7 +2,7 @@
 
 import os
 from arterial.feature_extraction.graph_builder import build_local_graph, build_individual_centerline_graph_from_vtkpolydata
-from arterial.feature_extraction.utils import make_graph_plot, centerline_sanity_check
+from arterial.feature_extraction.utils import resample_centerline_segments_array, make_graph_plot, centerline_sanity_check
 from arterial.feature_extraction.local_features.feature_extraction import perform_local_feature_extraction, perform_local_feature_extraction_individual_centerline
 from arterial.feature_extraction.segment_features.feature_extraction import perform_segment_feature_extraction
 from arterial.feature_extraction.segment_features.utils import plot_single_segments, extract_segment_features
@@ -96,13 +96,15 @@ class FeatureExtractor():
         self.individual_centerlines_dir_path = os.path.join(self.case_dir, self.mode, "individual_centerlines")
         self.individual_centerline_graph = None
 
-    def build_local_graph(self, save=True):
+    def build_local_graph(self, resample=True, save=True):
         """
         Builds dense centerline graph from case_dir/centerline_segments_array.npy and 
         graph_pred.pickle.
 
         Parameters
         ----------
+        resample : bool, optional
+            Whether to resample the centerline segments array. The default is True.
         save : bool, optional
             Whether to save the generated graph. The default is True.
 
@@ -113,6 +115,12 @@ class FeatureExtractor():
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
         if self.centerline_segments_array is None:
             self._load_centerline_segments_array()
+        if resample:
+            from time import time
+            start_time = time()
+            print(f"Resampling centerline segments array to {self.sampling_distance_mm} mm")
+            self.centerline_segments_array = resample_centerline_segments_array(self.centerline_segments_array, self.sampling_distance_mm)
+            print(f"Centerline segments array resampled ({time() - start_time:.2f} seconds)")
         if self.segments_graph is None:
             self._load_segments_graph_pred()
         self.local_graph = build_local_graph(self.centerline_segments_array, self.segments_graph, self.sampling_distance_mm)
@@ -247,7 +255,7 @@ class FeatureExtractor():
         if not centerline_sanity_check(centerline_model, self.cta_array, self.cta_affine):
             raise ValueError("Centerline model is not valid. It is not within the image volume.")
         else:
-            self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id)
+            self.individual_centerline_graph = build_individual_centerline_graph_from_vtkpolydata(centerline_model, self.cta_affine, self.cta_array.shape, radius_array_name=radius_array_name, centerline_id=centerline_id, sampling_distance_mm=self.sampling_distance_mm)
             self.individual_centerline_graph = perform_local_feature_extraction_individual_centerline(self.individual_centerline_graph, self.cta_array, self.cta_affine)
             self.individual_centerline_graph = extract_segment_features(self.individual_centerline_graph, use_blanking=False)
 

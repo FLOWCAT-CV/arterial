@@ -9,6 +9,9 @@ from mycolorpy import colorlist as mcp
 import nibabel as nib
 from vtk.util.numpy_support import vtk_to_numpy
 
+from scipy.interpolate import interp1d, splprep, splev
+
+
 def get_predicted_vessels_dict(segments_graph_pred):
     """
     Builds cell_id to vessel type and vessel type name dictionaries.
@@ -717,17 +720,43 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
             plt.close()
 
 def build_segments_array_for_individual_centerline_graph(centerline_model, affine, image_shape, radius_array_name="MaximumInscribedSphereRadius"):
-    # Get coordinates array from centerline_segments_array
+    """
+    Build centerline_segments_array from a single VTK centerline model.
+    
+    The resulting array has shape (1, 2) with dtype=object, where:
+    - centerline_segments_array[0, 0] = coordinate array of shape (n_points, 3)
+    - centerline_segments_array[0, 1] = radius array of shape (n_points,)
+    
+    This structure matches the format used when loading from .npy files with multiple segments.
+    
+    Parameters
+    ----------
+    centerline_model : vtkPolyData
+        VTK centerline model.
+    affine : numpy.ndarray
+        Affine matrix of the image.
+    image_shape : tuple
+        Shape of the image volume.
+    radius_array_name : str, optional
+        Name of the radius array in the VTK model. Default is "MaximumInscribedSphereRadius".
+    
+    Returns
+    -------
+    centerline_segments_array : numpy.ndarray
+        Array with shape (1, 2) and dtype=object containing the single segment's
+        coordinates and radii.
+    """
+    # Get coordinates array from centerline model
     coordinate_array = vtk_to_numpy(centerline_model.GetPoints().GetData())
-    # Get radius array from centerline_segments_array
+    # Get radius array from centerline model
     radius_array = vtk_to_numpy(centerline_model.GetPointData().GetArray(radius_array_name))
 
-    # For some reason, the vtk logic return a vtk centerline object inverted (so, first points
+    # For some reason, the vtk logic returns a vtk centerline object inverted (so, first points
     # are the distal end and last points are the proximal end). We need to flip it
     coordinate_array = np.flip(coordinate_array, axis=0)
     radius_array = np.flip(radius_array, axis=0)
 
-    # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
+    # Depending on the orientation of the image, we have to define the corner voxel coordinates
     orientation = nib.aff2axcodes(affine)
     if orientation == ('R', 'A', 'S'):
         lpi_corner_voxel_coordinates = np.array([0, 0, 0])
@@ -735,23 +764,23 @@ def build_segments_array_for_individual_centerline_graph(centerline_model, affin
         lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, 0, 0])
     elif orientation == ('L', 'P', 'S'):
         lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
+    else:
+        # Default fallback for other orientations
+        lpi_corner_voxel_coordinates = np.array([0, 0, 0])
 
-    # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
+    # Compute lpi corner coordinates in real world coordinates
     lpi_corner_coordinates = np.dot(affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
 
-    # Build centerline_segments_array to reuse the same code as the one used in the build_centerline_graph function
-    # This structure makes no sense and we should try to mend this in the future
-    centerline_segments_array = np.ndarray([0, 2])
-    centerline_segments_array_ = np.ndarray([len(coordinate_array), 2], dtype=object)
-    for idx in range(len(coordinate_array)):
-        centerline_segments_array_[idx, 0] = coordinate_array[idx] - lpi_corner_coordinates
-        centerline_segments_array_[idx, 1] = radius_array[idx]
-    centerline_segments_array = np.append(centerline_segments_array, centerline_segments_array_, axis=0)
+    # Transform coordinates to the local coordinate system
+    transformed_coordinates = coordinate_array - lpi_corner_coordinates
 
-    # centerline_coordinate_array = centerline_segments_array[:, 0]
-    # centerline_radius_array = centerline_segments_array[:, 1]
-    # centerline_coordinate_array = np.expand_dims(centerline_coordinate_array, axis=0)
-    # centerline_radius_array = np.expand_dims(centerline_radius_array, axis=0)
+    # Build centerline_segments_array with the correct structure:
+    # Shape (1, 2) with dtype=object, where:
+    # - [0, 0] contains the entire coordinate array (n_points, 3)
+    # - [0, 1] contains the entire radius array (n_points,)
+    centerline_segments_array = np.empty((1, 2), dtype=object)
+    centerline_segments_array[0, 0] = transformed_coordinates
+    centerline_segments_array[0, 1] = radius_array
 
     return centerline_segments_array
 
@@ -794,3 +823,158 @@ def centerline_sanity_check(centerline_model, cta_array, cta_affine):
             print("Skipping graph building and featurization of because it is not contained within the image volume")
             return False
     return True
+
+def resample_single_segment(coordinates, radii, target_distance, smoothing_factor=0.0):
+    """
+    Resample a single centerline segment to have points at approximately the target distance,
+    while maintaining the exact start and end points. Uses parametric B-spline interpolation
+    that treats the 3D curve as a whole rather than interpolating axes independently.
+
+    Parameters
+    ----------
+    coordinates : numpy.ndarray
+        Array of shape (n_points, 3) containing the 3D coordinates of centerline points.
+    radii : numpy.ndarray
+        Array of shape (n_points,) containing the radius at each centerline point.
+    target_distance : float
+        Target distance in millimeters between consecutive resampled points.
+    smoothing_factor : float, optional
+        Smoothing factor for the spline (0 = interpolating spline that passes through 
+        all points, higher values = smoother approximating spline). Default is 0.0.
+
+    Returns
+    -------
+    resampled_coordinates : numpy.ndarray
+        Array of shape (m_points, 3) containing the resampled 3D coordinates.
+    resampled_radii : numpy.ndarray
+        Array of shape (m_points,) containing the interpolated radii at resampled points.
+
+    """
+    # Handle edge cases
+    if len(coordinates) < 2:
+        return coordinates.copy(), np.atleast_1d(radii).copy()
+    
+    # Compute cumulative arc length along the centerline (chord length parameterization)
+    segment_lengths = np.linalg.norm(np.diff(coordinates, axis=0), axis=1)
+    cumulative_length = np.zeros(len(coordinates))
+    cumulative_length[1:] = np.cumsum(segment_lengths)
+    total_length = cumulative_length[-1]
+    
+    # If total length is zero or smaller than target distance, return original
+    if total_length <= target_distance or total_length < 1e-10:
+        return coordinates.copy(), np.atleast_1d(radii).copy()
+    
+    # Normalize arc length to [0, 1] for spline parameterization
+    u_original = cumulative_length / total_length
+    
+    # Calculate number of segments to create (ensuring we keep start and end points)
+    n_segments = max(1, int(np.ceil(total_length / target_distance)))
+    
+    # Generate new parameter values (including start and end)
+    u_new = np.linspace(0, 1, n_segments + 1)
+    
+    # Determine spline degree based on number of points
+    # Need at least k+1 points for degree k spline
+    n_points = len(coordinates)
+    if n_points >= 4:
+        spline_degree = 3  # Cubic spline - smooth second derivatives
+    elif n_points >= 3:
+        spline_degree = 2  # Quadratic spline
+    else:
+        spline_degree = 1  # Linear interpolation
+    
+    # Fit parametric B-spline to the 3D curve
+    # splprep treats all dimensions together, respecting curve geometry
+    try:
+        tck, _ = splprep(
+            [coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]],
+            u=u_original,
+            s=smoothing_factor,
+            k=spline_degree
+        )
+        # Evaluate spline at new parameter values
+        resampled_x, resampled_y, resampled_z = splev(u_new, tck)
+        resampled_coordinates = np.column_stack([resampled_x, resampled_y, resampled_z])
+    except Exception:
+        # Fallback to linear interpolation if spline fitting fails
+        interp_x = interp1d(u_original, coordinates[:, 0], kind='linear')
+        interp_y = interp1d(u_original, coordinates[:, 1], kind='linear')
+        interp_z = interp1d(u_original, coordinates[:, 2], kind='linear')
+        resampled_coordinates = np.column_stack([
+            interp_x(u_new),
+            interp_y(u_new),
+            interp_z(u_new)
+        ])
+    
+    # Interpolate radii using 1D spline (radii is scalar, so 1D interpolation is appropriate)
+    radii = np.atleast_1d(radii)
+    if n_points >= 4:
+        try:
+            # Use univariate spline for radii
+            from scipy.interpolate import UnivariateSpline
+            radius_spline = UnivariateSpline(u_original, radii, s=smoothing_factor, k=3)
+            resampled_radii = radius_spline(u_new)
+        except Exception:
+            # Fallback to linear interpolation
+            interp_radius = interp1d(u_original, radii, kind='linear')
+            resampled_radii = interp_radius(u_new)
+    else:
+        # For few points, use linear interpolation for radii
+        interp_radius = interp1d(u_original, radii, kind='linear')
+        resampled_radii = interp_radius(u_new)
+    
+    # Ensure exact start and end points are preserved (avoid numerical drift)
+    resampled_coordinates[0] = coordinates[0]
+    resampled_coordinates[-1] = coordinates[-1]
+    resampled_radii[0] = radii[0]
+    resampled_radii[-1] = radii[-1]
+    
+    # Ensure radii are non-negative
+    resampled_radii = np.maximum(resampled_radii, 0.0)
+    
+    return resampled_coordinates, resampled_radii
+
+def resample_centerline_segments_array(centerline_segments_array, target_distance, smoothing_factor=0.0):
+    """
+    Resample all segments in a centerline_segments_array to have points at approximately
+    the target distance, while maintaining the exact start and end points for each segment.
+    Uses parametric B-spline interpolation that respects the 3D geometry of each curve.
+
+    Parameters
+    ----------
+    centerline_segments_array : numpy.ndarray
+        Array with dtype=object and shape (n_segments, 2), where:
+        - [:, 0] contains coordinate arrays (each of shape (n_points, 3))
+        - [:, 1] contains radius arrays (each of shape (n_points,))
+    target_distance : float
+        Target distance in millimeters between consecutive resampled points.
+    smoothing_factor : float, optional
+        Smoothing factor for the spline interpolation. Default is 0.0 (interpolating 
+        spline that passes through all original points). Higher values create smoother
+        curves that approximate rather than interpolate the original points.
+
+    Returns
+    -------
+    resampled_centerline_segments_array : numpy.ndarray
+        Array with the same structure as input, but with resampled segments.
+
+    """
+    n_segments = len(centerline_segments_array)
+    resampled_centerline_segments_array = np.ndarray([n_segments, 2], dtype=object)
+    
+    for idx in range(n_segments):
+        coordinates = centerline_segments_array[idx, 0]
+        radii = centerline_segments_array[idx, 1]
+        
+        # Handle cases where coordinates or radii might be scalar (single point)
+        if np.isscalar(coordinates) or (hasattr(coordinates, 'ndim') and coordinates.ndim == 1 and len(coordinates) == 3):
+            # Single point case - just copy
+            resampled_centerline_segments_array[idx, 0] = np.atleast_2d(coordinates)
+            resampled_centerline_segments_array[idx, 1] = np.atleast_1d(radii)
+        else:
+            # Normal case - resample the segment
+            resampled_coords, resampled_rads = resample_single_segment(coordinates, radii, target_distance, smoothing_factor)
+            resampled_centerline_segments_array[idx, 0] = resampled_coords
+            resampled_centerline_segments_array[idx, 1] = resampled_rads
+    
+    return resampled_centerline_segments_array

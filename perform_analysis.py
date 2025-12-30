@@ -15,7 +15,7 @@ def main():
     parser.add_argument("-fast", "--fast_segmentation", action="store_true",
         help="Boolean argument to determine if fast segmentation is used or not. Use (True) if fast segmentation is wanted. "
         "Otherwise, full segmentation will be performed. Not required, default = False.")
-    parser.add_argument('-sd', '--sampling_distance_mm', type=int, required=False, default=2,
+    parser.add_argument('-sd', '--sampling_distance_mm', type=float, required=False, default=2,
         help='Sampling density (in mm) for the dense centerline graph sampling from the centerline models. Not required. Default = 2.')
     parser.add_argument("-ss", "--skip_segmentation", action="store_true",
         help="Boolean argument to determine if segmentation is predicted or not. Use (True) if segmentation is already "
@@ -33,7 +33,7 @@ def main():
         help="Boolean argument to determine if feature extraction should be skipped or not. Not required, default = False.")
     parser.add_argument("-sap", "--skip_access_prediction", action="store_true",
         help="Boolean argument to determine if access prediction should be skipped or not. Not required, default = False.")
-    parser.add_argument("-slm", "--skip_landmark_detection", action="store_true",
+    parser.add_argument("-sld", "--skip_landmark_detection", action="store_true",
         help="Boolean argument to determine if landmark detection should be skipped or not. Not required, default = False.")
     parser.add_argument("-clnn", "--cl_dice_nnunet", action="store_true",
         help="Boolean argument to determine if nnunet trained with centerline dice should be used or not. Not required, default = False.")

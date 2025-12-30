@@ -882,6 +882,9 @@ def extract_segment_features(segment, use_blanking=True):
     segment.graph["features"]["azimuthal_angle"] = azimuthal
     segment.graph["features"]["diameter_last_5mm"] = diameter_last_5mm(segment, distal_node)
     segment.graph["features"]["diameter_last_10mm"] = diameter_last_10mm(segment, distal_node)
+    segment.graph["features"]["tortuosity_index_last_10mm"] = tortuosity_index_last_10mm(segment, distal_node)
+    segment.graph["features"]["tortuosity_index_last_20mm"] = tortuosity_index_last_20mm(segment, distal_node)
+    segment.graph["features"]["tortuosity_index_last_30mm"] = tortuosity_index_last_30mm(segment, distal_node)
     segment.graph["features"]["curvature_energy"] = curvature_energy(segment)
 
     return segment
@@ -1344,54 +1347,6 @@ def cumulative_curvature(segment, proximal_node):
 
     return cumulative_curvature
 
-def tortuosity_index_first_5_cm(segment, proximal_node):
-    """
-    Computes tortuosity index of first 5 centimeters of the segment.
-    First it detects which nodes are within a 5 centimeter distance 
-    along the centerline, then it removes all other nodes and finally
-    it computes the tortuosity index from the remaining subsegment.
-
-    Parameters
-    ----------
-    segment : networkx.Graph
-        Graph of the individual segment.
-    proximal_node : integer
-        Proximal node of the segment.
-    distal_node : integer
-        Distal node of the segment.
-
-    Returns
-    -------
-    tortuosty_index_first_5_cm : float
-        Tortuosity index of the first 5 cm of the segment.
-    
-    """
-    # Create a copy of the segment
-    segment_copy = segment.copy()
-    # Initialize list for nodes within 5 cm of the proximal node and cumulative distance
-    cumulative_distance = 0
-    node = proximal_node
-    nodes_visited = [proximal_node]
-    done = False
-    while not done and cumulative_distance < 50:
-        done = True
-        for neighbor in segment.neighbors(node):
-            if neighbor not in nodes_visited:
-                # Compute distance from reference axis
-                cumulative_distance += np.linalg.norm(segment_copy.nodes[neighbor]["pos"] - segment_copy.nodes[node]["pos"])
-                nodes_visited.append(node)
-                node = neighbor
-                done = False
-                break
-
-    # Eliminate all other nodes from the segment
-    for node in segment_copy.copy():
-        if node not in nodes_visited:
-            segment_copy.remove_node(node)
-
-    # Compute tortuosity index from the remaining segment
-    return tortuosity_index(segment_copy)
-
 def min_polar_angle(segment):
     """
     Computes the smallest angle along a segment.
@@ -1477,72 +1432,97 @@ def direction_angles(segment, proximal_node, distal_node):
         return polar, azimuth
     else:
         return 0, 0
+
+def partial_segment(segment, starting_node, partial_length_mm=5):
+    """
+    Computes a partial segment from a given segment. The way the algorithm works, 
+    it will start with the provided starting node and will compute the propagated
+    length of the segment until the partial length is reached.
+
+    Parameters
+    ----------
+    segment : networkx.Graph
+        Graph of the individual segment.
+    starting_node : int
+        Starting node of the partial segment.
+    partial_length_mm : float
+        Length of the partial segment in millimeters.
+
+    Returns
+    -------
+    partial_segment : networkx.Graph
+        Subgraph of the partial segment.
+
+    """
+    accumulated_distance = 0
+    node = starting_node
+    nodes_visited = [node]
+    idx = 0
+    # while accumulated_distance < partial_length_mm:
+    length_segment = 0
+    while length_segment < partial_length_mm:
+        for neighbor in segment.neighbors(node):
+            if neighbor not in nodes_visited:
+                nodes_visited.append(neighbor)
+                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
+                node = neighbor
+                if accumulated_distance >= partial_length_mm:
+                    break
+
+        if len(nodes_visited) == len(segment):
+            break
+        idx += 1
+        if idx > 200:
+            break
+        
+        length_segment = length(segment.subgraph(nodes_visited))
+    
+    if len(nodes_visited) > 0:
+        return segment.subgraph(nodes_visited)
+    else:
+        return None
     
 def diameter_last_5mm(segment, distal_node):
     """
     Computes the diameter of the last 5 mm of a segment.
     """
-    accumulated_distance = 0
-    node = distal_node
-    nodes_visited = [distal_node]
-
-    node_diameters = []
-
-    idx = 0
-
-    while accumulated_distance < 5:
-        for neighbor in segment.neighbors(node):
-            if neighbor not in nodes_visited:
-                node_diameters.append(segment.nodes[neighbor]["features femoral"]["radius"] * 2)
-                nodes_visited.append(neighbor)
-                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
-                node = neighbor
-
-        if len(nodes_visited) == len(segment):
-            # print("Warning: diameter_last_5mm did not find 5 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
-            break
-        idx += 1
-        if idx > 200:
-            break
-
-    if len(node_diameters) > 0:
-        return np.mean(node_diameters)
-    else:
-        print("Warning: diameter_last_5mm could not be measured. No nodes found.")
-        return np.nan
+    subsegment = partial_segment(segment, starting_node=distal_node, partial_length_mm=5)
+    return mean_diameter(subsegment)
 
 def diameter_last_10mm(segment, distal_node):
     """
-    Computes the diameter of the last 5 mm of a segment.
+    Computes the diameter of the last 10 mm of a segment.
     """
-    accumulated_distance = 0
-    node = distal_node
-    nodes_visited = [distal_node]
+    subsegment = partial_segment(segment, starting_node=distal_node, partial_length_mm=10)
+    return mean_diameter(subsegment)
+    
+def tortuosity_index_first_5_cm(segment, proximal_node):
+    """
+    Computes tortuosity index of first 5 centimeters of the segment.
+    """
+    subsegment = partial_segment(segment, starting_node=proximal_node, partial_length_mm=50)
+    return tortuosity_index(subsegment)
 
-    node_diameters = []
+def tortuosity_index_last_10mm(segment, distal_node):
+    """
+    Computes the tortuosity index of the last 10 mm of a segment.
+    """
+    subsegment = partial_segment(segment, starting_node=distal_node, partial_length_mm=10)
+    return tortuosity_index(subsegment)
 
-    idx = 0
+def tortuosity_index_last_20mm(segment, distal_node):
+    """
+    Computes the tortuosity index of the last 20 mm of a segment.
+    """
+    subsegment = partial_segment(segment, starting_node=distal_node, partial_length_mm=20)
+    return tortuosity_index(subsegment)
 
-    while accumulated_distance < 10:
-        for neighbor in segment.neighbors(node):
-            if neighbor not in nodes_visited:
-                node_diameters.append(segment.nodes[neighbor]["features femoral"]["radius"] * 2)
-                nodes_visited.append(neighbor)
-                accumulated_distance += np.linalg.norm(segment.nodes[neighbor]["pos"] - segment.nodes[node]["pos"])
-                node = neighbor
-
-        if len(nodes_visited) == len(segment):
-            # print("Warning: diameter_last_10mm did not find 10 mm of segment (accumulated distance: {:.2f} mm)".format(accumulated_distance))
-            break
-        idx += 1
-        if idx > 200:
-            break
-
-    if len(node_diameters) > 0:
-        return np.mean(node_diameters)
-    else:
-        print("Warning: diameter_last_10mm could not be measured. No nodes found.")
-        return np.nan
+def tortuosity_index_last_30mm(segment, distal_node):
+    """
+    Computes the tortuosity index of the last 30 mm of a segment.
+    """
+    subsegment = partial_segment(segment, starting_node=distal_node, partial_length_mm=30)
+    return tortuosity_index(subsegment)
 
 def curvature_energy(segment):
     """

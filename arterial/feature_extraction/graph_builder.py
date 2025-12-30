@@ -3,7 +3,7 @@
 import numpy as np
 import networkx as nx
 
-from arterial.feature_extraction.utils import get_predicted_vessels_dict, get_hierarchical_order, unify_subgraphs, sanity_check_for_random_islands, build_segments_array_for_individual_centerline_graph
+from arterial.feature_extraction.utils import resample_centerline_segments_array, get_predicted_vessels_dict, get_hierarchical_order, unify_subgraphs, sanity_check_for_random_islands, build_segments_array_for_individual_centerline_graph
 
 def build_local_graph(centerline_segments_array, segments_graph_pred, sampling_distance_mm=2):
     """
@@ -82,7 +82,8 @@ def build_local_graph(centerline_segments_array, segments_graph_pred, sampling_d
                         previous_position = position
                     # If distance from last sampled node is larger than selected sampling_distance_mm, add a node with cell_id and an edge to the previous sample 
                     # node, keeping cell_id and the indices of the centerline points in the centerline_segments_array
-                    elif distance > sampling_distance_mm:
+                    # elif distance >= sampling_distance_mm:
+                    elif idx < len(curve) - 1:
                         local_graph.add_node(total_nodes, pos = position)
                         local_graph.nodes[total_nodes]["radius"] = centerline_radius_array[cell_id][idx]
                         local_graph.nodes[total_nodes]["cell_id"] = cell_id
@@ -236,7 +237,7 @@ def build_local_graph(centerline_segments_array, segments_graph_pred, sampling_d
 
         return local_graph
     
-def build_individual_centerline_graph_from_vtkpolydata(centerline_model, affine, image_shape, sampling_distance_mm=0.1, radius_array_name="MaximumInscribedSphereRadius", centerline_id=None):
+def build_individual_centerline_graph_from_vtkpolydata(centerline_model, affine, image_shape, sampling_distance_mm=0.5, radius_array_name="MaximumInscribedSphereRadius", centerline_id=None):
     """
     Builds networkx graph from a vtkPolyData object containing a centerline model corresponding 
     to a single vascular segment. This is build in coherence with the 
@@ -257,11 +258,14 @@ def build_individual_centerline_graph_from_vtkpolydata(centerline_model, affine,
 
     """
     centerline_segments_array = build_segments_array_for_individual_centerline_graph(centerline_model, affine, image_shape, radius_array_name)
+    centerline_segments_array = resample_centerline_segments_array(centerline_segments_array, sampling_distance_mm)
 
+    # Extract coordinate and radius arrays from the segments array
+    # centerline_segments_array has shape (n_segments, 2) with dtype=object
+    # [:, 0] contains coordinate arrays of shape (n_points, 3)
+    # [:, 1] contains radius arrays of shape (n_points,)
     centerline_coordinate_array = centerline_segments_array[:, 0]
     centerline_radius_array = centerline_segments_array[:, 1]
-    centerline_coordinate_array = np.expand_dims(centerline_coordinate_array, axis=0)
-    centerline_radius_array = np.expand_dims(centerline_radius_array, axis=0)
 
     # Initialize graph with networkx
     individual_centerline_graph = nx.Graph()
@@ -291,7 +295,8 @@ def build_individual_centerline_graph_from_vtkpolydata(centerline_model, affine,
                 previous_position = position
             # If distance from last sampled node is larger than selected sampling_distance_mm, add a node with cell_id and an edge to the previous sample 
             # node, keeping cell_id and the indices of the centerline points in the centerline_segments_array
-            elif distance > sampling_distance_mm:
+            elif idx < len(curve) - 1:
+            # elif distance > sampling_distance_mm:
                 individual_centerline_graph.add_node(total_nodes, pos = position)
                 individual_centerline_graph.nodes[total_nodes]["radius"] = centerline_radius_array[cell_id][idx]
                 individual_centerline_graph.nodes[total_nodes]["cell_id"] = cell_id
