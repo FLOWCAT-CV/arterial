@@ -6,6 +6,9 @@ import cv2
 
 import numpy as np
 import torchio as tio
+from scipy import ndimage
+from skimage.morphology import skeletonize_3d
+
 
 class SingleCTADataset:
     """
@@ -13,20 +16,23 @@ class SingleCTADataset:
 
     Parameters
     ----------
-    cta_array: np.ndarray
+    cta_array : np.ndarray
         CTA data.
-    cta_affine: np.ndarray
+    cta_affine : np.ndarray
         Affine transformation matrix.
-
+    segmentation_array : np.ndarray, optional
+        Vessel segmentation mask. If provided, will be used as second channel.
     """
     def __init__(self, 
                  cta_array, 
-                 cta_affine
+                 cta_affine,
+                 segmentation_array=None
                  ):
         self.cta_array = cta_array
         self.cta_affine = cta_affine
-        self.target_spacing = (0.8, 0.8, 0.8) # mm
-        self.target_shape = (320, 320, 480) # (W, H, D)
+        self.segmentation_array = segmentation_array
+        self.target_spacing = (0.8, 0.8, 0.8)  # mm
+        self.target_shape = (320, 320, 480)  # (W, H, D)
         self.clipping_lower_bound = 0
         self.clipping_upper_bound = 700
 
@@ -36,90 +42,114 @@ class SingleCTADataset:
     def __getitem__(self, idx):
         """
         Uses TorchIO to resample, crop and pad the CTA to the target shape and spacing and normalize the data.
+        Returns 1-channel or 2-channel volume depending on whether segmentation was provided.
         """
+        # Process CTA
         tio_img = tio.ScalarImage(tensor=torch.from_numpy(self.cta_array).unsqueeze(0), affine=self.cta_affine)
-        # Resamples the CTA to the target spacing
         tio_img = tio.Resample(self.target_spacing, scalars_only=True)(tio_img)
-        # Crops and pads the CTA to the target shape
         tio_img = tio.CropOrPad(self.target_shape)(tio_img)
-        # Normalize: clip and divide the CTA intensity to the target range 
-        # TODO: perhaps this should be adjusted to a more restrisctive window (usually, I use W=300, L=150, which would be equivalent of changing the upper bound to 300)
-        volume = torch.clamp(tio_img.data, self.clipping_lower_bound, self.clipping_upper_bound) / self.clipping_upper_bound
+        
+        # Normalize CTA: clip and divide
+        cta_volume = torch.clamp(tio_img.data, self.clipping_lower_bound, self.clipping_upper_bound) / self.clipping_upper_bound
         # Transpose to match training: (C, H, W, D) -> (C, D, H, W)
-        volume = volume.permute(0, 3, 1, 2)
-        volume = volume.float()
+        cta_volume = cta_volume.permute(0, 3, 1, 2).float()
+        
+        preprocessed_affine = tio_img.affine
+        
+        # If segmentation provided, process and stack as second channel
+        if self.segmentation_array is not None:
+            tio_seg = tio.ScalarImage(
+                tensor=torch.from_numpy(self.segmentation_array.astype(np.float32)).unsqueeze(0), 
+                affine=self.cta_affine
+            )
+            tio_seg = tio.Resample(self.target_spacing, scalars_only=True, image_interpolation="nearest")(tio_seg)
+            tio_seg = tio.CropOrPad(self.target_shape)(tio_seg)
+            
+            # Binarize segmentation
+            seg_volume = (tio_seg.data > 0).float()
+            # Transpose to match training: (C, H, W, D) -> (C, D, H, W)
+            seg_volume = seg_volume.permute(0, 3, 1, 2)
+            
+            # Stack: (2, D, H, W)
+            volume = torch.cat([cta_volume, seg_volume], dim=0)
+        else:
+            volume = cta_volume
 
-        return volume, tio_img.affine
+        return volume, preprocessed_affine
 
-def preprocess_for_landmark_detection(cta_array, cta_affine, device='cpu'):
+
+def preprocess_for_landmark_detection(cta_array, cta_affine, segmentation_array=None, device='cpu'):
     """
     Prepare the input array for the model.
 
     Parameters
     ----------
-    cta_array: np.ndarray
+    cta_array : np.ndarray
         CTA data.
-    cta_affine: np.ndarray
+    cta_affine : np.ndarray
         Affine transformation matrix.
-    device: str
+    segmentation_array : np.ndarray, optional
+        Vessel segmentation mask. If provided, creates 2-channel input.
+    device : str
         Device to run the model on ('cpu' or 'cuda'). Defaults to 'cpu'.
 
     Returns
     -------
-    preprocessed_volume: torch.Tensor
-        Preprocessed CTA volume.
-    preprocessed_affine: np.ndarray
+    preprocessed_volume : torch.Tensor
+        Preprocessed volume. Shape (1, C, D, H, W) where C=1 or 2.
+    preprocessed_affine : np.ndarray
         Affine transformation matrix.
-
     """
-    dataset = SingleCTADataset(cta_array, cta_affine)
+    dataset = SingleCTADataset(cta_array, cta_affine, segmentation_array)
     preprocessed_volume, preprocessed_affine = dataset[0]
     return preprocessed_volume.unsqueeze(0).to(device), preprocessed_affine
 
+
 def resample_mask_to_original_cta(predicted_mask_array, predicted_mask_affine, cta_array, cta_affine):
     """
-    Resample the predicted mask to the original CTA space. Reverses operations performed in preprocess_for_landmark_detection.
+    Resample the predicted mask to the original CTA space.
 
     Parameters
     ----------
-    predicted_mask_array: np.ndarray
+    predicted_mask_array : np.ndarray
         Predicted mask.
-    predicted_mask_affine: np.ndarray
+    predicted_mask_affine : np.ndarray
         Affine transformation matrix of the predicted mask.
-    cta_array: np.ndarray
+    cta_array : np.ndarray
         CTA data.
-    cta_affine: np.ndarray
+    cta_affine : np.ndarray
         Affine transformation matrix of the CTA.
 
     Returns
     -------
-    resampled_predicted_mask: np.ndarray
+    resampled_predicted_mask : np.ndarray
         Resampled predicted mask.
-
     """
     tio_img = tio.ScalarImage(tensor=torch.from_numpy(predicted_mask_array).unsqueeze(0), affine=predicted_mask_affine)
     target_spacing = np.abs(np.diag(cta_affine)[:3])
-    tio_img = tio.Resample(target_spacing, scalars_only=True, image_interpolation = "nearest")(tio_img)
+    tio_img = tio.Resample(target_spacing, scalars_only=True, image_interpolation="nearest")(tio_img)
     tio_img = tio.CropOrPad(cta_array.shape)(tio_img)
     return tio_img.data.squeeze(0).numpy()
 
+
 def postprocess_preds(preds, affine, return_mask=False):
     """
+    Postprocess model predictions to extract landmark coordinates.
 
     Parameters
     ----------
-    preds: torch.Tensor
+    preds : torch.Tensor
         Model predictions with shape (1, 7, D, H, W).
-    affine: np.ndarray
-        Original affine transformation matrix of the CTA image. Used for orientation only.
-    return_mask: bool
+    affine : np.ndarray
+        Affine transformation matrix of the preprocessed volume.
+    return_mask : bool
         Whether to return the predicted mask.
 
     Returns
     -------
-    landmarks_ras_mm: np.ndarray
+    landmarks_ras_mm : np.ndarray
         Landmark coordinates in mm space (6, 3).
-    predicted_mask: np.ndarray, None
+    predicted_mask : np.ndarray or None
         Predicted mask. None if return_mask is False.
     """
     preds = preds.cpu().numpy()[0]  # Remove batch dim: (7, D, H, W)
@@ -129,12 +159,11 @@ def postprocess_preds(preds, affine, return_mask=False):
     confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)
     
     for c in range(1, preds.shape[0]):  # Skip background (class 0)
-        # Only update voxels where current prediction is higher than previous ones
         mask = (preds[c] > -1) & ((preds[c] > confidence_map) | (combined == 0))
         confidence_map[mask] = preds[c][mask]
         combined[mask] = c
 
-    # detect centroids for each landmark class
+    # Detect centroids for each landmark class
     centroids_ijk = np.zeros((6, 3), dtype=np.float32)
     all_largest_components = []
     
@@ -153,13 +182,11 @@ def postprocess_preds(preds, affine, return_mask=False):
             # Convert from (z, y, x) to (x, y, z) order to match original
             centroids_ijk[label - 1] = [centroid[1], centroid[2], centroid[0]]
         else:
-            # If no component found, set to zero coordinates
             centroids_ijk[label - 1] = [0, 0, 0]
     
     # Convert to mm coordinates with affine from preprocessed volume
     centroids_ras = np.array([ijk_to_ras(centroids_ijk[i], affine) for i in range(6)])
 
-    # # Reconstruct combined mask with only largest components
     if return_mask:
         combined_largest_components = np.zeros(preds.shape[1:], dtype=np.uint8)
         for i, mask in enumerate(all_largest_components):
@@ -169,40 +196,168 @@ def postprocess_preds(preds, affine, return_mask=False):
     else:   
         return centroids_ras, None
 
+
 def ras_to_ijk(coordinates_ras, affine):
-    """
-    Convert RAS coordinates to IJK coordinates.
-
-    Parameters
-    ----------
-    coordinates_ras: np.ndarray
-        RAS coordinates.    
-    affine: np.ndarray
-        Affine transformation matrix.
-
-    Returns
-    -------
-    coordinates_ijk: np.ndarray
-        IJK coordinates.
-        
-    """
+    """Convert RAS coordinates to IJK coordinates."""
     return np.dot(np.linalg.inv(affine), np.append(coordinates_ras, 1))[:3]
 
+
 def ijk_to_ras(coordinates_ijk, affine):
+    """Convert IJK coordinates to RAS coordinates."""
+    return np.dot(affine, np.append(coordinates_ijk, 1))[:3]
+
+
+# =============================================================================
+# LANDMARK REFINEMENT FUNCTIONS
+# =============================================================================
+
+def refine_landmarks_with_segmentation(landmarks_dict, segmentation_array, affine, 
+                                        method='adaptive', search_radius_mm=5.0):
     """
-    Convert IJK coordinates to RAS coordinates.
+    Refine landmark positions using the vessel segmentation mask.
+    
+    Snaps landmarks to the vessel centerline or bifurcation points.
 
     Parameters
     ----------
-    coordinates_ijk: np.ndarray
-        IJK coordinates.
-    affine: np.ndarray
+    landmarks_dict : dict
+        Dictionary of landmark names to RAS coordinates.
+    segmentation_array : np.ndarray
+        Binary vessel segmentation mask.
+    affine : np.ndarray
         Affine transformation matrix.
+    method : str
+        Refinement method: 'centerline', 'bifurcation', 'adaptive'.
+        'adaptive' uses bifurcation for eica landmarks, centerline for others.
+    search_radius_mm : float
+        Maximum search radius in mm.
 
     Returns
     -------
-    coordinates_ras: np.ndarray
-        RAS coordinates.
-
+    refined_landmarks : dict
+        Dictionary of refined landmark coordinates.
+    refinement_stats : dict
+        Statistics about the refinement (displacements).
     """
-    return np.dot(affine, np.append(coordinates_ijk, 1))[:3]
+    refiner = _LandmarkRefiner(landmarks_dict, segmentation_array, affine)
+    refined_landmarks = refiner.refine_all(method=method, search_radius_mm=search_radius_mm)
+    return refined_landmarks, refiner.get_stats()
+
+
+class _LandmarkRefiner:
+    """Internal class for landmark refinement."""
+    
+    def __init__(self, landmarks_dict, segmentation_array, affine):
+        self.original_landmarks = landmarks_dict.copy()
+        self.segmentation = (segmentation_array > 0).astype(np.uint8)
+        self.affine = affine
+        self.voxel_size = np.abs(np.diag(affine)[:3])
+        
+        self._centerline = None
+        self._centerline_points = None
+        self._bifurcation_points = None
+        
+        self.refined_landmarks = {}
+        self.stats = {}
+    
+    @property
+    def centerline(self):
+        if self._centerline is None:
+            cleaned = cc3d.largest_k(self.segmentation, k=10, connectivity=26)
+            cleaned = (cleaned > 0).astype(np.uint8)
+            self._centerline = skeletonize_3d(cleaned).astype(np.uint8)
+        return self._centerline
+    
+    @property
+    def centerline_points(self):
+        if self._centerline_points is None:
+            self._centerline_points = np.array(np.where(self.centerline > 0)).T
+        return self._centerline_points
+    
+    @property
+    def bifurcation_points(self):
+        if self._bifurcation_points is None:
+            kernel = np.ones((3, 3, 3), dtype=np.uint8)
+            kernel[1, 1, 1] = 0
+            neighbor_count = ndimage.convolve(self.centerline, kernel, mode='constant', cval=0)
+            bifurc_mask = (self.centerline > 0) & (neighbor_count > 2)
+            coords = np.array(np.where(bifurc_mask)).T
+            self._bifurcation_points = self._cluster_points(coords, 3.0) if len(coords) > 0 else np.array([]).reshape(0, 3)
+        return self._bifurcation_points
+    
+    def _cluster_points(self, points, min_dist_mm):
+        if len(points) == 0:
+            return np.array([])
+        min_dist_vox = min_dist_mm / np.mean(self.voxel_size)
+        clustered = []
+        used = np.zeros(len(points), dtype=bool)
+        for i, p in enumerate(points):
+            if used[i]:
+                continue
+            dists = np.linalg.norm(points - p, axis=1)
+            cluster_mask = dists < min_dist_vox
+            used[cluster_mask] = True
+            clustered.append(np.mean(points[cluster_mask], axis=0))
+        return np.array(clustered)
+    
+    def refine_all(self, method='adaptive', search_radius_mm=5.0):
+        bifurc_landmarks = ['l-eica', 'r-eica']
+        
+        for name, coords in self.original_landmarks.items():
+            if coords is None or not isinstance(coords, (list, tuple)) or len(coords) != 3:
+                self.refined_landmarks[name] = coords
+                continue
+            
+            coords_ijk = ras_to_ijk(np.array(coords), self.affine)
+            
+            if method == 'adaptive':
+                if name in bifurc_landmarks:
+                    refined_ijk, dist = self._snap_to_bifurcation(coords_ijk, search_radius_mm * 1.5)
+                else:
+                    refined_ijk, dist = self._snap_to_centerline(coords_ijk, search_radius_mm)
+            elif method == 'bifurcation':
+                refined_ijk, dist = self._snap_to_bifurcation(coords_ijk, search_radius_mm)
+            else:  # centerline
+                refined_ijk, dist = self._snap_to_centerline(coords_ijk, search_radius_mm)
+            
+            refined_ras = ijk_to_ras(refined_ijk, self.affine).tolist()
+            self.refined_landmarks[name] = tuple(refined_ras)
+            self.stats[name] = {'displacement_mm': dist, 'method': method}
+        
+        return self.refined_landmarks
+    
+    def _snap_to_centerline(self, coords_ijk, search_radius_mm):
+        if len(self.centerline_points) == 0:
+            return coords_ijk, 0.0
+        
+        dists = np.linalg.norm(self.centerline_points - coords_ijk, axis=1)
+        min_idx = np.argmin(dists)
+        min_dist_mm = dists[min_idx] * np.mean(self.voxel_size)
+        
+        if min_dist_mm > search_radius_mm:
+            return coords_ijk, 0.0
+        
+        return self.centerline_points[min_idx], min_dist_mm
+    
+    def _snap_to_bifurcation(self, coords_ijk, search_radius_mm):
+        if len(self.bifurcation_points) == 0:
+            return self._snap_to_centerline(coords_ijk, search_radius_mm)
+        
+        dists = np.linalg.norm(self.bifurcation_points - coords_ijk, axis=1)
+        min_idx = np.argmin(dists)
+        min_dist_mm = dists[min_idx] * np.mean(self.voxel_size)
+        
+        if min_dist_mm > search_radius_mm:
+            return self._snap_to_centerline(coords_ijk, search_radius_mm)
+        
+        return self.bifurcation_points[min_idx], min_dist_mm
+    
+    def get_stats(self):
+        if not self.stats:
+            return {}
+        displacements = [s['displacement_mm'] for s in self.stats.values()]
+        return {
+            'mean_displacement_mm': float(np.mean(displacements)),
+            'max_displacement_mm': float(np.max(displacements)),
+            'per_landmark': self.stats
+        }
