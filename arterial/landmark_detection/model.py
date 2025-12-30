@@ -6,11 +6,17 @@ from monai.networks.nets import UNet
 from monai.networks.layers import Norm
 import torch.nn.functional as F
 
+
 class MonaiUNet3DSeg(nn.Module):
     """3D U-Net model for segmentation using MONAI.
+    
     Parameters
     ----------
-        num_classes (int): Number of output classes for segmentation.
+    in_channels : int
+        Number of input channels. Default is 1 (CTA only).
+        Use 2 for CTA + segmentation.
+    num_classes : int
+        Number of output classes for segmentation. Default is 7.
         0: background
         1: ICA-L
         2: ICA-R
@@ -19,11 +25,13 @@ class MonaiUNet3DSeg(nn.Module):
         5: ACA-L
         6: ACA-R
     """
-    def __init__(self, num_classes=7):
+    def __init__(self, in_channels=1, num_classes=7):
         super().__init__()
+        self.in_channels = in_channels
+        self.num_classes = num_classes
         self.unet = UNet(
             spatial_dims=3,
-            in_channels=1,
+            in_channels=in_channels,
             out_channels=num_classes,
             channels=(16, 32, 64, 128, 256),
             strides=(2, 2, 2, 2),
@@ -34,20 +42,44 @@ class MonaiUNet3DSeg(nn.Module):
     def forward(self, x):
         return self.unet(x)
 
-def load_trained_model_seg(model_path, device):
-    model = MonaiUNet3DSeg(num_classes=7).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+
+def load_trained_model_seg(model_path, device, in_channels=1, num_classes=7):
+    """
+    Load a trained landmark detection model.
+    
+    Parameters
+    ----------
+    model_path : str
+        Path to the model weights file (.pth)
+    device : torch.device
+        Device to load the model on
+    in_channels : int
+        Number of input channels (1 for CTA only, 2 for CTA + segmentation)
+    num_classes : int
+        Number of output classes
+        
+    Returns
+    -------
+    model : MonaiUNet3DSeg
+        Loaded model in eval mode
+    """
+    model = MonaiUNet3DSeg(in_channels=in_channels, num_classes=num_classes).to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    model.eval()
     return model
 
-### While training will not be conducted, this is inference-ready, it doesn't hurt to have it
+
+### Loss function for training (kept for reference)
 def combined_loss(preds, mask, dice_weight=1.0, ce_weight=1.0):
     """
     Combined loss function that computes the weighted sum of Dice loss and Cross-Entropy loss.
+    
     Args:
         preds (torch.Tensor): Predicted logits from the model.
         mask (torch.Tensor): Ground truth segmentation mask.
         dice_weight (float): Weight for the Dice loss.
         ce_weight (float): Weight for the Cross-Entropy loss.
+        
     Returns:
         torch.Tensor: Combined loss value.
     """
@@ -63,4 +95,3 @@ def combined_loss(preds, mask, dice_weight=1.0, ce_weight=1.0):
         dice = (2. * intersection + 1e-5) / (union + 1e-5)
         dice_loss += (1 - dice) / (num_classes - 1)
     return dice_weight * dice_loss + ce_weight * ce_loss
-
