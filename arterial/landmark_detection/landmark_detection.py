@@ -60,7 +60,7 @@ def infer_landmarks_from_array(cta_array, cta_affine, mode="extracranial_vessels
     print(f"Using device: {device}")
 
     # Determine model path and input channels
-    arterial_dir = os.environ.get("arterial_dir", "")
+    arterial_dir = os.environ["arterial_dir"]
     
     if use_segmentation_model:
         model_path = os.path.join(arterial_dir, "landmark_detection/models/six_landmarks_2ch.pth")
