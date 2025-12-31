@@ -14,7 +14,7 @@ from arterial.centerline_extraction.utils import build_endpoints_json
 def infer_landmarks_from_array(cta_array, cta_affine, mode="extracranial_vessels", 
                                 return_mask=False, segmentation_array=None,
                                 use_segmentation_model=False, refine_with_segmentation=False,
-                                refinement_method='adaptive', refinement_radius_mm=5.0):
+                                refinement_method='adaptive', refinement_radius_mm=20.0):
     """
     Infer landmarks from a CTA volume.
 

@@ -78,8 +78,8 @@ class LandmarkDetector:
         self.predicted_mask_nifti_path = os.path.join(self.case_dir, self.mode, "predicted_mask.nii.gz")
 
     def detect_landmarks_on_cta(self, return_mask=False, save=True,
-                                 use_segmentation_model=False,
-                                 refine_with_segmentation=False,
+                                 use_segmentation_model=True,
+                                 refine_with_segmentation=True,
                                  refinement_method='adaptive',
                                  refinement_radius_mm=5.0):
         """
@@ -119,13 +119,13 @@ class LandmarkDetector:
         segmentation_array = None
         if use_segmentation_model or refine_with_segmentation:
             segmentation_array = self._load_segmentation_if_available()
-            if segmentation_array is None:
-                if use_segmentation_model:
-                    print("WARNING: Segmentation not found. Falling back to CTA-only model.")
-                    use_segmentation_model = False
-                if refine_with_segmentation:
-                    print("WARNING: Segmentation not found. Skipping refinement.")
-                    refine_with_segmentation = False
+        if segmentation_array is None:
+            if use_segmentation_model:
+                print("WARNING: Segmentation not found. Falling back to CTA-only model.")
+                use_segmentation_model = False
+            if refine_with_segmentation:
+                print("WARNING: Segmentation not found. Skipping refinement.")
+                refine_with_segmentation = False
 
         # Detect landmarks
         print(f"Detecting landmarks on CTA...")

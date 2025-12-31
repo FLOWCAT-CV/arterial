@@ -35,7 +35,7 @@ def run_segmentation(case_dir, mode="extracranial_vessels", cta_nifti_path=None,
 
     return segmentation_model.segmentation_nifti
 
-def run_landmark_detection(case_dir, mode="extracranial_vessels", cta_nifti_path=None):
+def run_landmark_detection(case_dir, mode="extracranial_vessels", cta_nifti_path=None, use_segmentation_model=True):
     # Initialize the landmark detector
     landmark_detector = LandmarkDetector(
         case_dir=case_dir,
@@ -43,7 +43,7 @@ def run_landmark_detection(case_dir, mode="extracranial_vessels", cta_nifti_path
         cta_nifti_path=cta_nifti_path
     )
     # Detect landmarks on the CTA
-    landmark_detector.detect_landmarks_on_cta(return_mask=False, save=True)
+    landmark_detector.detect_landmarks_on_cta(return_mask=False, save=True, use_segmentation_model=use_segmentation_model)
 
     return landmark_detector.landmarks_ras_mm_dict
 
@@ -71,9 +71,9 @@ def run_centerline_extraction(case_dir, segmentation_nifti, landmarks_dict, mode
 
     return list(landmark_pairs.keys())
 
-def run_feature_extraction(case_dir, cta_nifti_path, centerline_ids, mode="extracranial_vessels"):
+def run_feature_extraction(case_dir, cta_nifti_path, centerline_ids, mode="extracranial_vessels", sampling_distance_mm=0.5):
     # Initialize the feature extractor
-    feature_extractor = FeatureExtractor(case_dir, mode, cta_nifti_path=cta_nifti_path)
+    feature_extractor = FeatureExtractor(case_dir, mode, cta_nifti_path=cta_nifti_path, sampling_distance_mm=sampling_distance_mm)
     for centerline_id in centerline_ids:
         if os.path.isfile(os.path.join(case_dir, f"{mode}/individual_centerlines", f"individual_centerline_{centerline_id}.vtk")):
             print(f"Building and featurizing {centerline_id}")
