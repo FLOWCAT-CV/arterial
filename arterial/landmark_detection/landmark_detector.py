@@ -75,7 +75,7 @@ class LandmarkDetector:
         self.landmarks_slicer_json_path = os.path.join(self.case_dir, self.mode, "landmarks_slicer.json")
 
         self.predicted_mask_nifti = None
-        self.predicted_mask_nifti_path = os.path.join(self.case_dir, self.mode, "predicted_mask.nii.gz")
+        self.predicted_mask_nifti_path = os.path.join(self.case_dir, self.mode, "landmarks_mask.nii.gz")
 
     def detect_landmarks_on_cta(self, return_mask=False, save=True,
                                  use_segmentation_model=True,
