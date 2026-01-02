@@ -1,67 +1,357 @@
-# Arterial: an AI framework for the automated analysis of vascular tortuosity
+# Arterial
 
-Mechanical thrombectomy (MT) is considered as the gold standard treatment for acute ischemic stroke (AIS). Studies show that up to 30% of MT patients register abnormally long procedural times, and in about 3-5% of cases, catheterization through femoral access is impossible. Most of these long procedures are linked to complications due to the presence of vascular tortuosity in supra-aortic and cervical arteries, which oppose difficulties upon catheter navigation. In an attempt to minimize time loss in these cases we propose ARTERIAL, an artificial intelligence (AI) framework for the fully automatic assessment of vascular tortuosity and operation planning for MT. ARTERIAL is born with the promise to deliver accurate and robust predictions of procedural times from all possible access sites and recognition of potential intra-operation difficulties for endovascular treatment based on machine learning (ML) models, enabling a powerful, objective and personalized analysis for each patient prior to intervention. 
+**An AI framework for automated vascular analysis and endovascular intervention planning**
 
-Arterial is conceived to be deployed as an operation planning and decision support tool prior to endovascuklar intervention for AIS patients. This is a challenging medical emergency setting which requires a robust, rapid and objective analysis, only taking the protocolary imaging (namely non-contrast CT (NCCT) and angio-CT (CTA)) as well as patient metadata that can be gathered before the patient arrival. Therefore, we adjust the analysis as much as possible taking this into account. Moreover, we believe that the only way to achieve the described qualities that the analysis requires is to achieve a fully automated process, without the need of any kind of manual input on the analysis.
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-In this repository we will be posting the development of Arterial, which is the core project of the Pere Canals' doctoral thesis.
+---
 
+## Overview
 
+Arterial is a comprehensive AI framework for fully automated vascular tortuosity analysis from CT Angiography (CTA) images. Originally developed to support mechanical thrombectomy (MT) planning for acute ischemic stroke (AIS), Arterial provides:
 
-<!-- # Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-  * [How to run nnU-Net on a new datasets](#how-to-run-nnu-net-on-a-new-datasets)
-    + [Dataset conversion](#dataset-conversion)
-    + [Experiment planning and preprocessing](#experiment-planning-and-preprocessing)
-    + [Model training](#model-training)
-      - [2D U-Net](#2d-u-net)
-      - [3D full resolution U-Net](#3d-full-resolution-u-net)
-      - [3D U-Net cascade](#3d-u-net-cascade)
-        * [3D low resolution U-Net](#3d-low-resolution-u-net)
-        * [3D full resolution U-Net](#3d-full-resolution-u-net-1)
-      - [Multi GPU training](#multi-gpu-training)
-    + [Identifying the best U-Net configuration(s)](#identifying-the-best-u-net-configuration)
-    + [Run inference](#run-inference)
-  * [How to run inference with pretrained models](#how-to-run-inference-with-pretrained-models)
-  * [Examples](#Examples)
-- [Extending/Changing nnU-Net](#extending-changing-nnu-net)
-- [FAQ](#faq) 
+- **Automated vessel segmentation** using deep learning (nnU-Net v2)
+- **Centerline extraction** via VMTK
+- **Anatomical landmark detection** using 3D U-Net
+- **Vessel labelling** with Graph Neural Networks (GNN)
+- **Multi-scale feature extraction** for vascular characterization
+- **Catheter pathway mapping** and **accessibility prediction**
 
-ecotrust-canada.github.io/markdown-toc/ -->
+The framework processes a single CTA image and outputs a complete vascular analysis including segmentation masks, labeled centerlines, geometric features, and procedural predictions—all without manual input.
 
-## Description of the process
+---
 
-Arterial is composed by several external packages for the different tasks that have to be implemented in order to run the complete analysis. As the first step, Isensee's et al. nnU-Net [1] has been implemented and optimized for the segmentation of the arterial anatomy of the patient from the CTA images. This deep learning network inputs a CTA volume (nifti format) and outputs the corresponding binary mask with a background (not vessel) as zeros and a foreground (vessel) as ones, also in nifti format. 
+## Key Features
 
-We include the possibility to run inference with a single model or to ensemble 5 folds of the same model (varying the training dataset for each fold) and averaging the resulting probabilities for each voxel. This can improve the quality of the segmentation in exchange of a larger computational cost. 
+| Feature | Description |
+|---------|-------------|
+| **Deep Learning Segmentation** | nnU-Net v2 models for extracranial and intracranial vessels |
+| **Automatic Centerlines** | VMTK-based centerline extraction with branch splitting |
+| **Landmark Detection** | Automatic identification of ICA and MCA bifurcations |
+| **Vessel Labelling** | GNN-based classification of 14 vessel types |
+| **Feature Extraction** | Local, segment, and global vascular features |
+| **Pathway Mapping** | 8 catheter configurations (femoral/radial × left/right × anterior/posterior) |
+| **End-to-End Pipeline** | Single command from CTA to complete analysis |
 
-After segmentation, the binary map is processed using open-source software Slicer [2] and the Vascular Modelling ToolKit (VMTK). First, the binary map is segmented by thresholding and VMTK is used to automatically extract the centerline model of the vascular object. In parallel, VMTK is also used to split the surface model of the segmentation into individual clipped branches, which are linked to the centerline model as well. 
+---
 
-The centerline model is used to generate a graph used for vessel labeling. We have implemented a graph neural net (GNN) for the 
+## Pipeline Architecture
 
+```
+                              ┌─────────────┐
+                              │  CTA Image  │
+                              │  (.nii.gz)  │
+                              └──────┬──────┘
+                                     │
+        ┌────────────────────────────┼────────────────────────────┐
+        │                            ▼                            │
+        │               ┌────────────────────────┐                │
+        │               │     SEGMENTATION       │                │
+        │               │   (nnU-Net v2 models)  │                │
+        │               └───────────┬────────────┘                │
+        │                           │                             │
+        │                           ▼                             │
+        │          ┌─────────────────────────────────┐            │
+        │          │    CENTERLINE EXTRACTION        │            │
+        │          │   (VMTK preprocessing + vmtk)   │            │
+        │          └────────────────┬────────────────┘            │
+        │                           │                             │
+        │          ┌────────────────┴────────────────┐            │
+        │          ▼                                 ▼            │
+        │  ┌───────────────────┐          ┌──────────────────┐    │
+        │  │ LANDMARK DETECTION│          │  VESSEL LABELLING│    │
+        │  │   (3D U-Net)      │          │      (GNN)       │    │
+        │  └─────────┬─────────┘          └────────┬─────────┘    │
+        │            │                             │              │
+        │            └──────────────┬──────────────┘              │
+        │                           ▼                             │
+        │               ┌────────────────────────┐                │
+        │               │   FEATURE EXTRACTION   │                │
+        │               │  (local/segment/global)│                │
+        │               └───────────┬────────────┘                │
+        │                           │                             │
+        │                           ▼                             │
+        │               ┌────────────────────────┐                │
+        │               │   ACCESS PREDICTION    │                │
+        │               │   (catheter pathways)  │                │
+        │               └────────────────────────┘                │
+        │                                                         │
+        └─────────────────────────────────────────────────────────┘
+```
 
-    [1] Fabian Isensee, Paul F. Jäger, Simon A. A. Kohl, Jens Petersen, Klaus H. Maier-Hein "Automated Design of Deep Learning Methods for Biomedical Image Segmentation" arXiv preprint arXiv:1904.08128 (2020).
-    [2] Fedorov A., Beichel R., Kalpathy-Cramer J., Finet J., Fillion-Robin J-C., Pujol S., Bauer C., Jennings D., Fennessy F.M., Sonka M., Buatti J., Aylward S.R., Miller J.V., Pieper S., Kikinis R. 3D Slicer as an Image Computing Platform for the Quantitative Imaging Network. Magn Reson Imaging. 2012 Nov;30(9):1323-41. PMID: 22770690. PMCID: PMC3466397.
+---
+
+## Modules
+
+Arterial is organized into specialized modules, each with detailed documentation:
+
+| Module | Description | Documentation |
+|--------|-------------|---------------|
+| **Segmentation** | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [README](arterial/segmentation/README.md) |
+| **Centerline Extraction** | VMTK-based centerline computation and branching | [README](arterial/centerline_extraction/README.md) |
+| **Landmark Detection** | Automatic anatomical landmark identification | [README](arterial/landmark_detection/README.md) |
+| **Vessel Labelling** | GNN-based anatomical vessel classification | [README](arterial/vessel_labelling/README.md) |
+| **Feature Extraction** | Multi-scale vascular feature computation | [README](arterial/feature_extraction/README.md) |
+| **Access Prediction** | Catheter accessibility prediction with attention maps | [README](arterial/access_prediction/README.md) |
+| **Run (Processor)** | Pipeline orchestration and CLI | [README](arterial/run/README.md) |
+
+---
 
 ## Installation
 
-We strongly recommend the creation of a virtual environment for the installation of Arterial along with the rest of external packages.
+### System Requirements
 
-### Setting up environment paths
+- **Operating System**: Linux (Ubuntu 22.04 tested), macOS (14.x, 15.x)
+- **Python**: 3.9+ (3.11 recommended for Linux)
+- **GPU**: NVIDIA GPU with CUDA support (recommended for inference)
 
-Defining a series of environment paths
+### Linux (Ubuntu)
 
-### nnU-Net
+```bash
+# Create conda environment
+conda create -n arterial_env python=3.11
+conda activate arterial_env
 
-For installation of the nnU-Net framework please refer to the [nnU-Net GitHub site](https://github.com/MIC-DKFZ/nnUNet), and follow the steps for installation for running inference with pre-trained models. You have to first install [PyTorch](https://pytorch.org/) (> 1.6), then `pip install nnunet` and finally set up the 
+# Install VMTK
+conda install -c conda-forge vmtk
 
-After the out-of-the-box nnU-Net setup is completed
+# Install PyTorch and dependencies
+pip install torch==2.6.0 torch_geometric==2.6.1 monai torchio nnunetv2
 
-### Slicer
+# Install PyG dependencies (CUDA 12.4)
+pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 \
+    torch_cluster==1.6.3 torch_spline_conv==1.2.2 \
+    -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+```
 
-SlicerPython path should be set as an environmental variable or sth?
+### macOS
 
-### VMTK
+```bash
+# Create conda environment (Python 3.9 required for VMTK on macOS)
+conda create -n arterial_env python=3.9
+conda activate arterial_env
 
-### GraphNets
+# Install VMTK
+conda install -c conda-forge vmtk
+
+# Install PyTorch and dependencies
+pip install --upgrade pip
+pip install torch==2.2.2 torch_geometric
+pip install torch_scatter torch_sparse torch_cluster torch_spline_conv \
+    -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
+```
+
+### Install Arterial
+
+```bash
+# Clone the repository
+git clone https://github.com/FLOWCAT-CV/arterial.git
+cd arterial
+
+# Install as editable package
+pip install -e .
+```
+
+### Environment Configuration
+
+Add the Arterial directory to your environment:
+
+```bash
+# Add to ~/.bashrc (Linux) or ~/.zshrc (macOS)
+export arterial_dir="/path/to/arterial/arterial"
+```
+
+---
+
+## Quick Start
+
+### Command-Line Usage
+
+```bash
+# Full analysis pipeline (extracranial vessels)
+python perform_analysis.py -cd /path/to/case_dir
+
+# With explicit CTA path
+python perform_analysis.py -cd /path/to/case_dir -cnp /path/to/cta.nii.gz
+
+# Intracranial vessel analysis
+python perform_analysis.py -cd /path/to/case_dir -m intracranial_vessels
+
+# Fast segmentation mode
+python perform_analysis.py -cd /path/to/case_dir -fast
+
+# Skip segmentation (if already computed)
+python perform_analysis.py -cd /path/to/case_dir -ss
+```
+
+### Python API
+
+```python
+from arterial.segmentation import VesselSegmenter
+from arterial.centerline_extraction import CenterlineExtractor
+from arterial.vessel_labelling import VesselLabeller
+from arterial.feature_extraction import FeatureExtractor
+
+case_dir = "/path/to/case"
+
+# Step 1: Segment vessels
+segmenter = VesselSegmenter(case_dir, mode="extracranial_vessels")
+segmenter.segment_vessels_from_cta()
+
+# Step 2: Extract centerlines
+extractor = CenterlineExtractor(case_dir, mode="extracranial_vessels")
+extractor.perform_centerline_extraction()
+extractor.perform_branch_model_extraction()
+extractor.perform_centerline_postprocessing()
+
+# Step 3: Label vessels
+labeller = VesselLabeller(case_dir, mode="extracranial_vessels")
+labeller.build_segments_graph()
+labeller.predict_vessel_types()
+
+# Step 4: Extract features
+feature_ext = FeatureExtractor(case_dir, mode="extracranial_vessels")
+feature_ext.build_local_graph()
+feature_ext.extract_local_features()
+feature_ext.extract_segment_features()
+feature_ext.extract_global_features()
+feature_ext.extract_supersegments()
+```
+
+### Using the Processor
+
+```python
+from argparse import Namespace
+from arterial.run.processor import ArterialProcessor
+
+args = Namespace(
+    case_dir="/path/to/case",
+    cta_nifti_path=None,
+    mode="extracranial_vessels",
+    sampling_distance_mm=2,
+    fast_segmentation=False,
+    skip_segmentation=False,
+    skip_centerline_extraction=False,
+    skip_branching=False,
+    skip_clipping=False,
+    skip_vessel_labelling=False,
+    skip_feature_extraction=False,
+    skip_access_prediction=False,
+    skip_landmark_detection=False,
+    cl_dice_nnunet=False,
+    no_slicing=False,
+    set_threshold_099=False
+)
+
+processor = ArterialProcessor(args)
+timing = processor.perform_analysis()
+
+print(f"Total analysis time: {timing['total_time']:.2f}s")
+```
+
+---
+
+## Expected Input
+
+| Requirement | Format | Description |
+|-------------|--------|-------------|
+| CTA Image | NIfTI (`.nii.gz`) | CT Angiography volume |
+| Case Directory | Folder | Working directory for outputs |
+
+**Default naming convention**: `case_dir/cta.nii.gz`
+
+---
+
+## Expected Outputs
+
+After running the full pipeline:
+
+```
+case_dir/
+├── cta.nii.gz                              # Input
+├── extracranial_vessels_segmentation.nii.gz # Vessel mask
+└── extracranial_vessels/
+    ├── centerlines/                         # Individual centerline models
+    ├── branch_model.vtk                     # Merged branch model
+    ├── centerline_segments_array.npy        # Centerline data
+    ├── landmarks/
+    │   └── landmarks.json                   # Detected landmarks
+    ├── segments_graph_pred.pickle           # Labeled vessel graph
+    ├── local_graph.pickle                   # Featurized graph
+    ├── supersegments/                       # Catheter pathways (8 configs)
+    └── access_prediction/                   # Accessibility predictions
+```
+
+---
+
+## Analysis Modes
+
+| Mode | Vessels | Landmarks | Features |
+|------|---------|-----------|----------|
+| `extracranial_vessels` | Aortic arch through Circle of Willis | 6 (bilateral ICA, EICA, MCA) | Full pipeline |
+| `intracranial_vessels` | Circle of Willis and branches | 4 (bilateral TICA, MCA) | Individual centerlines |
+
+---
+
+## Command-Line Options
+
+| Flag | Description |
+|------|-------------|
+| `-cd`, `--case_dir` | Path to case directory (required) |
+| `-cnp`, `--cta_nifti_path` | Path to CTA NIfTI file |
+| `-m`, `--mode` | Analysis mode (`extracranial_vessels` or `intracranial_vessels`) |
+| `-sd`, `--sampling_distance_mm` | Centerline sampling distance (default: 2) |
+| `-fast`, `--fast_segmentation` | Use fast (single-resolution) segmentation |
+| `-ss`, `--skip_segmentation` | Skip segmentation step |
+| `-sce`, `--skip_centerline_extraction` | Skip centerline extraction |
+| `-sb`, `--skip_branching` | Skip branch model extraction |
+| `-svl`, `--skip_vessel_labelling` | Skip vessel labelling |
+| `-sfe`, `--skip_feature_extraction` | Skip feature extraction |
+| `-sap`, `--skip_access_prediction` | Skip access prediction |
+| `-sld`, `--skip_landmark_detection` | Skip landmark detection |
+
+---
+
+## Citation
+
+If you use Arterial in your research, please cite:
+
+```bibtex
+@article{canals2024arterial,
+  title={Arterial: An AI framework for automated vascular analysis},
+  author={Canals, Pere and others},
+  journal={...},
+  year={2024}
+}
+```
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+Arterial was developed at the Stroke Research group at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+
+**Key dependencies:**
+- [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) - Deep learning segmentation
+- [VMTK](http://www.vmtk.org/) - Vascular Modeling Toolkit
+- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) - Graph Neural Networks
+- [MONAI](https://monai.io/) - Medical image analysis
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## Contact
+
+For questions and support, please open an issue on GitHub.

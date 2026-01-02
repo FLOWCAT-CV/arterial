@@ -130,7 +130,7 @@ segmenter = VesselSegmenter(
 segmenter.segment_vessels_from_cta(save=True)
 ```
 
-> ⚠️ **Note**: Fast segmentation mode produces less reliable cerebral artery segmentation. Use only when processing speed is prioritized over accuracy.
+> **Note**: Fast segmentation mode produces less reliable cerebral artery segmentation. Use only when processing speed is prioritized over accuracy.
 
 ---
 

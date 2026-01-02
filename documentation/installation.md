@@ -11,8 +11,8 @@ For Ubuntu:
 
 ```bash
 # <=3.9 necessary for vmtk, otherwise it won't install
-conda create -n foo python=3.11
-conda activate foo
+conda create -n arterial_env python=3.11
+conda activate arterial_env
 conda install -c conda-forge vmtk
 
 pip install torch==2.6.0 torch_geometric==2.6.1 monai torchio nnunetv2
@@ -23,8 +23,8 @@ For MacOS (outdated, not tested):
 
 ```bash
 # <=3.9 necessary for vmtk, otherwise it won't install
-conda create -n foo python=3.9
-conda activate foo
+conda create -n arterial_env python=3.9
+conda activate arterial_env
 conda install -c conda-forge vmtk
 
 pip install --upgrade pip
