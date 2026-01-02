@@ -148,9 +148,10 @@ from arterial.vessel_labelling import VesselLabeller
 from arterial.feature_extraction import FeatureExtractor
 
 case_dir = "/path/to/case"
+cta_nifti_path = "/path/to/cta.nii.gz"
 
 # Step 1: Segment vessels
-segmenter = VesselSegmenter(case_dir, mode="extracranial_vessels")
+segmenter = VesselSegmenter(case_dir, cta_nifti_path, mode="extracranial_vessels")
 segmenter.segment_vessels_from_cta()
 
 # Step 2: Extract centerlines
@@ -272,13 +273,47 @@ case_dir/
 If you use Arterial in your research, please cite:
 
 ```bibtex
-@article{canals2024arterial,
-  title={Arterial: An AI framework for automated vascular analysis},
-  author={Canals, Pere and others},
-  journal={...},
-  year={2024}
+@article{canals2023vascular,
+  title={A fully automatic method for vascular tortuosity feature extraction in the supra-aortic region: Unraveling possibilities in stroke treatment planning},
+  author={Canals, Pere and Marti-Bonmati, Luis and Defined, Author and others},
+  journal={Computerized Medical Imaging and Graphics},
+  volume={104},
+  pages={102170},
+  year={2023},
+  publisher={Elsevier},
+  doi={10.1016/j.compmedimag.2022.102170}
 }
 ```
+
+---
+
+## Relevant Work Enabled by Arterial
+
+The following publications have utilized the Arterial framework for vascular analysis in stroke research:
+
+### Deep Learning-Based Model for Difficult Transfemoral Access Prediction
+
+A deep learning model comparing AI-based predictions with human expert assessment for identifying difficult transfemoral access in stroke thrombectomy procedures.
+
+> Canals P, et al. **Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy.** *Journal of NeuroInterventional Surgery* 2024;17:653-659.
+> 
+> 🔗 [https://jnis.bmj.com/content/17/6/653](https://jnis.bmj.com/content/17/6/653)
+
+### Vascular Tortuosity Impact on Stroke Treatment Outcomes
+
+Analysis of extracranial vascular tortuosity characteristics and their association with mechanical thrombectomy procedural outcomes.
+
+> Canals P, et al. **Extracranial vascular tortuosity and mechanical thrombectomy outcomes.** *European Stroke Journal* 2025.
+> 
+> 🔗 [https://journals.sagepub.com/doi/full/10.1177/23969873251350124](https://journals.sagepub.com/doi/full/10.1177/23969873251350124)
+
+### ArterialGNet: Graph Neural Network for Access Prediction
+
+A multi-scale graph neural network (ArterialGNet) designed to predict impossible femoral access in stroke mechanical thrombectomy using vascular centerline graph embeddings. Achieved AUROC of 0.89 on a dataset of 493 interventions.
+
+> Canals P, García-Tornel A, Ribo M. **ArterialGNet: Impossible Femoral Access Prediction in Stroke Mechanical Thrombectomy with Vascular Centerline Graph Embeddings.** In: *Image Analysis in Stroke Diagnosis and Interventions (ISLES/SWITCH 2024)*. Lecture Notes in Computer Science, vol 15408. Springer, 2025.
+> 
+> 🔗 [https://link.springer.com/chapter/10.1007/978-3-031-81101-2_8](https://link.springer.com/chapter/10.1007/978-3-031-81101-2_8)
 
 ---
 
