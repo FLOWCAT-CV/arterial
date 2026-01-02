@@ -275,7 +275,7 @@ If you use Arterial in your research, please cite:
 ```bibtex
 @article{canals2023vascular,
   title={A fully automatic method for vascular tortuosity feature extraction in the supra-aortic region: Unraveling possibilities in stroke treatment planning},
-  author={Canals, Pere and Marti-Bonmati, Luis and Defined, Author and others},
+  author={P. Canals, S. Balocco, O. Díaz, J. Li, A. García-Tornel, A. Tomasello, M. Olivé-Gadea, M. Ribo},
   journal={Computerized Medical Imaging and Graphics},
   volume={104},
   pages={102170},
@@ -284,6 +284,8 @@ If you use Arterial in your research, please cite:
   doi={10.1016/j.compmedimag.2022.102170}
 }
 ```
+
+> 🔗 [https://www.sciencedirect.com/science/article/pii/S0895611122001409](https://www.sciencedirect.com/science/article/pii/S0895611122001409)
 
 ---
 
@@ -295,7 +297,7 @@ The following publications have utilized the Arterial framework for vascular ana
 
 A deep learning model comparing AI-based predictions with human expert assessment for identifying difficult transfemoral access in stroke thrombectomy procedures.
 
-> Canals P, et al. **Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy.** *Journal of NeuroInterventional Surgery* 2024;17:653-659.
+> Pere Canals, Alvaro Garcia-Tornel, Manuel Requena, Magda Jabłońska, Jiahui Li, Simone Balocco, Oliver Díaz, Alejandro Tomasello, Marc Ribo. **Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy.** *Journal of NeuroInterventional Surgery* 2024;17:653-659.
 > 
 > 🔗 [https://jnis.bmj.com/content/17/6/653](https://jnis.bmj.com/content/17/6/653)
 
@@ -303,7 +305,7 @@ A deep learning model comparing AI-based predictions with human expert assessmen
 
 Analysis of extracranial vascular tortuosity characteristics and their association with mechanical thrombectomy procedural outcomes.
 
-> Canals P, et al. **Extracranial vascular tortuosity and mechanical thrombectomy outcomes.** *European Stroke Journal* 2025.
+> Pere Canals, Alvaro García-Tornel, Giulio Maria Fiore, Marc Rodrigo-Gisbert, Blanca Sastre, Jordi Mayol, Jesús David González Riveros, and Marc Ribo. **Prognostic value of intracranial vascular tortuosity in thrombectomy for distal vessel occlusion.** *European Stroke Journal* 2025.
 > 
 > 🔗 [https://journals.sagepub.com/doi/full/10.1177/23969873251350124](https://journals.sagepub.com/doi/full/10.1177/23969873251350124)
 
