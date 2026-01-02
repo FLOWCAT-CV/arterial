@@ -36,52 +36,6 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 ---
 
-## Pipeline Architecture
-
-```
-                              ┌─────────────┐
-                              │  CTA Image  │
-                              │  (.nii.gz)  │
-                              └──────┬──────┘
-                                     │
-        ┌────────────────────────────┼────────────────────────────┐
-        │                            ▼                            │
-        │               ┌────────────────────────┐                │
-        │               │     SEGMENTATION       │                │
-        │               │   (nnU-Net v2 models)  │                │
-        │               └───────────┬────────────┘                │
-        │                           │                             │
-        │                           ▼                             │
-        │          ┌─────────────────────────────────┐            │
-        │          │    CENTERLINE EXTRACTION        │            │
-        │          │   (VMTK preprocessing + vmtk)   │            │
-        │          └────────────────┬────────────────┘            │
-        │                           │                             │
-        │          ┌────────────────┴────────────────┐            │
-        │          ▼                                 ▼            │
-        │  ┌───────────────────┐          ┌──────────────────┐    │
-        │  │ LANDMARK DETECTION│          │  VESSEL LABELLING│    │
-        │  │   (3D U-Net)      │          │      (GNN)       │    │
-        │  └─────────┬─────────┘          └────────┬─────────┘    │
-        │            │                             │              │
-        │            └──────────────┬──────────────┘              │
-        │                           ▼                             │
-        │               ┌────────────────────────┐                │
-        │               │   FEATURE EXTRACTION   │                │
-        │               │  (local/segment/global)│                │
-        │               └───────────┬────────────┘                │
-        │                           │                             │
-        │                           ▼                             │
-        │               ┌────────────────────────┐                │
-        │               │   ACCESS PREDICTION    │                │
-        │               │   (catheter pathways)  │                │
-        │               └────────────────────────┘                │
-        │                                                         │
-        └─────────────────────────────────────────────────────────┘
-```
-
----
-
 ## Modules
 
 Arterial is organized into specialized modules, each with detailed documentation:
