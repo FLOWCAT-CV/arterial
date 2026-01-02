@@ -3,6 +3,7 @@
 import os, shutil, glob
 import numpy as np
 import nibabel as nib
+from nibabel.orientations import axcodes2ornt, ornt_transform, apply_orientation, io_orientation, inv_ornt_aff
 import SimpleITK as sitk
 import dicom2nifti
 import dicom2nifti.settings as settings
@@ -119,3 +120,69 @@ def convert_to_lps(nifti_file):
         
         # Return the new image
         return img_lps
+
+def convert_orientation(nifti_input, target_orientation="RAS"):
+    """
+    Convert a NIfTI image to any desired orientation.
+
+    Parameters
+    ----------
+    nifti_input : string or nibabel.Nifti1Image
+        Path to the NIfTI file or a nibabel image object.
+    target_orientation : string
+        Three-letter orientation code (e.g., "RAS", "LAS", "LPS", "PIR").
+        Each letter specifies the direction of the corresponding axis:
+        - First letter: Left (L) or Right (R)
+        - Second letter: Anterior (A) or Posterior (P)
+        - Third letter: Inferior (I) or Superior (S)
+        Default is "RAS".
+
+    Returns
+    -------
+    nibabel.Nifti1Image
+        NIfTI image reoriented to the target orientation.
+
+    """
+    # Load the image if a path is provided
+    if isinstance(nifti_input, str):
+        img = nib.load(nifti_input)
+    else:
+        img = nifti_input
+    
+    # Validate target orientation string
+    target_orientation = target_orientation.upper()
+    if len(target_orientation) != 3:
+        raise ValueError(f"Target orientation must be a 3-letter string, got: {target_orientation}")
+    
+    valid_codes = {'L', 'R', 'A', 'P', 'I', 'S'}
+    for code in target_orientation:
+        if code not in valid_codes:
+            raise ValueError(f"Invalid orientation code '{code}'. Valid codes are: {valid_codes}")
+    
+    # Get current orientation from affine
+    current_axcodes = nib.aff2axcodes(img.affine)
+    
+    # Check if already in target orientation
+    if tuple(current_axcodes) == tuple(target_orientation):
+        return img
+    
+    # Get current orientation array
+    current_ornt = io_orientation(img.affine)
+    
+    # Parse target orientation string to orientation array
+    target_ornt = axcodes2ornt(tuple(target_orientation))
+    
+    # Compute transformation from current to target orientation
+    transform = ornt_transform(current_ornt, target_ornt)
+    
+    # Apply transformation to data
+    data = img.get_fdata()
+    new_data = apply_orientation(data, transform)
+    
+    # Compute new affine matrix
+    new_affine = img.affine @ inv_ornt_aff(transform, data.shape)
+    
+    # Create new NIfTI image preserving header information
+    new_img = nib.Nifti1Image(new_data, new_affine, img.header)
+    
+    return new_img

@@ -185,3 +185,15 @@ class LandmarkDetector:
         self.segmentation_nifti = load_nifti(self.segmentation_nifti_path)
         self.segmentation_array = self.segmentation_nifti.get_fdata()
         return self.segmentation_array
+
+    def _load_cta_nifti_from_nib(self, cta_nifti):
+        self.cta_nifti = cta_nifti
+        self.cta_array = cta_nifti.get_fdata()
+        self.cta_affine = cta_nifti.affine
+        self.image_shape = self.cta_array
+    
+    def _load_segmentation_nifti_from_nib(self, segmentation_nifti):
+        self.segmentation_nifti = segmentation_nifti
+        self.segmentation_array = segmentation_nifti.get_fdata()
+        self.segmentation_affine = segmentation_nifti.affine
+        self.image_shape = self.segmentation_array.shape

@@ -81,7 +81,7 @@ class VesselSegmenter():
         self.segmentation_neck_array = None
         
         self.probabilities_nifti = None
-        self.probabilities_nifti_path = os.path.join(self.case_dir, self.mode, "probabilities.nii.gz")
+        self.probabilities_nifti_path = os.path.join(self.case_dir, self.mode, "segmentation_probabilities.nii.gz")
 
         self.use_vanilla_nnunet = use_vanilla_nnunet
         self.no_slicing = no_slicing
@@ -100,7 +100,7 @@ class VesselSegmenter():
         If return_probabilities=True, the probabilities of the segmentation will be saved in a nifti file 
         with the format:
         
-        >>> {self.case_dir}/{self.mode}/probabilities.nii.gz
+        >>> {self.case_dir}/{self.mode}/segmentation_probabilities.nii.gz
 
         In the case of `extracranial_vessels` and fast_segmentation=True, the 3d_lowres variant
         from nnunetv2 is used. In the case of `extracranial_vessels` and fast_segmentation=False, or

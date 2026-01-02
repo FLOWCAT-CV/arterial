@@ -342,13 +342,13 @@ class CenterlineExtractor():
         self.segmentation_nifti = load_nifti(self.segmentation_nifti_path)
         self.segmentation_array = self.segmentation_nifti.get_fdata()
         self.segmentation_affine = self.segmentation_nifti.affine
-        self.image_shape = self.segmentation_nifti.shape
+        self.image_shape = self.segmentation_array.shape
 
-    def _load_segmentation_nifti_from_nib(self, segmentation_nib):
-        self.segmentation_nib = segmentation_nib
-        self.segmentation_array = segmentation_nib.get_fdata()
-        self.segmentation_affine = segmentation_nib.affine
-        self.image_shape = segmentation_nib.shape
+    def _load_segmentation_nifti_from_nib(self, segmentation_nifti):
+        self.segmentation_nifti = segmentation_nifti
+        self.segmentation_array = segmentation_nifti.get_fdata()
+        self.segmentation_affine = segmentation_nifti.affine
+        self.image_shape = self.segmentation_array.shape
 
     def _load_centerline_model_list(self):
         if not os.path.isdir(self.centerlines_dir_path): 
