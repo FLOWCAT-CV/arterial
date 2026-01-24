@@ -364,38 +364,45 @@ def compute_spherical_angles(vec):
 
 def compute_curvature_and_torsion(curve, node_idx):
     """
-    Computes curvature along a curve.
+    Computes curvature and torsion along a 3D curve.
 
     Parameters
     ----------
-    curve : numpy.array or array-like object.
-        Array containing the coordinates of a set of ordered points from
-        a curve.
+    curve : (N, 3) numpy array
+        Ordered points of the curve.
+    node_idx : int
+        Index of the node at which curvature and torsion are returned.
 
     Returns
     -------
-    radius_of_curvature : numpy.array or array-like object.
-        Array containing the radius of curvature at each point of the curve.
-
+    curvature : float
+        Curvature at node_idx.
+    torsion : float
+        Torsion at node_idx.
     """
-    # Compute the time tangent of the curve
-    time_tangent = np.gradient(curve, axis = 0)
-    # Compute the inverse of the derivative of the arclength wrt time
-    dtds = 1 / np.linalg.norm(time_tangent, axis = 1)
-    # Compute the tangent vector at all points of the curve
-    tangent = time_tangent * np.expand_dims(dtds, axis = 1)
-    # The curvature is simply the norm of the derivative of the tangent wrt arclength
-    curvature = np.linalg.norm(np.gradient(tangent, axis = 0), axis = 1)
-    # Compute the differential of the tangent
-    diff_tangent = np.gradient(tangent, axis = 0)
-    # Compute the non-normalized normal vector at every point
-    normal = diff_tangent
-    # Normalize to 1
-    normal = normal / np.expand_dims(np.linalg.norm(normal, axis = 1), axis = 1)
-    # Compute the binormal vector
+    # First derivative dr/dt
+    drdt = np.gradient(curve, axis=0)
+    # dt/ds = 1 / |dr/dt|
+    speed = np.linalg.norm(drdt, axis=1)
+    dtds = 1.0 / speed
+    # Unit tangent vector T = dr/ds
+    tangent = drdt * dtds[:, None]
+    # dT/dt
+    dTdt = np.gradient(tangent, axis=0)
+    # dT/ds = (dT/dt) * (dt/ds)
+    dTds = dTdt * dtds[:, None]
+    # Curvature κ = |dT/ds|
+    curvature = np.linalg.norm(dTds, axis=1)
+    # Unit normal vector N
+    normal = dTds / np.linalg.norm(dTds, axis=1)[:, None]
+    # Binormal vector B = T × N
     binormal = np.cross(tangent, normal)
-    # The torsion is given by the Frenet-Serret formulas
-    torsion = (- np.gradient(binormal, axis = 0) * np.expand_dims(dtds, axis = 1) * normal).sum(axis = 1)
+    # dB/dt
+    dBdt = np.gradient(binormal, axis=0)
+    # dB/ds
+    dBds = dBdt * dtds[:, None]
+    # Torsion τ = - dB/ds · N
+    torsion = -np.sum(dBds * normal, axis=1)
 
     return curvature[node_idx], torsion[node_idx]
 

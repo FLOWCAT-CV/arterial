@@ -625,7 +625,7 @@ def sanity_check_for_random_islands(subgraphs, skip_cell_ids):
 
     return sanity_check, skip_cell_ids
 
-def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=None, show=False, output_path=None):
+def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=None, show=False, output_path=None, feature_lims=None):
     """
     Make a plot of the graph. Adds the option to provide a feature to plot. This is expected to be a node feature, within
     the "features femoral" feature dictionary.
@@ -646,7 +646,9 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
         Whether to show the plot.
     output_path : str, optional
         Path to save the plot.
-
+    feature_lims : tuple, optional
+        Limits for the feature.
+        
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -663,13 +665,16 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
         
     if feature is not None:
         # Color map
-        feature_values = [graph.nodes[node]["features " + access][feature] for node in graph]
+        feature_values = np.array([graph.nodes[node]["features " + access][feature] for node in graph])
+        if feature_lims is not None:
+            # Clip feature values to the limits
+            feature_values = np.clip(feature_values, feature_lims[0], feature_lims[1])
         color_palette = mcp.gen_color(cmap = cmap, n = len(np.unique(feature_values)))
         # Choose color for each node. Each node feature will have to be rounded to the nearest integer to be used as an index for the color_palette
         # color_palette indices do not have physical meaning. The whole range of the fetaure_values is divided into the n nodes of the supersegment. 
         # Each feature value should be mapped to the corresponding index of the color_palette. To do that, we have to divide the feature value of each node by the range of the feature values and multiply by the number of nodes in the supersegment.
         if max(feature_values) != min(feature_values):
-            color_map = [color_palette[int(np.round((len(np.unique(feature_values)) - 1) * (graph.nodes[node]["features " + access][feature] - min(feature_values)) / (max(feature_values) - min(feature_values))))] for node in graph]
+            color_map = [color_palette[int(np.round((len(np.unique(feature_values)) - 1) * (fv - min(feature_values)) / (max(feature_values) - min(feature_values))))] for fv in feature_values]
         else:
             print("All values are the same. Setting to blue")
             color_map = "blue"
