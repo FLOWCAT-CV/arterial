@@ -116,6 +116,56 @@ Add the Arterial directory to your environment:
 export arterial_dir="/path/to/arterial/arterial"
 ```
 
+### Model Weights Via Plain Git
+
+Raw `.pth` files remain ignored in this repo. To move them through plain `git`, export them into deterministic chunk files plus a manifest under `model_chunks/`, commit those artifacts, and rebuild the original paths on the destination machine.
+
+Source machine:
+
+```bash
+python scripts/export_pth_chunks.py --clean
+```
+
+Destination machine:
+
+```bash
+python scripts/rebuild_pth_chunks.py --skip-existing
+```
+
+The export script scans `arterial/**/*.pth`, writes sub-100MB chunk files under `model_chunks/arterial/...`, and records file hashes in `model_chunks/manifest.json`. The rebuild script restores the original `.pth` paths expected by the runtime and verifies SHA256 checksums after reconstruction.
+
+### Recommended Branch Workflow For Model Payloads
+
+Keep code changes on `main`, then create a dedicated payload branch from the exact code commit that introduced the chunking scripts and docs.
+
+```bash
+# On the code commit you want to deploy
+git checkout main
+git pull
+
+# Create a versioned payload branch
+git checkout -b models/2026-03
+
+# Export chunk artifacts
+python scripts/export_pth_chunks.py --clean
+```
+
+Commit chunk payloads in small batches so each push is easier to retry and review. A practical order is:
+
+1. access prediction plus landmark detection chunks
+2. vessel labelling chunks
+3. extracranial segmentation chunks
+4. intracranial segmentation chunks
+5. mandible segmentation chunks
+
+On the destination machine, clone or pull the corresponding payload branch before rebuilding:
+
+```bash
+git checkout models/2026-03
+git pull
+python scripts/rebuild_pth_chunks.py --skip-existing
+```
+
 ---
 
 ## Quick Start

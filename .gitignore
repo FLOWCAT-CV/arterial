@@ -1,7 +1,9 @@
 # Added by Pere
 *.DS_Store
 *.model
+# Raw model files stay local; transport them through model_chunks/.
 *.pth
+*.pth.tmp
 *.pkl
 *test_data/
 batch_processing*
@@ -11,6 +13,7 @@ dev
 *__pycache__/
 *.pyc
 .*
+!model_chunks/.gitkeep
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
 *stanford/
 *distal_subanalysis_scripts/

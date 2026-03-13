@@ -52,4 +52,57 @@ export arterial_dir="/path/to/arterial/arterial"
 
 ## Copy models
 
-This step is currently performed manually.
+Raw `.pth` files stay ignored in the repo. To move them with plain `git`, export them into chunk files plus a manifest, commit those artifacts, and rebuild the original model paths after cloning.
+
+Source machine:
+
+```bash
+python scripts/export_pth_chunks.py --clean
+```
+
+This writes:
+
+- `model_chunks/manifest.json`
+- chunk files under `model_chunks/arterial/.../*.partNNN`
+
+Destination machine:
+
+```bash
+python scripts/rebuild_pth_chunks.py --skip-existing
+```
+
+This reconstructs the original `.pth` files under `$arterial_dir/...` and verifies their SHA256 checksums.
+
+## Suggested Git branch strategy
+
+Use two branch roles:
+
+- `main` for normal code, docs, and the chunking scripts
+- `models/<version>` for chunk payload commits
+
+Recommended workflow:
+
+```bash
+git checkout main
+git pull
+
+# after the chunking scripts are already in main
+git checkout -b models/2026-03
+python scripts/export_pth_chunks.py --clean
+```
+
+Commit payloads in module-sized batches:
+
+1. access prediction plus landmark detection
+2. vessel labelling
+3. extracranial segmentation
+4. intracranial segmentation
+5. mandible segmentation
+
+On the destination machine:
+
+```bash
+git checkout models/2026-03
+git pull
+python scripts/rebuild_pth_chunks.py --skip-existing
+```
