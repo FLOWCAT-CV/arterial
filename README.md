@@ -345,19 +345,30 @@ The following publications have utilized the Arterial framework for vascular ana
 
 ### Deep Learning-Based Model for Difficult Transfemoral Access Prediction
 
-A deep learning model comparing AI-based predictions with human expert assessment for identifying difficult transfemoral access in stroke thrombectomy procedures.
-
-> Pere Canals, Alvaro Garcia-Tornel, Manuel Requena, Magda Jabłońska, Jiahui Li, Simone Balocco, Oliver Díaz, Alejandro Tomasello, Marc Ribo. **Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy.** *Journal of NeuroInterventional Surgery* 2024;17:653-659.
-> 
-> 🔗 [https://jnis.bmj.com/content/17/6/653](https://jnis.bmj.com/content/17/6/653)
-
-### Vascular Tortuosity Impact on Stroke Treatment Outcomes
+### Vascular Tortuosity Impact on Endovascular Treatment Outcomes in Patients with Distal Vessel Occlusion 
 
 Analysis of extracranial vascular tortuosity characteristics and their association with mechanical thrombectomy procedural outcomes.
 
 > Pere Canals, Alvaro García-Tornel, Giulio Maria Fiore, Marc Rodrigo-Gisbert, Blanca Sastre, Jordi Mayol, Jesús David González Riveros, and Marc Ribo. **Prognostic value of intracranial vascular tortuosity in thrombectomy for distal vessel occlusion.** *European Stroke Journal* 2025.
 > 
 > 🔗 [https://journals.sagepub.com/doi/full/10.1177/23969873251350124](https://journals.sagepub.com/doi/full/10.1177/23969873251350124)
+
+### AI-derived carotid elongation ratio analysis for estimating procedural delay and clinical utility in mechanical thrombectomy.
+
+Analysis of AI-derived carotid elongation ratio and its association with procedural delay in mechanical thrombectomy.
+
+> Julien Ognard, Pere Canals, Jiahui Li, et al. **AI-derived Carotid Elongation Ratio may predict procedural delay but offer limited prognostic utility in mechanical thrombectomy.** *American Journal of Neuroradiology* 2026.
+> 
+> 🔗 [https://www.ajnr.org/content/early/2026/02/25/ajnr.A9262](https://www.ajnr.org/content/early/2026/02/25/ajnr.A9262)
+
+
+### Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy
+
+Analysis of a model for difficult transfemoral access prediction derived from deep learning-based features compared with human expert assessment for identifying difficult transfemoral access in stroke thrombectomy procedures.
+
+> Pere Canals, Alvaro Garcia-Tornel, Manuel Requena, Magda Jabłońska, Jiahui Li, Simone Balocco, Oliver Díaz, Alejandro Tomasello, Marc Ribo. **Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy.** *Journal of NeuroInterventional Surgery* 2024;17:653-659.
+> 
+> 🔗 [https://jnis.bmj.com/content/17/6/653](https://jnis.bmj.com/content/17/6/653)
 
 ### ArterialGNet: Graph Neural Network for Access Prediction
 
