@@ -13,6 +13,7 @@ dev
 .*
 *nnUNetTrainerClDiceLoss__nnUNetPlans__3d_lowres/
 *stanford/
+*distal_subanalysis_scripts/
 
 *.zip
 

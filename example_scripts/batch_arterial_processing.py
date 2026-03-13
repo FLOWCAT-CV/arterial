@@ -14,7 +14,7 @@ XLSX_PATH = ""
 TEMPLATE_PARAMETERS_FILE_PATH = os.path.join(os.environ["arterial_dir"], "../example_scripts", "arterial_processing_params.json")
 USE_SYMLINKS = True
 
-# Connect to the database. Use any logic here, as lomng as you have an iterator with identifiers and existing images it'll be fine
+# Connect to the database. Use any logic here, as long as you have an iterator with identifiers and existing images it'll be fine
 # Also, you will have to define a logic for the filename
 df = pd.read_excel(XLSX_PATH)
 
