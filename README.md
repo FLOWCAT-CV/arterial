@@ -346,16 +346,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Contact
 
 For questions and support, please open an issue on GitHub.
-
-
-# 1. Get the initial cookie and the confirmation token
-curl -c /tmp/cookies.txt "https://drive.google.com/uc?export=download&id=1W2QnhTEgE7EEoOXQM6JWq3aZxVe-L_BD" > /dev/null
-
-# 2. Extract the confirmation code from the cookie
-CONFIRM=$(grep -o '[0-9A-Za-z_]\{4,10\}_warning' /tmp/cookies.txt)
-
-# 3. Use that code to start the actual download
-curl -Lb /tmp/cookies.txt "https://drive.google.com/uc?export=download&confirm=$CONFIRM&id=1W2QnhTEgE7EEoOXQM6JWq3aZxVe-L_BD" -o model.pth
-
-# 4. Clean up the cookie file
-rm /tmp/cookies.txt
