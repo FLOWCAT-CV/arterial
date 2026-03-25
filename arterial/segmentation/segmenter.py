@@ -160,7 +160,7 @@ class VesselSegmenter():
                 print(f"Saving probabilities to {self.probabilities_nifti_path}")
                 save_nifti(self.probabilities_nifti, self.probabilities_nifti_path)
 
-    def slice_cta(self):
+    def slice_cta(self, return_bounding_box=False):
         """
         Slices head-and-neck CTA volumes into two separate volumes: head and neck.
 
@@ -169,15 +169,21 @@ class VesselSegmenter():
 
         Parameters
         ----------
-
+        return_bounding_box : bool, optional
+            Whether to return the bounding box of the head and neck parts of the CTA.
+            Default is False.
         Returns
         -------
-        
+        bounding_box : tuple
+            Tuple with the bounding box of the head and neck parts of the CTA.
+            Default is None.
         """
         if self.cta_array is None or self.cta_affine is None:
             self._load_cta_nifti_from_file()
 
-        self.cta_head_array, self.cta_neck_array, self.cta_head_affine = slice_cta_head_and_neck(self.cta_array, self.cta_affine)
+        self.cta_head_array, self.cta_neck_array, self.cta_head_affine, bounding_box = slice_cta_head_and_neck(self.cta_array, self.cta_affine, return_bounding_box=return_bounding_box)
+        if return_bounding_box:
+            return bounding_box
 
     def _load_cta_nifti_from_file(self):
         if not os.path.isfile(self.cta_nifti_path):

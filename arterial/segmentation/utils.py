@@ -120,8 +120,8 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
 
     return cranium_mask
 
-def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
-    """cranium_mask
+def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_bounding_box=False):
+    """
     This funciton enables slicing of head and neck parts of the CTA ({case_id}.nii.gz)
     by using a Laplacian of Gaussian filter (scipy) to perform a segmentation
     of the cranium. That information is used to slice the original CTA
@@ -133,6 +133,12 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
         Numpy array with the CTA image.
     cta_affine : numpy.ndarray
         Affine matrix of the CTA.
+    use_laplacian : bool, optional
+        Whether to use a Laplacian of Gaussian filter to perform a segmentation
+        of the cranium.
+    return_bounding_box : bool, optional
+        Whether to return the bounding box of the head and neck parts of the CTA.
+        Default is False.
 
     Returns
     -------
@@ -142,8 +148,11 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
         Nifti object of the neck CTA.
     cta_head_affine : numpy.ndarray
         Affine matrix of the head CTA.
-
+    bounding_box : tuple
+        Tuple with the bounding box of the head and neck parts of the CTA.
+        Default is None.
     """    
+    bounding_box = None
     if use_laplacian:
         # Apply laplacian-gaussian filter to upper half of the CTA image
         half_s_coordinate = cta_array.shape[2] // 2
@@ -158,8 +167,6 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
         cranium_mask = get_largest_connected_component(cranium_mask)
         # Get lowest coordinate with a non-zero voxel from cranium mask 
         nonzero_coordinates = np.nonzero(cranium_mask)
-        print("cranium_mask.shape", cranium_mask.shape)
-        print("nonzero_coordinates", nonzero_coordinates)
         # Get s coordinate for slicing into head and neck
         lower_slicing_i_coordinate = min(nonzero_coordinates[0])
         upper_slicing_i_coordinate = max(nonzero_coordinates[0])
@@ -186,6 +193,9 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
         lower_slicing_k_coordinate = min(nonzero_coordinates[2])
         upper_slicing_k_coordinate = max(nonzero_coordinates[2])
 
+    if return_bounding_box:
+        bounding_box = (lower_slicing_i_coordinate, upper_slicing_i_coordinate, lower_slicing_j_coordinate, upper_slicing_j_coordinate, lower_slicing_k_coordinate, upper_slicing_k_coordinate)
+
     # Slice cta into two (head and neck)
     cta_head_array = cta_array[
         lower_slicing_i_coordinate:upper_slicing_i_coordinate, 
@@ -209,7 +219,7 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False):
     cta_head_affine[1, 3] += lower_slicing_j_coordinate * a_voxel_size
     cta_head_affine[2, 3] += lower_slicing_k_coordinate * s_voxel_size
 
-    return cta_head_array, cta_neck_array, cta_head_affine
+    return cta_head_array, cta_neck_array, cta_head_affine, bounding_box
 
 def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_array, segmentation_neck_array, head_affine, is_probabilities=False):
     """
