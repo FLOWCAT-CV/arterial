@@ -343,8 +343,6 @@ If you use Arterial in your research, please cite:
 
 The following publications have utilized the Arterial framework for vascular analysis in stroke research:
 
-### Deep Learning-Based Model for Difficult Transfemoral Access Prediction
-
 ### Vascular Tortuosity Impact on Endovascular Treatment Outcomes in Patients with Distal Vessel Occlusion 
 
 Analysis of extracranial vascular tortuosity characteristics and their association with mechanical thrombectomy procedural outcomes.
@@ -382,7 +380,9 @@ A multi-scale graph neural network (ArterialGNet) designed to predict impossible
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This work is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/).
+
+![CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)
 
 ---
 
