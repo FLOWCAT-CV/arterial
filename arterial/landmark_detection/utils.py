@@ -132,6 +132,66 @@ def resample_mask_to_original_cta(predicted_mask_array, predicted_mask_affine, c
     return tio_img.data.squeeze(0).numpy()
 
 
+# Reference TICA→MCA distances from GT analysis. Used to flag anatomically
+# implausible MCA placements at inference time (no GT required).
+# Index 0 = r-mca (r-tica pair), index 1 = l-mca (l-tica pair).
+_TICA_MCA_DIST_MEAN = np.array([17.1, 16.1])  # mm
+_TICA_MCA_DIST_STD  = np.array([ 6.2,  7.0])  # mm
+_MIRROR_MIN_DISP_MM = 5.0
+
+
+def _apply_mca_mirror_correction(centroids_ras):
+    """
+    Conditional mirror-reflection correction for MCA landmarks.
+
+    When one MCA has an anatomically implausible TICA→MCA distance and the
+    contralateral MCA is healthy, the healthy MCA is reflected across the
+    sagittal midplane (estimated from all four bilateral landmarks) to replace
+    the bad prediction.
+
+    Landmark index layout (training label order 1-6):
+        0=l-tica  1=r-tica  2=l-eica  3=r-eica  4=r-mca  5=l-mca
+
+    Parameters
+    ----------
+    centroids_ras : np.ndarray, shape (6, 3)
+        Landmark coordinates in RAS mm. Modified in-place.
+
+    Returns
+    -------
+    centroids_ras : np.ndarray
+    correction_log : dict  {landmark_name: {"displacement_mm": float}}
+    """
+    L_TICA, R_TICA, L_EICA, R_EICA, R_MCA, L_MCA = 0, 1, 2, 3, 4, 5
+
+    midplane_x = float(np.mean(centroids_ras[[L_TICA, R_TICA, L_EICA, R_EICA], 0]))
+
+    r_dist = float(np.linalg.norm(centroids_ras[R_MCA] - centroids_ras[R_TICA]))
+    l_dist = float(np.linalg.norm(centroids_ras[L_MCA] - centroids_ras[L_TICA]))
+
+    def _bad(dist, i):
+        return (dist < _TICA_MCA_DIST_MEAN[i] - 2.0 * _TICA_MCA_DIST_STD[i] or
+                dist > _TICA_MCA_DIST_MEAN[i] + 2.0 * _TICA_MCA_DIST_STD[i])
+
+    r_bad, l_bad = _bad(r_dist, 0), _bad(l_dist, 1)
+    correction_log = {}
+
+    for bad_idx, good_idx, name, is_bad, contra_bad in [
+        (R_MCA, L_MCA, "r-mca", r_bad, l_bad),
+        (L_MCA, R_MCA, "l-mca", l_bad, r_bad),
+    ]:
+        if is_bad and not contra_bad:
+            mirrored = np.array([2.0 * midplane_x - centroids_ras[good_idx, 0],
+                                 centroids_ras[good_idx, 1],
+                                 centroids_ras[good_idx, 2]])
+            disp = float(np.linalg.norm(mirrored - centroids_ras[bad_idx]))
+            if disp > _MIRROR_MIN_DISP_MM:
+                centroids_ras[bad_idx] = mirrored
+                correction_log[name] = {"displacement_mm": round(disp, 1)}
+
+    return centroids_ras, correction_log
+
+
 def postprocess_preds(preds, affine, return_mask=False):
     """
     Postprocess model predictions to extract landmark coordinates.
@@ -153,11 +213,11 @@ def postprocess_preds(preds, affine, return_mask=False):
         Predicted mask. None if return_mask is False.
     """
     preds = preds.cpu().numpy()[0]  # Remove batch dim: (7, D, H, W)
-    
+
     # Create combined mask by taking the class with highest confidence
     combined = np.zeros(preds.shape[1:], dtype=np.uint8)
     confidence_map = np.zeros(preds.shape[1:], dtype=np.float32)
-    
+
     for c in range(1, preds.shape[0]):  # Skip background (class 0)
         mask = (preds[c] > -1) & ((preds[c] > confidence_map) | (combined == 0))
         confidence_map[mask] = preds[c][mask]
@@ -166,7 +226,7 @@ def postprocess_preds(preds, affine, return_mask=False):
     # Detect centroids for each landmark class
     centroids_ijk = np.zeros((6, 3), dtype=np.float32)
     all_largest_components = []
-    
+
     for label in range(1, 7):  # Classes 1-6
         binary_mask = (combined == label).astype(np.uint8)
         # Apply morphological operations to clean up the mask
@@ -183,9 +243,13 @@ def postprocess_preds(preds, affine, return_mask=False):
             centroids_ijk[label - 1] = [centroid[1], centroid[2], centroid[0]]
         else:
             centroids_ijk[label - 1] = [0, 0, 0]
-    
+
     # Convert to mm coordinates with affine from preprocessed volume
     centroids_ras = np.array([ijk_to_ras(centroids_ijk[i], affine) for i in range(6)])
+
+    # MCA mirror correction: fixes hemisphere confusion when one MCA is
+    # placed on the wrong side (detected via anatomical distance plausibility).
+    centroids_ras, _ = _apply_mca_mirror_correction(centroids_ras)
 
     if return_mask:
         combined_largest_components = np.zeros(preds.shape[1:], dtype=np.uint8)
@@ -193,7 +257,7 @@ def postprocess_preds(preds, affine, return_mask=False):
             combined_largest_components += mask * (i + 1)
         combined_largest_components = combined_largest_components.transpose(1, 2, 0)
         return centroids_ras, combined_largest_components
-    else:   
+    else:
         return centroids_ras, None
 
 
