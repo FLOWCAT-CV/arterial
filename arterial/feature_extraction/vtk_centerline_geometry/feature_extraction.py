@@ -4,7 +4,7 @@ import vtk
 import numpy as np
 
 from vtk.util.numpy_support import vtk_to_numpy
-from scipy.signal import savgol_filter
+from scipy.signal import find_peaks, savgol_filter
 
 from arterial.feature_extraction.vtk_centerline_geometry.utils import (
     add_point_array,
@@ -149,4 +149,58 @@ def perform_curvature_extraction(centerline, savgol_window_length=50, savgol_pol
     add_point_array(out, angle_of_curvature, "Angle of curvature")
     add_point_array(out, cumulative_angle_of_curvature, "Cumulative angle of curvature")
 
+    return out
+
+
+def perform_curve_id_extraction(centerline, peak_height=0.030, peak_width=10):
+    """
+    Segments a centerline into successive turns ("curves") by detecting peaks in
+    the `Filtered curvature` point-data array and placing curve boundaries at the
+    curvature minimum between each consecutive pair of peaks. Each turn is assigned
+    an integer identifier starting at 0 from the proximal end and incrementing by
+    one at each boundary; the result is added as a `CurveIds` integer point-data
+    array.
+
+    The centerline must already carry a `Filtered curvature` array (produced by
+    `perform_curvature_extraction`). A `ValueError` is raised if it is missing,
+    rather than silently re-computing it: this keeps each step single-purpose and
+    lets callers control which arrays are written.
+
+    Parameters
+    ----------
+    centerline : vtk.vtkPolyData
+        Centerline polydata with a `Filtered curvature` point-data array.
+    peak_height : float, optional
+        Minimum peak height passed to `scipy.signal.find_peaks`. Tuned for
+        ICA-scale vessels at 2 mm sampling; vessels at finer/coarser sampling or
+        of different calibre will likely need adjustment. The default is 0.030.
+    peak_width : int, optional
+        Minimum peak width in samples, passed to `scipy.signal.find_peaks`. The
+        default is 10.
+
+    Returns
+    -------
+    out : vtk.vtkPolyData
+        Deep copy of `centerline` with `CurveIds` added as an int point-data array.
+
+    """
+    out = vtk.vtkPolyData()
+    out.DeepCopy(centerline)
+
+    filtered_curvature_array = out.GetPointData().GetArray("Filtered curvature")
+    if filtered_curvature_array is None:
+        raise ValueError("`Filtered curvature` point-data array not found on centerline; run `perform_curvature_extraction` first.")
+    filtered_curvature = vtk_to_numpy(filtered_curvature_array)
+
+    peaks, _ = find_peaks(filtered_curvature, height=peak_height, width=peak_width)
+    separation_points = [
+        peaks[idx - 1] + int(np.argmin(filtered_curvature[peaks[idx - 1]:peaks[idx]]))
+        for idx in range(1, len(peaks))
+    ]
+
+    curve_ids = np.zeros(len(filtered_curvature), dtype=int)
+    for curve_id, sep in enumerate(separation_points, start=1):
+        curve_ids[sep:] = curve_id
+
+    add_point_array(out, curve_ids, "CurveIds")
     return out

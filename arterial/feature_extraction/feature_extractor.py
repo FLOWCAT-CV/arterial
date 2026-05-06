@@ -9,7 +9,7 @@ from arterial.feature_extraction.segment_features.utils import plot_single_segme
 from arterial.feature_extraction.global_features.feature_extraction import perform_global_feature_extraction
 from arterial.feature_extraction.mapping.mapping import extract_arterial_mapping
 from arterial.feature_extraction.mapping.utils import make_supersegment_plots
-from arterial.feature_extraction.vtk_centerline_geometry.feature_extraction import perform_radius_extraction, perform_curvature_extraction
+from arterial.feature_extraction.vtk_centerline_geometry.feature_extraction import perform_radius_extraction, perform_curvature_extraction, perform_curve_id_extraction
 from arterial.feature_extraction.vtk_centerline_geometry.utils import pickle_to_vtk
 from arterial.io.load_and_save_operations import *
 
@@ -375,7 +375,42 @@ class FeatureExtractor():
             save_vtkpolydata(out, save_path)
         return out
 
-    def add_centerline_geometry(self, centerline_model, surface_model=None, mis_array_name="MaximumInscribedSphereRadius", savgol_window_length=50, savgol_polyorder=3, save_path=None):
+    def add_curve_ids(self, centerline_model, peak_height=0.030, peak_width=10, save_path=None):
+        """
+        Adds a `CurveIds` int point-data array to a centerline polydata,
+        segmenting it into successive turns based on peaks in the `Filtered
+        curvature` point-data array. Standalone — does not depend on or modify
+        the local-graph pipeline. The centerline must already carry a `Filtered
+        curvature` array (from a prior call to `add_curvature_arrays` or
+        `add_centerline_geometry`).
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Centerline polydata (single segment) with a `Filtered curvature`
+            point-data array.
+        peak_height : float, optional
+            Minimum peak height for `scipy.signal.find_peaks`. The default is
+            0.030.
+        peak_width : int, optional
+            Minimum peak width in samples for `scipy.signal.find_peaks`. The
+            default is 10.
+        save_path : string or path-like object, optional
+            If provided, the augmented centerline is written to this path.
+
+        Returns
+        -------
+        out : vtk.vtkPolyData
+            New centerline polydata with the `CurveIds` array added.
+
+        """
+        out = perform_curve_id_extraction(centerline_model, peak_height=peak_height, peak_width=peak_width)
+        if save_path is not None:
+            print(f"Saving centerline with curve ids to {save_path}")
+            save_vtkpolydata(out, save_path)
+        return out
+
+    def add_centerline_geometry(self, centerline_model, surface_model=None, mis_array_name="MaximumInscribedSphereRadius", savgol_window_length=50, savgol_polyorder=3, compute_curves=False, peak_height=0.030, peak_width=10, save_path=None):
         """
         Convenience method to chain `add_radius_arrays` (skipped if `surface_model`
         is None) and `add_curvature_arrays`. Returns a single new centerline
@@ -394,6 +429,16 @@ class FeatureExtractor():
             Window length for Savitzky-Golay smoothing. The default is 50.
         savgol_polyorder : int, optional
             Polynomial order for Savitzky-Golay smoothing. The default is 3.
+        compute_curves : bool, optional
+            If True, additionally segments the centerline into turns and adds a
+            `CurveIds` int point-data array via `perform_curve_id_extraction`.
+            The default is False.
+        peak_height : float, optional
+            Minimum peak height for curve-id detection. Only used when
+            `compute_curves` is True. The default is 0.030.
+        peak_width : int, optional
+            Minimum peak width in samples for curve-id detection. Only used when
+            `compute_curves` is True. The default is 10.
         save_path : string or path-like object, optional
             If provided, the augmented centerline is written to this path.
 
@@ -407,6 +452,8 @@ class FeatureExtractor():
         if surface_model is not None:
             out = perform_radius_extraction(out, surface_model, mis_array_name=mis_array_name)
         out = perform_curvature_extraction(out, savgol_window_length=savgol_window_length, savgol_polyorder=savgol_polyorder)
+        if compute_curves:
+            out = perform_curve_id_extraction(out, peak_height=peak_height, peak_width=peak_width)
         if save_path is not None:
             print(f"Saving centerline with geometry arrays to {save_path}")
             save_vtkpolydata(out, save_path)
