@@ -9,6 +9,8 @@ from arterial.feature_extraction.segment_features.utils import plot_single_segme
 from arterial.feature_extraction.global_features.feature_extraction import perform_global_feature_extraction
 from arterial.feature_extraction.mapping.mapping import extract_arterial_mapping
 from arterial.feature_extraction.mapping.utils import make_supersegment_plots
+from arterial.feature_extraction.vtk_centerline_geometry.feature_extraction import perform_radius_extraction, perform_curvature_extraction
+from arterial.feature_extraction.vtk_centerline_geometry.utils import pickle_to_vtk
 from arterial.io.load_and_save_operations import *
 
 class FeatureExtractor():
@@ -264,6 +266,151 @@ class FeatureExtractor():
                 save_pickle(self.individual_centerline_graph, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.pickle"))
                 print(f"Saving individual centerline graph plot to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.png')}")
                 make_graph_plot(self.individual_centerline_graph, output_path=os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.png"))
+
+    def single_segment_pickle_to_vtk(self, graph, use_branch_model_for_blanking=True, mis_array_name="MaximumInscribedSphereRadius", compute_frenet=True, save_path=None):
+        """
+        Converts a single-segment networkx graph (e.g. one of the pickles in the
+        case's `single_segments/` directory) to a `vtkPolyData` centerline in native
+        NIfTI/VTK coordinates. The CTA NIfTI affine and shape are taken from the
+        extractor's loaded CTA — loaded on demand from `self.cta_nifti_path` if not
+        already available.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Single-segment graph to convert.
+        use_branch_model_for_blanking : bool, optional
+            If True (default), derives the `Blanking` array by nearest-neighbour
+            lookup against the branch model loaded from `self.branch_model_path`,
+            rather than trusting the pickle's `features femoral["blanking"]` value
+            (which may be all-zero if upstream featurization was run without a
+            branch model). The branch model is loaded on demand if not already
+            available.
+        mis_array_name : str, optional
+            Name to assign to the MIS radius point-data array. The default is
+            "MaximumInscribedSphereRadius".
+        compute_frenet : bool, optional
+            Whether to compute Tangents/Normals/Binormals from the polyline. The
+            default is True.
+        save_path : string or path-like object, optional
+            If provided, the converted centerline is written to this path.
+
+        Returns
+        -------
+        centerline : vtk.vtkPolyData
+            Centerline polydata in native space.
+
+        """
+        if self.cta_array is None or self.cta_affine is None:
+            self._load_cta_nifti_from_file()
+        branch_model = None
+        if use_branch_model_for_blanking:
+            if self.branch_model is None:
+                self._load_branch_model()
+            branch_model = self.branch_model
+        centerline = pickle_to_vtk(graph, self.cta_affine, self.cta_array.shape, branch_model=branch_model, mis_array_name=mis_array_name, compute_frenet=compute_frenet)
+        if save_path is not None:
+            print(f"Saving converted centerline to {save_path}")
+            save_vtkpolydata(centerline, save_path)
+        return centerline
+
+    def add_radius_arrays(self, centerline_model, surface_model, mis_array_name="MaximumInscribedSphereRadius", save_path=None):
+        """
+        Adds cross-section-based radius arrays (`Radius CE`, `Radius CC`, `Ovality`)
+        as point data to a centerline polydata. Standalone — does not depend on or
+        modify the local-graph pipeline.
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Centerline polydata (single segment) carrying `Tangents` and a MIS
+            radius array.
+        surface_model : vtk.vtkPolyData
+            Vessel surface mesh used to cut cross-sections.
+        mis_array_name : str, optional
+            Name of the MIS radius array on the centerline. The default is
+            "MaximumInscribedSphereRadius".
+        save_path : string or path-like object, optional
+            If provided, the augmented centerline is written to this path.
+
+        Returns
+        -------
+        out : vtk.vtkPolyData
+            New centerline polydata with the radius arrays added.
+
+        """
+        out = perform_radius_extraction(centerline_model, surface_model, mis_array_name=mis_array_name)
+        if save_path is not None:
+            print(f"Saving centerline with radius arrays to {save_path}")
+            save_vtkpolydata(out, save_path)
+        return out
+
+    def add_curvature_arrays(self, centerline_model, savgol_window_length=50, savgol_polyorder=3, save_path=None):
+        """
+        Adds Frenet-Serret-derived arrays (`Curvature`, `Torsion`, `Filtered curvature`,
+        `Distance from origin`) as point data to a centerline polydata. Standalone —
+        does not depend on or modify the local-graph pipeline.
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Centerline polydata (single segment) carrying `Tangents`, `Normals`, and
+            `Binormals` arrays.
+        savgol_window_length : int, optional
+            Window length for Savitzky-Golay smoothing. The default is 50.
+        savgol_polyorder : int, optional
+            Polynomial order for Savitzky-Golay smoothing. The default is 3.
+        save_path : string or path-like object, optional
+            If provided, the augmented centerline is written to this path.
+
+        Returns
+        -------
+        out : vtk.vtkPolyData
+            New centerline polydata with the curvature arrays added.
+
+        """
+        out = perform_curvature_extraction(centerline_model, savgol_window_length=savgol_window_length, savgol_polyorder=savgol_polyorder)
+        if save_path is not None:
+            print(f"Saving centerline with curvature arrays to {save_path}")
+            save_vtkpolydata(out, save_path)
+        return out
+
+    def add_centerline_geometry(self, centerline_model, surface_model=None, mis_array_name="MaximumInscribedSphereRadius", savgol_window_length=50, savgol_polyorder=3, save_path=None):
+        """
+        Convenience method to chain `add_radius_arrays` (skipped if `surface_model`
+        is None) and `add_curvature_arrays`. Returns a single new centerline
+        polydata with all arrays added.
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Centerline polydata (single segment).
+        surface_model : vtk.vtkPolyData, optional
+            Vessel surface mesh. If None, only curvature arrays are added.
+        mis_array_name : str, optional
+            Name of the MIS radius array on the centerline. The default is
+            "MaximumInscribedSphereRadius".
+        savgol_window_length : int, optional
+            Window length for Savitzky-Golay smoothing. The default is 50.
+        savgol_polyorder : int, optional
+            Polynomial order for Savitzky-Golay smoothing. The default is 3.
+        save_path : string or path-like object, optional
+            If provided, the augmented centerline is written to this path.
+
+        Returns
+        -------
+        out : vtk.vtkPolyData
+            New centerline polydata with all geometry arrays added.
+
+        """
+        out = centerline_model
+        if surface_model is not None:
+            out = perform_radius_extraction(out, surface_model, mis_array_name=mis_array_name)
+        out = perform_curvature_extraction(out, savgol_window_length=savgol_window_length, savgol_polyorder=savgol_polyorder)
+        if save_path is not None:
+            print(f"Saving centerline with geometry arrays to {save_path}")
+            save_vtkpolydata(out, save_path)
+        return out
 
     def is_local_featurized(self):
         if "features femoral" in self.local_graph.nodes[0].keys():
