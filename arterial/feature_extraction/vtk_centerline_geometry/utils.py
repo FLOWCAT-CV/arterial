@@ -28,6 +28,30 @@ def add_point_array(polydata, array, name):
     polydata.GetPointData().AddArray(vtk_array)
 
 
+def add_string_point_array(polydata, strings, name):
+    """
+    Adds a Python list of strings as a named `vtkStringArray` point-data array to
+    a vtkPolyData (in place). Used for categorical labels (e.g. vessel type names)
+    that are not amenable to numeric storage.
+
+    Parameters
+    ----------
+    polydata : vtk.vtkPolyData
+        Target polydata.
+    strings : sequence of str
+        One string per point.
+    name : str
+        Name to assign to the new point-data array.
+
+    """
+    vtk_array = vtk.vtkStringArray()
+    vtk_array.SetName(name)
+    vtk_array.SetNumberOfValues(len(strings))
+    for i, s in enumerate(strings):
+        vtk_array.SetValue(i, str(s))
+    polydata.GetPointData().AddArray(vtk_array)
+
+
 def extract_cross_section(surface, center, normal):
     """
     Cuts the surface with a plane defined by center and normal, keeps the connected
@@ -311,6 +335,9 @@ def pickle_to_vtk(graph, affine, image_shape, branch_model=None, mis_array_name=
     (node ids in single-segment pickles are typically non-contiguous). Node positions
     are written as `vtkPoints` connected by a single polyline cell. The MIS radius
     is read from each node's `radius` attribute and stored under `mis_array_name`.
+    `VesselType` (int) and `VesselTypeName` (vtkStringArray) are read from each
+    node's `vessel_type` / `vessel_type_name` attributes — useful because a single
+    segment's path typically traverses several vessel labels (e.g. AA → LCCA → LICA).
     If `compute_frenet=True`, `Tangents`, `Normals`, and `Binormals` are computed
     from the polyline geometry and stored as point-data arrays so the result is
     immediately consumable by `perform_radius_extraction` and
@@ -349,6 +376,8 @@ def pickle_to_vtk(graph, affine, image_shape, branch_model=None, mis_array_name=
 
     coordinates = np.array([np.asarray(graph.nodes[n]["pos"]) + lpi_corner for n in ordered_nodes])
     radius = np.array([float(graph.nodes[n]["radius"]) for n in ordered_nodes])
+    vessel_type = np.array([int(graph.nodes[n]["vessel_type"]) for n in ordered_nodes])
+    vessel_type_name = [str(graph.nodes[n]["vessel_type_name"]) for n in ordered_nodes]
     if branch_model is not None:
         bm_coords, bm_blanking = branch_model_blanking_lookup(branch_model)
         _, nearest = cKDTree(bm_coords).query(coordinates)
@@ -372,6 +401,8 @@ def pickle_to_vtk(graph, affine, image_shape, branch_model=None, mis_array_name=
     centerline.SetLines(cells)
     add_point_array(centerline, radius, mis_array_name)
     add_point_array(centerline, blanking, "Blanking")
+    add_point_array(centerline, vessel_type, "VesselType")
+    add_string_point_array(centerline, vessel_type_name, "VesselTypeName")
 
     if compute_frenet:
         tangents, normals, binormals = compute_frenet_frame(coordinates)
