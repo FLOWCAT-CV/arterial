@@ -29,9 +29,16 @@ from arterial.io.load_and_save_operations import load_pickle, load_vtkpolydata
 
 
 TARGET_VESSELS = ["RCCA", "RCA", "RICA", "LCCA", "LCA", "LICA"]
+CAROTID_VESSELS = {"LCA", "RCA"}
 
 
-def export_vessel_geometry(case_dir: str, mode: str, sampling_distance_mm: float, cta_nifti_path: str | None) -> None:
+def export_vessel_geometry(
+    case_dir: str,
+    mode: str,
+    sampling_distance_mm: float,
+    cta_nifti_path: str | None,
+    detect_intracranial: bool = False,
+) -> None:
     fe = FeatureExtractor(case_dir=case_dir, mode=mode, sampling_distance_mm=sampling_distance_mm, cta_nifti_path=cta_nifti_path)
 
     surface_path = os.path.join(case_dir, mode, "segmentation.vtk")
@@ -53,8 +60,16 @@ def export_vessel_geometry(case_dir: str, mode: str, sampling_distance_mm: float
         graph = load_pickle(pickle_path)
         centerline = fe.single_segment_pickle_to_vtk(graph)
         out_path = os.path.join(out_dir, f"{vessel}.vtk")
-        fe.add_centerline_geometry(centerline, surface_model=surface, save_path=out_path)
-        print(f"  {vessel}: wrote {out_path} ({centerline.GetNumberOfPoints()} points)")
+        out = fe.add_centerline_geometry(centerline, surface_model=surface, save_path=out_path)
+        msg = f"  {vessel}: wrote {out_path} ({out.GetNumberOfPoints()} points)"
+        if detect_intracranial and vessel in CAROTID_VESSELS:
+            # Re-saves the same file with `Intracranial` and
+            # `DistanceTransformValueSmoothed` arrays appended. The cranium
+            # distance transform is computed once (LCA) and reused on RCA via
+            # the FeatureExtractor's three-tier cache.
+            fe.add_intracranial_transition(out, save_path=out_path)
+            msg += " +intracranial"
+        print(msg)
 
 
 def build_processor_args(args: argparse.Namespace) -> Namespace:
@@ -118,6 +133,14 @@ def main() -> None:
     parser.add_argument("--skip-pipeline", action="store_true",
         help="Skip the full ArterialProcessor pipeline and only run the per-vessel VTK export. "
              "Use this when single_segments/ pickles already exist from a prior run.")
+    parser.add_argument("--detect-intracranial", action="store_true",
+        help="On the carotid centerlines (LCA, RCA), additionally run the "
+             "intracranial-transition detector and append the Intracranial and "
+             "DistanceTransformValueSmoothed point-data arrays to their VTKs. "
+             "Off by default because the underlying cranium distance transform "
+             "is expensive (~30 s on a typical head-and-neck CTA); the result "
+             "is cached on disk under {case_dir}/{mode}/cranium_distance_transform.npy "
+             "so subsequent runs reuse it.")
 
     args = parser.parse_args()
 
@@ -135,7 +158,13 @@ def main() -> None:
         print("Skipping ArterialProcessor (--skip-pipeline); using existing single_segments pickles.")
 
     print(f"\n=== Exporting per-vessel VTK centerlines ===")
-    export_vessel_geometry(args.case_dir, args.mode, args.sampling_distance_mm, args.cta_nifti_path)
+    export_vessel_geometry(
+        args.case_dir,
+        args.mode,
+        args.sampling_distance_mm,
+        args.cta_nifti_path,
+        detect_intracranial=args.detect_intracranial,
+    )
     print("Done.")
 
 
