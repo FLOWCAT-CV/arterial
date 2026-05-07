@@ -10,7 +10,9 @@ from arterial.feature_extraction.global_features.feature_extraction import perfo
 from arterial.feature_extraction.mapping.mapping import extract_arterial_mapping
 from arterial.feature_extraction.mapping.utils import make_supersegment_plots
 from arterial.feature_extraction.vtk_centerline_geometry.feature_extraction import perform_radius_extraction, perform_curvature_extraction, perform_curve_id_extraction
-from arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis import perform_carotid_analysis
+from arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis import (
+    perform_carotid_analysis, perform_intracranial_transition_detection,
+)
 from arterial.feature_extraction.vtk_centerline_geometry.utils import pickle_to_vtk
 from arterial.io.load_and_save_operations import *
 
@@ -98,6 +100,11 @@ class FeatureExtractor():
         # For intracranial vessel analysis
         self.individual_centerlines_dir_path = os.path.join(self.case_dir, self.mode, "individual_centerlines")
         self.individual_centerline_graph = None
+
+        # Cached cranium distance transform for the intracranial-transition detection
+        # in `add_carotid_analysis` / `add_intracranial_transition`. Lazily populated.
+        self._cranium_distance_transform = None
+        self._cranium_distance_transform_path = os.path.join(self.case_dir, self.mode, "cranium_distance_transform.npy")
 
     def build_local_graph(self, resample=True, save=True):
         """
@@ -460,12 +467,28 @@ class FeatureExtractor():
             save_vtkpolydata(out, save_path)
         return out
 
-    def add_carotid_analysis(self, centerline_model, mis_array_name="MaximumInscribedSphereRadius", n_bif_mask_nodes=20, bulb_threshold_mm=0.5, bulb_expand_nodes=1, save_path=None):
+    def add_carotid_analysis(
+        self,
+        centerline_model,
+        mis_array_name="MaximumInscribedSphereRadius",
+        n_bif_mask_nodes=20,
+        bulb_threshold_mm=0.5,
+        bulb_expand_nodes=1,
+        detect_intracranial=False,
+        intracranial_smoothing_sigma=2,
+        intracranial_dt_max_mm=20,
+        intracranial_dt_tolerance_mm=5,
+        intracranial_dt_clip_mm=50,
+        save_path=None,
+    ):
         """
         Detects the carotid bulb on a CCA→ICA centerline polydata (LCA / RCA
         convention) and adds the intermediate signals as point-data arrays.
         Thin wrapper around `perform_carotid_analysis` that adds the framework
-        save-on-disk convention.
+        save-on-disk convention. When ``detect_intracranial`` is True, the
+        carotid bulb pass is followed by an intracranial-transition detection
+        pass (see ``add_intracranial_transition`` / ``perform_intracranial_transition_detection``)
+        and both sets of arrays land on the same returned polydata.
 
         Only valid on centerlines that span CCA → ICA. Raises if applied to a
         centerline that lacks a CCA→ICA transition (no ICA-labelled points,
@@ -491,6 +514,26 @@ class FeatureExtractor():
         bulb_expand_nodes : int, optional
             Symmetric expansion of every threshold-positive run of bulb
             nodes, in nodes per side. The default is 1.
+        detect_intracranial : bool, optional
+            If True, additionally runs the intracranial-transition detection
+            and adds ``Intracranial`` and ``DistanceTransformValueSmoothed``
+            point-data arrays. Off by default because the underlying cranium
+            EDT is expensive; results are cached in memory and on disk so the
+            cost is paid once per case. The default is False.
+        intracranial_smoothing_sigma : float, optional
+            Gaussian smoothing sigma (in nodes) for the per-point DT signal
+            before differentiation. Only used when ``detect_intracranial`` is
+            True. The default is 2.
+        intracranial_dt_max_mm : float, optional
+            DT-value upper bound for a qualifying minimum (mm). Only used
+            when ``detect_intracranial`` is True. The default is 20.
+        intracranial_dt_tolerance_mm : float, optional
+            DT-value tolerance around the absolute minimum for the
+            transition-selection rule (mm). Only used when
+            ``detect_intracranial`` is True. The default is 5.
+        intracranial_dt_clip_mm : float, optional
+            DT clipping value (mm). Only used when ``detect_intracranial`` is
+            True. The default is 50.
         save_path : string or path-like object, optional
             If provided, the augmented centerline is written to this path.
 
@@ -499,7 +542,9 @@ class FeatureExtractor():
         out : vtk.vtkPolyData
             New centerline polydata with `KeepAfterBlankingTrim`,
             `Radius MIS interp`, `Radius MIS diff (raw - interp)`,
-            `BifurcationMask`, and `BulbMask` arrays added.
+            `BifurcationMask`, and `BulbMask` arrays added — plus
+            `Intracranial` and `DistanceTransformValueSmoothed` when
+            ``detect_intracranial`` is True.
 
         """
         out = perform_carotid_analysis(
@@ -509,10 +554,115 @@ class FeatureExtractor():
             bulb_threshold_mm=bulb_threshold_mm,
             bulb_expand_nodes=bulb_expand_nodes,
         )
+
+        if detect_intracranial:
+            if self.cta_array is None or self.cta_affine is None:
+                self._load_cta_nifti_from_file()
+            distance_transform = self._get_or_compute_cranium_distance_transform(intracranial_dt_clip_mm)
+            out, _, _, _ = perform_intracranial_transition_detection(
+                out,
+                self.cta_array,
+                self.cta_affine,
+                distance_transform=distance_transform,
+                smoothing_sigma=intracranial_smoothing_sigma,
+                dt_max_mm=intracranial_dt_max_mm,
+                dt_tolerance_mm=intracranial_dt_tolerance_mm,
+                dt_clip_mm=intracranial_dt_clip_mm,
+            )
+
         if save_path is not None:
             print(f"Saving centerline with carotid analysis arrays to {save_path}")
             save_vtkpolydata(out, save_path)
         return out
+
+    def add_intracranial_transition(
+        self,
+        centerline_model,
+        smoothing_sigma=2,
+        dt_max_mm=20,
+        dt_tolerance_mm=5,
+        dt_clip_mm=50,
+        save_path=None,
+    ):
+        """
+        Detects the intracranial transition on a CCA→ICA centerline polydata
+        and adds the resulting point-data arrays. Thin wrapper around
+        ``perform_intracranial_transition_detection`` that owns the cranium-DT
+        caching (in-memory on ``self._cranium_distance_transform`` and on
+        disk under ``{case_dir}/{mode}/cranium_distance_transform.npy``) so
+        repeated calls in the same session — and across sessions — don't
+        recompute the EDT.
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Per-vessel centerline polydata.
+        smoothing_sigma : float, optional
+            Gaussian smoothing sigma (in nodes). The default is 2.
+        dt_max_mm : float, optional
+            DT-value upper bound for a qualifying minimum (mm). The default
+            is 20.
+        dt_tolerance_mm : float, optional
+            DT-value tolerance around the absolute minimum (mm). The default
+            is 5.
+        dt_clip_mm : float, optional
+            DT clipping value (mm). The default is 50.
+        save_path : string or path-like object, optional
+            If provided, the augmented centerline is written to this path.
+
+        Returns
+        -------
+        out : vtk.vtkPolyData
+            New centerline polydata with `Intracranial` and
+            `DistanceTransformValueSmoothed` arrays added.
+
+        """
+        if self.cta_array is None or self.cta_affine is None:
+            self._load_cta_nifti_from_file()
+        distance_transform = self._get_or_compute_cranium_distance_transform(dt_clip_mm)
+
+        out, _, _, _ = perform_intracranial_transition_detection(
+            centerline_model,
+            self.cta_array,
+            self.cta_affine,
+            distance_transform=distance_transform,
+            smoothing_sigma=smoothing_sigma,
+            dt_max_mm=dt_max_mm,
+            dt_tolerance_mm=dt_tolerance_mm,
+            dt_clip_mm=dt_clip_mm,
+        )
+
+        if save_path is not None:
+            print(f"Saving centerline with intracranial-transition arrays to {save_path}")
+            save_vtkpolydata(out, save_path)
+        return out
+
+    def _get_or_compute_cranium_distance_transform(self, dt_clip_mm):
+        """
+        Returns the clipped cranium distance transform with three-tier caching:
+        (1) in-memory on ``self._cranium_distance_transform``; (2) on disk at
+        ``self._cranium_distance_transform_path``; (3) compute fresh, store
+        in memory, and persist to disk. The caller is responsible for ensuring
+        ``self.cta_array`` is loaded.
+        """
+        if self._cranium_distance_transform is not None:
+            return self._cranium_distance_transform
+
+        if os.path.isfile(self._cranium_distance_transform_path):
+            print(f"Loading cranium distance transform from {self._cranium_distance_transform_path}")
+            self._cranium_distance_transform = load_numpy(self._cranium_distance_transform_path)
+            return self._cranium_distance_transform
+
+        print("Computing cranium distance transform (this can take a while)...")
+        from arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis import (
+            _compute_cranium_distance_transform,
+        )
+        distance_transform = _compute_cranium_distance_transform(self.cta_array, dt_clip_mm)
+        self._cranium_distance_transform = distance_transform
+        os.makedirs(os.path.dirname(self._cranium_distance_transform_path), exist_ok=True)
+        print(f"Saving cranium distance transform to {self._cranium_distance_transform_path}")
+        save_numpy(distance_transform, self._cranium_distance_transform_path)
+        return distance_transform
 
     def is_local_featurized(self):
         if "features femoral" in self.local_graph.nodes[0].keys():

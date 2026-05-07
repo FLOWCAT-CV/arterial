@@ -5,8 +5,10 @@ import numpy as np
 
 from vtk.util.numpy_support import vtk_to_numpy
 from scipy.interpolate import PchipInterpolator
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 from arterial.feature_extraction.vtk_centerline_geometry.utils import add_point_array
+from arterial.segmentation.utils import compute_cranium_mask
 
 
 def perform_carotid_analysis(
@@ -42,8 +44,11 @@ def perform_carotid_analysis(
 
     Returns a deep copy of the input polydata with five new point-data arrays
     added (see below). Trimmed-out points (leading/trailing blanking) carry
-    ``NaN`` in the radius/diff arrays so the centerline geometry stays intact
-    for ParaView; binary masks carry ``0`` at trimmed-out positions.
+    ``0`` in the radius/diff arrays (and in all binary masks); use
+    ``KeepAfterBlankingTrim`` as the mask in ParaView to ignore them. (We
+    avoid ``NaN`` here because the legacy ASCII VTK writer round-trips
+    ``NaN`` as the literal token ``nan``, which trips newer ParaView
+    readers.)
 
     Parameters
     ----------
@@ -72,9 +77,9 @@ def perform_carotid_analysis(
 
         - ``KeepAfterBlankingTrim`` (int 0/1): which original nodes survived
           the leading/trailing blanking trim.
-        - ``Radius MIS interp`` (float, NaN where trimmed): the PCHIP baseline
+        - ``Radius MIS interp`` (float, 0 where trimmed): the PCHIP baseline
           radius across the bifurcation-mask window.
-        - ``Radius MIS diff (raw - interp)`` (float, NaN where trimmed): the
+        - ``Radius MIS diff (raw - interp)`` (float, 0 where trimmed): the
           residual ``raw - interp``.
         - ``BifurcationMask`` (int 0/1, 0 where trimmed): the
           ``n_bif_mask_nodes``-wide window around the CCA→ICA transition.
@@ -140,8 +145,8 @@ def perform_carotid_analysis(
     bulb_mask = _classify_bulb(diff, bulb_threshold_mm, bulb_expand_nodes)
 
     add_point_array(out, keep.astype(np.int32), "KeepAfterBlankingTrim")
-    add_point_array(out, _expand_to_full(r_interp, keep, np.nan), "Radius MIS interp")
-    add_point_array(out, _expand_to_full(diff, keep, np.nan), "Radius MIS diff (raw - interp)")
+    add_point_array(out, _expand_to_full(r_interp, keep, 0.0), "Radius MIS interp")
+    add_point_array(out, _expand_to_full(diff, keep, 0.0), "Radius MIS diff (raw - interp)")
 
     bif_full = np.zeros(n_full, dtype=np.int32)
     bif_full[keep] = bif_mask.astype(np.int32)
@@ -277,3 +282,232 @@ def _expand_to_full(trimmed, keep_mask, fill):
     full = np.full(keep_mask.size, fill, dtype=np.float64)
     full[keep_mask] = trimmed
     return full
+
+
+def perform_intracranial_transition_detection(
+    centerline,
+    cta_array,
+    cta_affine,
+    *,
+    distance_transform=None,
+    smoothing_sigma=2,
+    dt_max_mm=20,
+    dt_tolerance_mm=5,
+    dt_clip_mm=50,
+):
+    """
+    Detects the intracranial transition on a CCA→ICA centerline polydata.
+
+    Computes (or reuses) a clipped cranium distance transform, samples it at
+    each centerline point, smooths along arclength with a Gaussian filter, and
+    locates the first downstream local minimum (sign-change of the gradient
+    paired with second-derivative > 0) where the smoothed DT value falls below
+    ``dt_max_mm``. Among qualifying minima, the first one whose DT value is
+    within ``dt_tolerance_mm`` of the absolute minimum is selected — this
+    filters out spurious early minima at high DT values. Centerline nodes at
+    and proximal to the selected node are labelled extracranial; distal nodes
+    are intracranial. When no qualifying minimum is found, all nodes are
+    labelled extracranial.
+
+    Centerline points are assumed to be in **native world coordinates** (the
+    convention produced by ``pickle_to_vtk``); voxel indices are obtained via
+    ``round(inv(cta_affine) @ [x, y, z, 1])`` with no orientation branching.
+
+    Parameters
+    ----------
+    centerline : vtk.vtkPolyData
+        Per-vessel centerline polydata.
+    cta_array : numpy.ndarray
+        3D numpy array with the CTA image.
+    cta_affine : numpy.ndarray
+        4x4 affine matrix of the CTA.
+    distance_transform : numpy.ndarray, optional
+        Pre-computed clipped cranium distance transform on the full CTA grid
+        (shape == ``cta_array.shape``). If ``None`` it is computed locally.
+        Pass this in when running the detection multiple times on the same
+        case (e.g. LCA + RCA) to avoid recomputing the EDT.
+    smoothing_sigma : float, optional
+        Sigma (in nodes) of the Gaussian smoothing applied to the per-point DT
+        signal before differentiation. The default is 2.
+    dt_max_mm : float, optional
+        A local minimum is only considered intracranial-transition-eligible
+        when its smoothed DT value is below this threshold. The default is 20.
+    dt_tolerance_mm : float, optional
+        Among qualifying minima, only those within this tolerance of the
+        absolute minimum DT value are kept; the first such minimum is the
+        transition. The default is 5.
+    dt_clip_mm : float, optional
+        Maximum value used to clip the EDT (and to fill the lower half of the
+        CTA grid where the DT is not computed). The default is 50.
+
+    Returns
+    -------
+    out : vtk.vtkPolyData
+        Deep copy of ``centerline`` with the following point-data arrays added:
+
+        - ``Intracranial`` (int 0/1): per-point intracranial flag.
+        - ``DistanceTransformValueSmoothed`` (float, mm): the Gaussian-smoothed
+          per-point DT signal that drives detection.
+
+    transition_world : numpy.ndarray or None
+        World-coordinate (x, y, z) of the transition centerline point, or
+        ``None`` when no transition was found.
+    transition_ijk : numpy.ndarray or None
+        Voxel-coordinate (i, j, k) of the transition point, or ``None`` when
+        no transition was found.
+    distance_transform : numpy.ndarray
+        The full-CTA-grid clipped distance transform actually used (the input
+        if provided, else the freshly computed one). Cache this if you intend
+        to call again on the same case.
+
+    """
+    out = vtk.vtkPolyData()
+    out.DeepCopy(centerline)
+
+    if distance_transform is None:
+        distance_transform = _compute_cranium_distance_transform(cta_array, dt_clip_mm)
+
+    dt_values = _sample_dt_along_centerline(out, cta_affine, distance_transform)
+    dt_smoothed = gaussian_filter(dt_values, sigma=smoothing_sigma)
+
+    transition_idx = _find_first_local_minimum_idx(dt_smoothed, dt_max_mm, dt_tolerance_mm)
+
+    n_points = out.GetNumberOfPoints()
+    intracranial = np.zeros(n_points, dtype=np.int32)
+    if transition_idx is not None:
+        intracranial[transition_idx + 1:] = 1
+
+    add_point_array(out, intracranial, "Intracranial")
+    add_point_array(out, dt_smoothed.astype(np.float64), "DistanceTransformValueSmoothed")
+
+    transition_world = None
+    transition_ijk = None
+    if transition_idx is not None:
+        transition_world = np.array(out.GetPoint(transition_idx))
+        transition_ijk = np.round(
+            np.linalg.inv(cta_affine) @ np.append(transition_world, 1)
+        )[:3].astype(int)
+
+    return out, transition_world, transition_ijk, distance_transform
+
+
+def _compute_cranium_distance_transform(cta_array, dt_clip_mm):
+    """
+    Computes the cranium-distance-transform field used by intracranial-
+    transition detection.
+
+    Builds a binary cranium mask via :func:`compute_cranium_mask` (LoG +
+    largest-connected-component on the upper half of the CTA), takes the
+    Euclidean distance transform of its complement, embeds the result back
+    into a full-CTA-shaped grid (lower half filled with ``dt_clip_mm``), and
+    clips to ``[0, dt_clip_mm]``.
+
+    Parameters
+    ----------
+    cta_array : numpy.ndarray
+        3D numpy array with the CTA image.
+    dt_clip_mm : float
+        Distance-transform clipping value (mm).
+
+    Returns
+    -------
+    distance_transform : numpy.ndarray
+        Float array of shape ``cta_array.shape``.
+
+    """
+    half_s_coordinate = cta_array.shape[2] // 2
+    cranium_mask = compute_cranium_mask(cta_array)
+    upper_half_dt = distance_transform_edt(1 - cranium_mask)
+    distance_transform = np.full_like(cta_array, np.max(upper_half_dt), dtype=np.float64)
+    distance_transform[:, :, half_s_coordinate:] = upper_half_dt
+    distance_transform = np.clip(distance_transform, 0, dt_clip_mm)
+    return distance_transform
+
+
+def _sample_dt_along_centerline(centerline, cta_affine, distance_transform):
+    """
+    Samples a 3D scalar field at every centerline point.
+
+    Centerline points are assumed to be in native world coordinates; voxel
+    indices are obtained via ``round(inv(cta_affine) @ [x, y, z, 1])``. Points
+    that fall outside the volume are clamped to the nearest valid voxel.
+
+    Parameters
+    ----------
+    centerline : vtk.vtkPolyData
+        Per-vessel centerline polydata.
+    cta_affine : numpy.ndarray
+        4x4 affine matrix of the CTA.
+    distance_transform : numpy.ndarray
+        3D scalar field defined on the CTA voxel grid.
+
+    Returns
+    -------
+    values : numpy.ndarray
+        1-D float array of length ``centerline.GetNumberOfPoints()``.
+
+    """
+    n_points = centerline.GetNumberOfPoints()
+    inv_affine = np.linalg.inv(cta_affine)
+    shape = distance_transform.shape
+
+    values = np.empty(n_points, dtype=np.float64)
+    for idx in range(n_points):
+        world = np.array(centerline.GetPoint(idx))
+        ijk = np.round(inv_affine @ np.append(world, 1))[:3].astype(int)
+        ijk[0] = np.clip(ijk[0], 0, shape[0] - 1)
+        ijk[1] = np.clip(ijk[1], 0, shape[1] - 1)
+        ijk[2] = np.clip(ijk[2], 0, shape[2] - 1)
+        values[idx] = distance_transform[ijk[0], ijk[1], ijk[2]]
+    return values
+
+
+def _find_first_local_minimum_idx(dt_smoothed, dt_max_mm, dt_tolerance_mm):
+    """
+    Returns the index of the first downstream local minimum of a 1-D signal
+    whose value is below ``dt_max_mm`` and within ``dt_tolerance_mm`` of the
+    absolute minimum among qualifying minima. Returns ``None`` when no such
+    minimum exists.
+
+    A local minimum is detected by a sign-change of the gradient (from
+    negative to non-negative) paired with second-derivative > 0. The selection
+    rule (within-tolerance-of-absolute-minimum, then first) matches the
+    sandbox implementation in ``bulb_extraction/compute_cer_processing.py``.
+
+    Parameters
+    ----------
+    dt_smoothed : numpy.ndarray
+        1-D smoothed DT signal along the centerline.
+    dt_max_mm : float
+        Upper bound on the DT value at a qualifying minimum (mm).
+    dt_tolerance_mm : float
+        Tolerance around the absolute minimum DT value (mm).
+
+    Returns
+    -------
+    transition_idx : int or None
+        Index of the selected local minimum, or ``None``.
+
+    """
+    derivative = np.gradient(dt_smoothed)
+    second_derivative = np.gradient(derivative)
+
+    diff_sign = np.diff(np.sign(derivative))
+    if diff_sign.size == 0:
+        return None
+    local_minima_idx = np.where((diff_sign != 0) & (second_derivative[1:] > 0))[0]
+    if local_minima_idx.size == 0:
+        return None
+
+    qualifying = local_minima_idx[dt_smoothed[local_minima_idx] < dt_max_mm]
+    if qualifying.size == 0:
+        # No minimum within the DT-max gate; fall back to the first detected
+        # local minimum so the caller still gets a transition rather than
+        # silently dropping the result.
+        return int(local_minima_idx[0])
+
+    min_dt_value = np.min(dt_smoothed[qualifying])
+    near_absolute = qualifying[
+        dt_smoothed[qualifying] < min_dt_value + dt_tolerance_mm
+    ]
+    return int(near_absolute[0])
