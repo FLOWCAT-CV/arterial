@@ -10,6 +10,7 @@ from arterial.feature_extraction.global_features.feature_extraction import perfo
 from arterial.feature_extraction.mapping.mapping import extract_arterial_mapping
 from arterial.feature_extraction.mapping.utils import make_supersegment_plots
 from arterial.feature_extraction.vtk_centerline_geometry.feature_extraction import perform_radius_extraction, perform_curvature_extraction, perform_curve_id_extraction
+from arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis import perform_carotid_analysis
 from arterial.feature_extraction.vtk_centerline_geometry.utils import pickle_to_vtk
 from arterial.io.load_and_save_operations import *
 
@@ -456,6 +457,60 @@ class FeatureExtractor():
             out = perform_curve_id_extraction(out, peak_height=peak_height, peak_width=peak_width)
         if save_path is not None:
             print(f"Saving centerline with geometry arrays to {save_path}")
+            save_vtkpolydata(out, save_path)
+        return out
+
+    def add_carotid_analysis(self, centerline_model, mis_array_name="MaximumInscribedSphereRadius", n_bif_mask_nodes=20, bulb_threshold_mm=0.5, bulb_expand_nodes=1, save_path=None):
+        """
+        Detects the carotid bulb on a CCA→ICA centerline polydata (LCA / RCA
+        convention) and adds the intermediate signals as point-data arrays.
+        Thin wrapper around `perform_carotid_analysis` that adds the framework
+        save-on-disk convention.
+
+        Only valid on centerlines that span CCA → ICA. Raises if applied to a
+        centerline that lacks a CCA→ICA transition (no ICA-labelled points,
+        entirely ICA, or starting on ICA). The caller is responsible for
+        picking the right centerline — there is no auto-detection from
+        ``centerline_id``.
+
+        Parameters
+        ----------
+        centerline_model : vtk.vtkPolyData
+            Per-vessel centerline polydata spanning CCA → ICA. Must carry
+            `Blanking`, `VesselTypeName`, `Distance from origin`, and the
+            radius array named by `mis_array_name`.
+        mis_array_name : str, optional
+            Name of the radius array on the centerline. The default is
+            "MaximumInscribedSphereRadius".
+        n_bif_mask_nodes : int, optional
+            Total number of centerline nodes to mask around the CCA→ICA
+            transition before interpolating the radius. The default is 20.
+        bulb_threshold_mm : float, optional
+            A centerline node is labelled bulb when
+            ``|raw - interp| > bulb_threshold_mm``. The default is 0.5.
+        bulb_expand_nodes : int, optional
+            Symmetric expansion of every threshold-positive run of bulb
+            nodes, in nodes per side. The default is 1.
+        save_path : string or path-like object, optional
+            If provided, the augmented centerline is written to this path.
+
+        Returns
+        -------
+        out : vtk.vtkPolyData
+            New centerline polydata with `KeepAfterBlankingTrim`,
+            `Radius MIS interp`, `Radius MIS diff (raw - interp)`,
+            `BifurcationMask`, and `BulbMask` arrays added.
+
+        """
+        out = perform_carotid_analysis(
+            centerline_model,
+            mis_array_name=mis_array_name,
+            n_bif_mask_nodes=n_bif_mask_nodes,
+            bulb_threshold_mm=bulb_threshold_mm,
+            bulb_expand_nodes=bulb_expand_nodes,
+        )
+        if save_path is not None:
+            print(f"Saving centerline with carotid analysis arrays to {save_path}")
             save_vtkpolydata(out, save_path)
         return out
 
