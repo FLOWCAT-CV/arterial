@@ -14,9 +14,11 @@ from arterial.segmentation.utils import compute_cranium_mask
 def perform_carotid_analysis(
     centerline,
     *,
-    mis_array_name="MaximumInscribedSphereRadius",
-    n_bif_mask_nodes=20,
-    bulb_threshold_mm=0.5,
+    radius_array_name="Radius CE",
+    bulb_landmark_world_mm=None,
+    proximal_vessel_substring="CCA",
+    bif_mask_width_mm=25.0,
+    bulb_threshold_mm=(0.5, 0.2),
     bulb_expand_nodes=1,
 ):
     """
@@ -25,22 +27,42 @@ def perform_carotid_analysis(
 
     The algorithm proceeds in four steps:
 
-    1. **Trim leading/trailing blanking.** Drops only the leading and trailing
-       runs of ``Blanking == 1`` (which mark the edges of upstream / downstream
-       segments that are not part of the CCA→ICA path of interest). Middle
-       blanking points (the carotid bifurcation neighbourhood) are preserved.
-    2. **Find the CCA→ICA transition.** Identified as the first centerline
-       point whose ``VesselTypeName`` contains the substring ``"ICA"`` (matches
-       both ``LICA`` and ``RICA``).
-    3. **Interpolate the radius across the bifurcation.** Masks
-       ``n_bif_mask_nodes`` centerline nodes around the transition (split as
-       ``n // 2`` proximal + remainder starting at the transition itself) and
-       fits a PCHIP curve through the surviving non-masked points, evaluated
-       at every centerline arclength.
+    1. **Trim to the main proximal segment.** Drops everything before the
+       start of the *longest* run of points satisfying both
+       ``Blanking == 0`` and ``proximal_vessel_substring in VesselTypeName``
+       (i.e. the longest contiguous proximal-vessel chunk). This handles
+       short non-blanking stubs at the very start of the centerline that
+       would otherwise become the trim boundary under a naive
+       "first-non-blanking" rule. The trailing end drops the trailing run
+       of ``Blanking == 1``. Middle blanking (the carotid bifurcation
+       neighbourhood) is preserved.
+    2. **Locate the bifurcation centre.** If ``bulb_landmark_world_mm`` is
+       provided (e.g. the side's ``l-eica`` / ``r-eica`` landmark from the
+       landmark detector), the centre is the centerline node geometrically
+       closest to that 3-D point. Otherwise it falls back to the first node
+       whose ``VesselTypeName`` contains ``"ICA"`` (matches both ``LICA`` and
+       ``RICA``).
+    3. **Interpolate the radius across the bifurcation.** Masks all nodes
+       within an asymmetric arclength window around the centre: ``2/5``
+       of ``bif_mask_width_mm`` proximal of the centre and ``3/5`` distal
+       (so the 25 mm default spans 10 mm proximal + 15 mm distal toward
+       the ICA — the bulb sits distal to the transition, so the ICA side
+       gets the longer arm). A PCHIP curve is then fit through the
+       surviving non-masked points and evaluated at every centerline
+       arclength.
     4. **Classify bulb nodes.** Threshold-positive where
-       ``|raw_radius - r_interp| > bulb_threshold_mm``. Each contiguous run of
-       positives is then symmetrically extended by ``bulb_expand_nodes`` on
-       each side via a 1-D binary dilation (clamped to the array boundaries).
+       ``|raw_radius - r_interp|`` exceeds a side-dependent threshold:
+       proximal of the bifurcation centre, the proximal value of
+       ``bulb_threshold_mm`` (or the scalar, if uniform); distal of the
+       centre, the distal value. The default ``(0.4, 0.2)`` is stricter on
+       the CCA / BT side (rejects mild radius wiggles where the bulb
+       cannot be) and more permissive on the ICA side (catches the bulb's
+       gentle distal taper). The bulb is then defined as the full span
+       between the first and last threshold-positive node (interior dips
+       below threshold are kept as bulb — the bulb is treated as a single
+       connected segment). The span is then symmetrically extended by
+       ``bulb_expand_nodes`` on each side via a 1-D binary dilation
+       (clamped to the array boundaries).
 
     Returns a deep copy of the input polydata with five new point-data arrays
     added (see below). Trimmed-out points (leading/trailing blanking) carry
@@ -56,19 +78,42 @@ def perform_carotid_analysis(
         Per-vessel centerline polydata spanning CCA → ICA. Must carry
         ``Blanking`` (int 0/1), ``VesselTypeName`` (vtkStringArray),
         ``Distance from origin`` (float, monotone arclength in mm), and the
-        radius array named by ``mis_array_name``.
-    mis_array_name : str, optional
-        Name of the radius array on the centerline. The default is
-        ``"MaximumInscribedSphereRadius"`` (the VMTK convention).
-    n_bif_mask_nodes : int, optional
-        Total number of centerline nodes to mask around the CCA→ICA
-        transition before interpolating the radius. The default is 20.
-    bulb_threshold_mm : float, optional
-        A centerline node is labelled bulb when ``|raw - interp| >
-        bulb_threshold_mm``. The default is 0.5.
+        radius array named by ``radius_array_name``.
+    radius_array_name : str, optional
+        Name of the radius array on the centerline driving bulb detection.
+        The default is ``"Radius CE"`` (cross-section-equivalent radius
+        from ``perform_radius_extraction``; requires the case's surface
+        mesh upstream). Pass ``"MaximumInscribedSphereRadius"`` to fall
+        back to the VMTK MIS radius — useful when no surface mesh is
+        available (e.g. centerlines built without segmentation.vtk).
+    bulb_landmark_world_mm : sequence of float, optional
+        World-coordinate ``(x, y, z)`` of the side's bifurcation landmark
+        (typically ``l-eica`` for LCA and ``r-eica`` for RCA / BT-RCA from
+        the landmark detector). When given, the bifurcation-mask centre is
+        the centerline node closest to this point. When None, the centre is
+        recovered from ``VesselTypeName`` via string matching on ``"ICA"``.
+    proximal_vessel_substring : str, optional
+        Substring used to identify the proximal vessel segment in
+        ``VesselTypeName`` for the leading-edge trim. The default is
+        ``"CCA"`` (matches ``LCCA`` and ``RCCA``); use ``"BT"`` for the
+        BT-RCA centerline so the trim anchors on the brachiocephalic-trunk
+        proximal end.
+    bif_mask_width_mm : float, optional
+        Total arclength width (mm) of the bifurcation mask, split
+        asymmetrically as 2/5 proximal + 3/5 distal of the bifurcation
+        centre (favouring the ICA side where the bulb sits). The default
+        is 25.0 (10 mm proximal + 15 mm distal).
+    bulb_threshold_mm : float or (float, float), optional
+        Threshold for ``|raw - interp|``. As a scalar, applies uniformly
+        across the centerline. As a 2-tuple ``(proximal, distal)``, the
+        first value is used for nodes proximal of the bifurcation centre
+        (CCA / BT side) and the second for nodes distal of it (ICA side,
+        where the bulb sits). The bulb itself is the closed interval
+        between the first and last threshold-positive node. The default
+        is ``(0.4, 0.2)``.
     bulb_expand_nodes : int, optional
-        Symmetric expansion of every threshold-positive run of bulb nodes,
-        in nodes per side. The default is 1.
+        Symmetric expansion of the bulb span, in nodes per side. The
+        default is 1.
 
     Returns
     -------
@@ -77,21 +122,22 @@ def perform_carotid_analysis(
 
         - ``KeepAfterBlankingTrim`` (int 0/1): which original nodes survived
           the leading/trailing blanking trim.
-        - ``Radius MIS interp`` (float, 0 where trimmed): the PCHIP baseline
+        - ``Radius interp`` (float, 0 where trimmed): the PCHIP baseline
           radius across the bifurcation-mask window.
-        - ``Radius MIS diff (raw - interp)`` (float, 0 where trimmed): the
+        - ``Radius diff (raw - interp)`` (float, 0 where trimmed): the
           residual ``raw - interp``.
         - ``BifurcationMask`` (int 0/1, 0 where trimmed): the
-          ``n_bif_mask_nodes``-wide window around the CCA→ICA transition.
+          arclength window around the bifurcation centre.
         - ``BulbMask`` (int 0/1, 0 where trimmed): the final bulb
           classification.
 
     Raises
     ------
     RuntimeError
-        If no CCA→ICA transition is found (no ICA-labelled points, the
-        centerline is entirely ICA, or the centerline starts on ICA so there
-        are no CCA points proximal to interpolate from).
+        If the bifurcation centre cannot be located: in landmark mode, when
+        the centerline has no kept nodes; in string-match mode, when no
+        ICA-labelled points exist, the centerline is entirely ICA, or it
+        starts on ICA (no CCA proximal to interpolate from).
     ValueError
         If too few centerline nodes survive the bifurcation mask to fit a
         PCHIP curve through.
@@ -104,35 +150,44 @@ def perform_carotid_analysis(
 
     blanking_full = vtk_to_numpy(out.GetPointData().GetArray("Blanking")).astype(int)
     s_full = vtk_to_numpy(out.GetPointData().GetArray("Distance from origin")).astype(float)
-    r_full = vtk_to_numpy(out.GetPointData().GetArray(mis_array_name)).astype(float)
+    r_full = vtk_to_numpy(out.GetPointData().GetArray(radius_array_name)).astype(float)
+    points_full = np.array([out.GetPoint(i) for i in range(n_full)], dtype=float)
 
     vt_name_array = out.GetPointData().GetAbstractArray("VesselTypeName")
     if vt_name_array is None:
         raise RuntimeError(
-            "VesselTypeName point-data array is required for carotid analysis "
-            "but was not found on the input centerline."
+            "VesselTypeName point-data array is required for carotid "
+            "analysis but was not found on the input centerline."
         )
     vt_name_full = [vt_name_array.GetValue(i) for i in range(n_full)]
 
-    keep = _leading_trailing_blanking_keep_mask(blanking_full)
+    keep = _trim_to_main_segment_keep_mask(
+        vt_name_full, blanking_full, proximal_vessel_substring
+    )
     s = s_full[keep]
     r = r_full[keep]
+    points = points_full[keep]
     vt_name = [vt_name_full[i] for i in np.where(keep)[0]]
 
-    transition_idx = _find_cca_ica_transition(vt_name)
+    if bulb_landmark_world_mm is not None:
+        center_idx = _find_closest_centerline_idx(points, bulb_landmark_world_mm)
+    else:
+        center_idx = _find_cca_ica_transition(vt_name)
 
-    half = n_bif_mask_nodes // 2
-    lo = max(0, transition_idx - half)
-    hi = min(s.size, transition_idx + (n_bif_mask_nodes - half))
-
-    bif_mask = np.zeros(s.size, dtype=bool)
-    bif_mask[lo:hi] = True
+    # Asymmetric window: 2/5 of the total width proximal of the bifurcation
+    # centre, 3/5 distal (toward the ICA). The bulb sits distal to the
+    # CCA→ICA transition, so giving the ICA side more room keeps it inside
+    # the PCHIP-hide zone.
+    proximal_extent = float(bif_mask_width_mm) * 1.0 / 4.0
+    distal_extent = float(bif_mask_width_mm) * 3.0 / 4.0
+    delta_s = s - s[center_idx]
+    bif_mask = (delta_s >= -proximal_extent) & (delta_s <= distal_extent)
 
     fit_keep = ~bif_mask
     if int(fit_keep.sum()) < 4:
         raise ValueError(
             f"Only {int(fit_keep.sum())} points remain outside the bifurcation "
-            f"window — too few to fit a PCHIP curve. Reduce n_bif_mask_nodes."
+            f"window — too few to fit a PCHIP curve. Reduce bif_mask_width_mm."
         )
 
     s_fit = s[fit_keep]
@@ -142,11 +197,15 @@ def perform_carotid_analysis(
     r_interp = interpolator(s)
     diff = r - r_interp
 
-    bulb_mask = _classify_bulb(diff, bulb_threshold_mm, bulb_expand_nodes)
+    threshold_per_node = _build_per_node_threshold(bulb_threshold_mm, s, s[center_idx])
+    bulb_mask = _classify_bulb(diff, threshold_per_node, bulb_expand_nodes)
 
     add_point_array(out, keep.astype(np.int32), "KeepAfterBlankingTrim")
-    add_point_array(out, _expand_to_full(r_interp, keep, 0.0), "Radius MIS interp")
-    add_point_array(out, _expand_to_full(diff, keep, 0.0), "Radius MIS diff (raw - interp)")
+    # Names are intentionally source-agnostic ("Radius interp" rather than
+    # "Radius MIS interp") so they don't lie when `radius_array_name` is set
+    # to e.g. "Radius CE".
+    add_point_array(out, _expand_to_full(r_interp, keep, 0.0), "Radius interp")
+    add_point_array(out, _expand_to_full(diff, keep, 0.0), "Radius diff (raw - interp)")
 
     bif_full = np.zeros(n_full, dtype=np.int32)
     bif_full[keep] = bif_mask.astype(np.int32)
@@ -159,34 +218,101 @@ def perform_carotid_analysis(
     return out
 
 
-def _leading_trailing_blanking_keep_mask(blanking):
+def _trim_to_main_segment_keep_mask(vessel_type_name, blanking, proximal_substring):
     """
-    Returns a boolean mask (True = keep) that drops only the leading and
-    trailing runs of ``blanking == 1`` from a centerline. Middle blanking
-    points (e.g. the carotid bifurcation neighbourhood) are preserved.
+    Returns a boolean keep mask that anchors the leading edge on the *longest*
+    contiguous run of points satisfying both ``Blanking == 0`` and
+    ``proximal_substring in VesselTypeName``, and drops the trailing run of
+    ``Blanking == 1``. Middle blanking (e.g. the carotid bifurcation
+    neighbourhood) is preserved.
+
+    The longest-run rule for the proximal end is robust to short non-blanking
+    stubs at the very start of the centerline — those would otherwise become
+    the trim boundary under a naive "first non-blanking point" rule and bias
+    the PCHIP baseline.
 
     Parameters
     ----------
+    vessel_type_name : sequence of str
+        Per-point ``VesselTypeName`` along the centerline.
     blanking : np.ndarray
         1-D integer array of 0/1 blanking flags along the centerline.
+    proximal_substring : str
+        Substring used to identify the proximal vessel segment (e.g.
+        ``"CCA"`` for LCA / RCA, ``"BT"`` for BT-RCA).
 
     Returns
     -------
     keep : np.ndarray
         Boolean array of the same length, ``True`` for points to keep.
 
+    Raises
+    ------
+    RuntimeError
+        If no point matches both criteria (no proximal-vessel anchor found).
+
     """
     n = blanking.size
-    keep = np.ones(n, dtype=bool)
-    i = 0
-    while i < n and blanking[i] == 1:
-        keep[i] = False
-        i += 1
+
+    is_proximal = np.array(
+        [
+            proximal_substring in (name or "") and bl == 0
+            for name, bl in zip(vessel_type_name, blanking)
+        ],
+        dtype=bool,
+    )
+    if not is_proximal.any():
+        raise RuntimeError(
+            f"No non-blanking points with VesselTypeName containing "
+            f"{proximal_substring!r} were found on the centerline; cannot "
+            f"locate the proximal trim anchor."
+        )
+
+    edges = np.diff(np.concatenate(([0], is_proximal.astype(np.int8), [0])))
+    starts = np.where(edges == 1)[0]
+    ends = np.where(edges == -1)[0]  # exclusive
+    longest = int(np.argmax(ends - starts))
+    start_idx = int(starts[longest])
+
     j = n - 1
     while j >= 0 and blanking[j] == 1:
-        keep[j] = False
         j -= 1
+    end_idx = j + 1  # exclusive
+
+    keep = np.zeros(n, dtype=bool)
+    keep[start_idx:end_idx] = True
     return keep
+
+
+def _find_closest_centerline_idx(points, world_mm):
+    """
+    Returns the index of the centerline point closest to ``world_mm`` in 3-D
+    Euclidean distance.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        ``(N, 3)`` float array of centerline-point world coordinates.
+    world_mm : sequence of float
+        World-coordinate ``(x, y, z)`` to query.
+
+    Returns
+    -------
+    idx : int
+        Index of the closest centerline point.
+
+    Raises
+    ------
+    RuntimeError
+        If ``points`` is empty.
+
+    """
+    if points.size == 0:
+        raise RuntimeError(
+            "No centerline nodes available to match the bulb landmark against."
+        )
+    target = np.asarray(world_mm, dtype=float).reshape(3)
+    return int(np.argmin(np.linalg.norm(points - target, axis=1)))
 
 
 def _find_cca_ica_transition(vessel_type_name):
@@ -227,20 +353,66 @@ def _find_cca_ica_transition(vessel_type_name):
     return transition_idx
 
 
+def _build_per_node_threshold(bulb_threshold_mm, s, s_center):
+    """
+    Resolves the per-node bulb-classification threshold.
+
+    A scalar yields a uniform threshold; a 2-tuple ``(proximal, distal)``
+    yields the proximal value for nodes with arclength below ``s_center``
+    and the distal value otherwise.
+
+    Parameters
+    ----------
+    bulb_threshold_mm : float or sequence of two floats
+        Scalar (uniform) or ``(proximal, distal)`` pair.
+    s : np.ndarray
+        Per-node arclength along the centerline (mm).
+    s_center : float
+        Arclength of the bifurcation centre (mm).
+
+    Returns
+    -------
+    threshold : float or np.ndarray
+        Either a Python float (scalar case) or a per-node float array.
+
+    """
+    if np.ndim(bulb_threshold_mm) == 0:
+        return float(bulb_threshold_mm)
+    if len(bulb_threshold_mm) != 2:
+        raise ValueError(
+            f"bulb_threshold_mm must be a scalar or a 2-tuple "
+            f"(proximal, distal); got {bulb_threshold_mm!r}."
+        )
+    thr_proximal = float(bulb_threshold_mm[0])
+    thr_distal = float(bulb_threshold_mm[1])
+    return np.where(s < s_center, thr_proximal, thr_distal)
+
+
 def _classify_bulb(diff, threshold_mm, expand_nodes_each_side):
     """
-    Returns the bulb classification mask: ``|diff| > threshold_mm`` followed
-    by symmetric run expansion of ``expand_nodes_each_side`` nodes per side.
+    Returns the bulb classification mask. Threshold-positive nodes
+    (``|diff| > threshold_mm``) are first bridged into a single span — every
+    node between the first and last positive is labelled bulb, regardless of
+    whether it itself crosses the threshold — then the span is symmetrically
+    extended by ``expand_nodes_each_side`` nodes on each side.
+
+    Bridging makes detection robust to localised dips inside the bulb (e.g.
+    plaque or smoothing artefacts that briefly bring ``|diff|`` back under
+    threshold mid-bulb) at the cost of treating the bulb as a single connected
+    segment — so any spurious threshold crossing far from the true bulb will
+    drag the detected span to it.
 
     Parameters
     ----------
     diff : np.ndarray
         Residual ``raw_radius - r_interp`` per centerline node.
-    threshold_mm : float
-        Bulb-classification threshold (mm).
+    threshold_mm : float or np.ndarray
+        Bulb-classification threshold (mm). Either a scalar applied
+        uniformly, or a per-node array (e.g. for a side-dependent
+        threshold). Compared via numpy broadcasting against ``|diff|``.
     expand_nodes_each_side : int
-        Number of nodes by which each contiguous run of threshold-positive
-        nodes is extended on each side. ``0`` disables expansion.
+        Number of nodes by which the bridged bulb span is extended on each
+        side. ``0`` disables expansion.
 
     Returns
     -------
@@ -248,14 +420,20 @@ def _classify_bulb(diff, threshold_mm, expand_nodes_each_side):
         Boolean array of the same length as ``diff``.
 
     """
-    mask = np.abs(diff) > float(threshold_mm)
+    threshold_mask = np.abs(diff) > np.asarray(threshold_mm, dtype=float)
+    mask = np.zeros_like(threshold_mask)
+    if threshold_mask.any():
+        first = int(np.argmax(threshold_mask))
+        last = int(threshold_mask.size - 1 - np.argmax(threshold_mask[::-1]))
+        mask[first : last + 1] = True
     if expand_nodes_each_side <= 0 or not mask.any():
         return mask
     expanded = mask.copy()
     for _ in range(int(expand_nodes_each_side)):
         left = np.concatenate(([False], expanded[:-1]))
         right = np.concatenate((expanded[1:], [False]))
-        expanded = expanded | left | right
+        # expanded = expanded | left | right
+        expanded = expanded | right
     return expanded
 
 

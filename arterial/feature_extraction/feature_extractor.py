@@ -470,9 +470,13 @@ class FeatureExtractor():
     def add_carotid_analysis(
         self,
         centerline_model,
-        mis_array_name="MaximumInscribedSphereRadius",
-        n_bif_mask_nodes=20,
-        bulb_threshold_mm=0.5,
+        radius_array_name="Radius CE",
+        side=None,
+        use_landmark=False,
+        bulb_landmark_world_mm=None,
+        proximal_vessel_substring=None,
+        bif_mask_width_mm=25.0,
+        bulb_threshold_mm=0.3,
         bulb_expand_nodes=1,
         detect_intracranial=False,
         intracranial_smoothing_sigma=2,
@@ -482,38 +486,70 @@ class FeatureExtractor():
         save_path=None,
     ):
         """
-        Detects the carotid bulb on a CCA→ICA centerline polydata (LCA / RCA
-        convention) and adds the intermediate signals as point-data arrays.
-        Thin wrapper around `perform_carotid_analysis` that adds the framework
-        save-on-disk convention. When ``detect_intracranial`` is True, the
-        carotid bulb pass is followed by an intracranial-transition detection
-        pass (see ``add_intracranial_transition`` / ``perform_intracranial_transition_detection``)
-        and both sets of arrays land on the same returned polydata.
+        Detects the carotid bulb on a CCA→ICA centerline polydata (LCA / RCA /
+        BT-RCA convention) and adds the intermediate signals as point-data
+        arrays. Thin wrapper around `perform_carotid_analysis` that adds the
+        framework save-on-disk convention and the optional per-side landmark
+        resolution from ``{case_dir}/{mode}/landmarks.json``. When
+        ``detect_intracranial`` is True, the carotid bulb pass is followed by
+        an intracranial-transition detection pass (see
+        ``add_intracranial_transition`` /
+        ``perform_intracranial_transition_detection``) and both sets of arrays
+        land on the same returned polydata.
 
-        Only valid on centerlines that span CCA → ICA. Raises if applied to a
-        centerline that lacks a CCA→ICA transition (no ICA-labelled points,
-        entirely ICA, or starting on ICA). The caller is responsible for
-        picking the right centerline — there is no auto-detection from
-        ``centerline_id``.
+        Only valid on centerlines that span CCA → ICA. The caller is
+        responsible for picking the right centerline — there is no
+        auto-detection from ``centerline_id``.
 
         Parameters
         ----------
         centerline_model : vtk.vtkPolyData
             Per-vessel centerline polydata spanning CCA → ICA. Must carry
-            `Blanking`, `VesselTypeName`, `Distance from origin`, and the
-            radius array named by `mis_array_name`.
-        mis_array_name : str, optional
+            `Blanking`, `Distance from origin`, and the radius array named by
+            `radius_array_name`. `VesselTypeName` is required only as a fallback
+            when neither ``side`` nor ``bulb_landmark_world_mm`` resolves a
+            landmark.
+        radius_array_name : str, optional
             Name of the radius array on the centerline. The default is
-            "MaximumInscribedSphereRadius".
-        n_bif_mask_nodes : int, optional
-            Total number of centerline nodes to mask around the CCA→ICA
-            transition before interpolating the radius. The default is 20.
+            ``"Radius CE"``; pass ``"MaximumInscribedSphereRadius"`` to fall
+            back to the VMTK MIS radius when no surface mesh is available.
+        side : {"LCA", "RCA", "BT-RCA"}, optional
+            Used to resolve side-dependent defaults: the proximal-trim
+            substring (``"CCA"`` for LCA / RCA, ``"BT"`` for BT-RCA), and —
+            only when ``use_landmark`` is True — the bifurcation landmark
+            label to look up in ``{case_dir}/{mode}/landmarks.json``
+            (``l-eica`` for LCA; ``r-eica`` for RCA / BT-RCA).
+        use_landmark : bool, optional
+            When True (and ``bulb_landmark_world_mm`` not given explicitly),
+            load ``{case_dir}/{mode}/landmarks.json`` and centre the
+            bifurcation mask on the centerline node closest to the side's
+            landmark. If the file or label is missing, falls back to the
+            ``VesselTypeName`` string-match centre with a warning. Off by
+            default — the centre is recovered from ``VesselTypeName`` unless
+            the caller explicitly opts in. The default is False.
+        bulb_landmark_world_mm : sequence of float, optional
+            Explicit world-coordinate ``(x, y, z)`` of the side's
+            bifurcation landmark. Overrides both ``use_landmark`` and the
+            ``VesselTypeName`` fallback.
+        proximal_vessel_substring : str, optional
+            Substring used to identify the proximal vessel segment for the
+            leading-edge trim. When None, resolved from ``side``: ``"CCA"``
+            for LCA / RCA, ``"BT"`` for BT-RCA. Defaults to ``"CCA"`` when
+            ``side`` is also None. Explicit values override the side-based
+            mapping.
+        bif_mask_width_mm : float, optional
+            Total arclength width (mm) of the bifurcation mask, centred on
+            the bifurcation node. The default is 40.0 (4 cm: 2 cm proximal +
+            2 cm distal).
         bulb_threshold_mm : float, optional
-            A centerline node is labelled bulb when
-            ``|raw - interp| > bulb_threshold_mm``. The default is 0.5.
+            A centerline node is threshold-positive when
+            ``|raw - interp| > bulb_threshold_mm``. The bulb is the closed
+            interval between the first and last threshold-positive node
+            (interior dips below threshold are kept as bulb). The default
+            is 0.3.
         bulb_expand_nodes : int, optional
-            Symmetric expansion of every threshold-positive run of bulb
-            nodes, in nodes per side. The default is 1.
+            Symmetric expansion of the bulb span, in nodes per side. The
+            default is 1.
         detect_intracranial : bool, optional
             If True, additionally runs the intracranial-transition detection
             and adds ``Intracranial`` and ``DistanceTransformValueSmoothed``
@@ -541,16 +577,23 @@ class FeatureExtractor():
         -------
         out : vtk.vtkPolyData
             New centerline polydata with `KeepAfterBlankingTrim`,
-            `Radius MIS interp`, `Radius MIS diff (raw - interp)`,
+            `Radius interp`, `Radius diff (raw - interp)`,
             `BifurcationMask`, and `BulbMask` arrays added — plus
             `Intracranial` and `DistanceTransformValueSmoothed` when
             ``detect_intracranial`` is True.
 
         """
+        if bulb_landmark_world_mm is None and use_landmark and side is not None:
+            bulb_landmark_world_mm = self._resolve_bulb_landmark(side)
+        if proximal_vessel_substring is None:
+            proximal_vessel_substring = self._resolve_proximal_vessel_substring(side)
+
         out = perform_carotid_analysis(
             centerline_model,
-            mis_array_name=mis_array_name,
-            n_bif_mask_nodes=n_bif_mask_nodes,
+            radius_array_name=radius_array_name,
+            bulb_landmark_world_mm=bulb_landmark_world_mm,
+            proximal_vessel_substring=proximal_vessel_substring,
+            bif_mask_width_mm=bif_mask_width_mm,
             bulb_threshold_mm=bulb_threshold_mm,
             bulb_expand_nodes=bulb_expand_nodes,
         )
@@ -663,6 +706,64 @@ class FeatureExtractor():
         print(f"Saving cranium distance transform to {self._cranium_distance_transform_path}")
         save_numpy(distance_transform, self._cranium_distance_transform_path)
         return distance_transform
+
+    def _resolve_bulb_landmark(self, side):
+        """
+        Returns the world-coordinate ``(x, y, z)`` of the side's bifurcation
+        landmark from ``{case_dir}/{mode}/landmarks.json``. ``side`` must be
+        one of ``"LCA"``, ``"RCA"``, ``"BT-RCA"``; LCA maps to ``l-eica`` and
+        RCA / BT-RCA map to ``r-eica`` (the carotid-bifurcation landmarks
+        emitted by ``LandmarkDetector``). Returns ``None`` (with a warning)
+        when the file or label is missing, so the caller can fall back to
+        ``VesselTypeName`` string matching.
+        """
+        side_to_label = {"LCA": "l-eica", "RCA": "r-eica", "BT-RCA": "r-eica"}
+        if side not in side_to_label:
+            raise ValueError(
+                f"Unknown side {side!r}; expected one of {list(side_to_label)}."
+            )
+        label = side_to_label[side]
+        landmarks_path = os.path.join(self.case_dir, self.mode, "landmarks.json")
+        if not os.path.isfile(landmarks_path):
+            print(
+                f"WARNING: landmarks.json not found at {landmarks_path}; "
+                f"falling back to VesselTypeName string match for {side}."
+            )
+            return None
+        landmarks = load_json(landmarks_path)
+        if label not in landmarks:
+            print(
+                f"WARNING: label {label!r} not found in {landmarks_path}; "
+                f"falling back to VesselTypeName string match for {side}."
+            )
+            return None
+        coord = tuple(landmarks[label])
+        # The landmark detector emits (0, 0, 0) as a sentinel when no
+        # reliable landmark was found; treat that as "missing" and fall back.
+        if all(abs(float(c)) < 1e-6 for c in coord):
+            print(
+                f"WARNING: {label!r} in {landmarks_path} is the (0, 0, 0) "
+                f"sentinel (no reliable landmark detected); falling back to "
+                f"VesselTypeName string match for {side}."
+            )
+            return None
+        return coord
+
+    def _resolve_proximal_vessel_substring(self, side):
+        """
+        Returns the ``VesselTypeName`` substring used to anchor the leading-
+        edge trim in carotid analysis. ``"CCA"`` for LCA / RCA (matches
+        ``LCCA`` / ``RCCA``); ``"BT"`` for BT-RCA (brachiocephalic-trunk
+        proximal end). Defaults to ``"CCA"`` when ``side`` is None.
+        """
+        if side is None:
+            return "CCA"
+        side_to_substring = {"LCA": "CCA", "RCA": "CCA", "BT-RCA": "BT"}
+        if side not in side_to_substring:
+            raise ValueError(
+                f"Unknown side {side!r}; expected one of {list(side_to_substring)}."
+            )
+        return side_to_substring[side]
 
     def is_local_featurized(self):
         if "features femoral" in self.local_graph.nodes[0].keys():
