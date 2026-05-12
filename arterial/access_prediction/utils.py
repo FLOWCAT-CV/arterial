@@ -128,6 +128,20 @@ class ArterialGNetDatasetInference(Dataset):
         for src, dst in raw_segment_graph.edges:
             segment_edge_index.append(np.array([src, dst]))
             segment_egde_attr.append(raw_segment_graph.edges[src, dst]["features_list"])
+        # Raise a descriptive error when the supersegment collapses to a single
+        # segment-graph node (no segment edges). Without this guard, the
+        # implicit `np.array([])` below produces a 1-D shape (0,) tensor that
+        # breaks normalize_segment_edge_features with a cryptic
+        # "IndexError: too many indices for tensor of dimension 1". Observed
+        # upstream cause: a degree>2 access start node mishandled by
+        # supersegment_prediction (mapping/utils.py:237–302), which collapses
+        # the supersegment to AA-only.
+        if len(raw_segment_graph.edges) == 0:
+            raise ValueError(
+                f"Supersegment has {len(raw_segment_graph.nodes)} segment-graph node(s) "
+                f"and 0 edges; cannot run access prediction on a degenerate supersegment "
+                f"(typical cause: vessel-type path collapsed to a single segment)."
+            )
         data.segment_data.pos = torch.tensor(np.array(segment_pos), dtype=torch.float32)
         data.segment_data.x = self.normalize_segment_node_features(torch.tensor(np.array(segment_x), dtype=torch.float32))
         data.segment_data.edge_attr = self.normalize_segment_edge_features(torch.tensor(np.array(segment_egde_attr), dtype=torch.float32))
