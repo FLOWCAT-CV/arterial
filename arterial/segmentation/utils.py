@@ -206,7 +206,7 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_b
             print("TotalSegmentator failed, using laplacian-gaussian filter instead...")
             return slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=True)
 
-        # Get lowest coordinate with a non-zero voxel from cranium mask 
+        # Get lowest coordinate with a non-zero voxel from cranium mask
         nonzero_coordinates = np.nonzero(cranium_mask)
         # Get s coordinate for slicing into head and neck
         lower_slicing_i_coordinate = min(nonzero_coordinates[0])
@@ -216,16 +216,40 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_b
         lower_slicing_k_coordinate = min(nonzero_coordinates[2])
         upper_slicing_k_coordinate = max(nonzero_coordinates[2])
 
+    # Sanity-check the slicing bounds. If the cranium mask reaches near k=0
+    # of the full volume (TotalSegmentator path) or the TS-derived bounds
+    # otherwise leave one of the slabs degenerately thin, fall back to the
+    # Laplacian path — its mask is constrained to the upper half of the volume
+    # and is robust to that failure mode. nnUNet's preprocessing crashes with
+    # an opaque "zero-size array to reduction operation minimum" inside skimage
+    # resize when the neck slab is empty, hence the explicit guard here.
+    MIN_SLAB_VOXELS = 32
+    neck_slab_voxels = int(1.1 * lower_slicing_k_coordinate)
+    head_slab_voxels = upper_slicing_k_coordinate - lower_slicing_k_coordinate
+    if neck_slab_voxels < MIN_SLAB_VOXELS or head_slab_voxels < MIN_SLAB_VOXELS:
+        if not use_laplacian:
+            print(f"Cranium mask produces a degenerate slab "
+                  f"(lower_k={lower_slicing_k_coordinate}, upper_k={upper_slicing_k_coordinate}, "
+                  f"neck_voxels={neck_slab_voxels}, head_voxels={head_slab_voxels}); "
+                  f"falling back to Laplacian-gaussian cranium estimator.")
+            return slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=True, return_bounding_box=return_bounding_box)
+        raise ValueError(
+            f"Both TotalSegmentator and Laplacian cranium estimators produced a "
+            f"degenerate head/neck slab (lower_k={lower_slicing_k_coordinate}, "
+            f"upper_k={upper_slicing_k_coordinate}, neck_voxels={neck_slab_voxels}, "
+            f"head_voxels={head_slab_voxels}). Cannot proceed with head/neck split."
+        )
+
     if return_bounding_box:
         bounding_box = (lower_slicing_i_coordinate, upper_slicing_i_coordinate, lower_slicing_j_coordinate, upper_slicing_j_coordinate, lower_slicing_k_coordinate, upper_slicing_k_coordinate)
 
     # Slice cta into two (head and neck)
     cta_head_array = cta_array[
-        lower_slicing_i_coordinate:upper_slicing_i_coordinate, 
-        lower_slicing_j_coordinate:upper_slicing_j_coordinate, 
+        lower_slicing_i_coordinate:upper_slicing_i_coordinate,
+        lower_slicing_j_coordinate:upper_slicing_j_coordinate,
         lower_slicing_k_coordinate:upper_slicing_k_coordinate
         ]
-    
+
     # For the neck (lower part of the image) we add some extra slices to have some overlap
     # This should smooth edge effects upon merge after separate segmentation
     cta_neck_array = cta_array[:, :, : int(1.1 * lower_slicing_k_coordinate)]
