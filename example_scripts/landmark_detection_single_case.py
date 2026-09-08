@@ -1,4 +1,5 @@
-#   Copyright 2025 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain
+#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+#    SPDX-License-Identifier: CC-BY-NC-4.0
 
 """
 Single case landmark detection. This script shows the most common use case for the LandmarkDetector class.

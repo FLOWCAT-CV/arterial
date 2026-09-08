@@ -1,3 +1,6 @@
+#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+#    SPDX-License-Identifier: CC-BY-NC-4.0
+
 import sys, pickle
 
 from vmtk import vtkvmtk

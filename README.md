@@ -3,7 +3,7 @@
 **An AI framework for automated vascular analysis and endovascular intervention planning**
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue.svg)](LICENSE)
 
 ---
 
@@ -380,9 +380,17 @@ A multi-scale graph neural network (ArterialGNet) designed to predict impossible
 
 ## License
 
-This work is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/).
+Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 
-![CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)
+Arterial is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/) (CC BY-NC 4.0). See [LICENSE](LICENSE) for the full terms.
+
+[![CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc/4.0/)
+
+**Noncommercial use only.** You may share and adapt this work for noncommercial purposes, provided you give appropriate credit and indicate if changes were made. Commercial use requires a separate license — contact the authors.
+
+The same noncommercial terms apply to the trained model weights distributed with this project.
+
+This license covers Arterial itself. Its dependencies carry their own licenses (nnU-Net and MONAI under Apache-2.0, VMTK under BSD, PyTorch Geometric under MIT), which you must comply with independently.
 
 ---
 
