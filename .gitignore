@@ -1,6 +1,10 @@
 # Added by Pere
 *.DS_Store
 *.model
+# Model weights are downloaded from the Hugging Face Hub into arterial/models/
+# (see scripts/download_models.sh). They are never committed.
+arterial/models/
+
 # Raw model files stay local; transport them through model_chunks/.
 *.pth
 *.pth.tmp

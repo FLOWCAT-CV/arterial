@@ -20,6 +20,16 @@ Arterial is a comprehensive AI framework for fully automated vascular tortuosity
 
 The framework processes a single CTA image and outputs a complete vascular analysis including segmentation masks, labeled centerlines, geometric features, and procedural predictions—all without manual input.
 
+<p align="center">
+  <img src="documentation/figures/arterial_pipeline.png"
+       alt="Arterial pipeline: head-and-neck basal CTA, vascular segmentation, centerline extraction, vessel labelling, and multi-scale feature extraction"
+       width="100%">
+</p>
+
+<p align="center">
+  <em>The Arterial pipeline, from a basal head-and-neck CTA through to multi-scale vascular features.</em>
+</p>
+
 ---
 
 ## Key Features
@@ -116,54 +126,104 @@ Add the Arterial directory to your environment:
 export arterial_dir="/path/to/arterial/arterial"
 ```
 
-### Model Weights Via Plain Git
+### Model Weights
 
-Raw `.pth` files remain ignored in this repo. To move them through plain `git`, export them into deterministic chunk files plus a manifest under `model_chunks/`, commit those artifacts, and rebuild the original paths on the destination machine.
+The trained weights are **not** stored in this repository. They are distributed through the
+Hugging Face Hub:
 
-Source machine:
+> 🤗 **[FLOWCAT-CV/arterial-models](https://huggingface.co/FLOWCAT-CV/arterial-models)**
+
+They are gated under CC BY-NC 4.0. Access is granted **automatically** the moment you accept the
+terms — there is no waiting period and no manual approval — but you must accept them once before
+any download will work.
+
+#### Recommended: the Hugging Face CLI
+
+**1. Install the client**
 
 ```bash
-python scripts/export_pth_chunks.py --clean
+pip install huggingface_hub
 ```
 
-Destination machine:
+**2. Accept the licence**
+
+Open **[the model page](https://huggingface.co/FLOWCAT-CV/arterial-models)**, sign in, and click
+*Agree and access repository*. You will be asked to confirm noncommercial use and to acknowledge
+that these are research models, not an approved medical device.
+
+**3. Log in**
+
+Create an access token with the **read** role at
+[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), then:
 
 ```bash
-python scripts/rebuild_pth_chunks.py --skip-existing
+hf auth login
 ```
 
-The export script scans `arterial/**/*.pth`, writes sub-100MB chunk files under `model_chunks/arterial/...`, and records file hashes in `model_chunks/manifest.json`. The rebuild script restores the original `.pth` paths expected by the runtime and verifies SHA256 checksums after reconstruction.
+Paste the token when prompted. This is a one-off step per machine.
 
-### Recommended Branch Workflow For Model Payloads
-
-Keep code changes on `main`, then create a dedicated payload branch from the exact code commit that introduced the chunking scripts and docs.
+**4. Download**
 
 ```bash
-# On the code commit you want to deploy
-git checkout main
-git pull
-
-# Create a versioned payload branch
-git checkout -b models/2026-03
-
-# Export chunk artifacts
-python scripts/export_pth_chunks.py --clean
+bash scripts/download_models.sh
 ```
 
-Commit chunk payloads in small batches so each push is easier to retry and review. A practical order is:
+The script downloads about 1.2 GB into `$arterial_dir/models`, then verifies that every expected
+checkpoint arrived. If you have not accepted the licence yet, it says so and points you back to
+step 2.
 
-1. access prediction plus landmark detection chunks
-2. vessel labelling chunks
-3. extracranial segmentation chunks
-4. intracranial segmentation chunks
-5. mandible segmentation chunks
-
-On the destination machine, clone or pull the corresponding payload branch before rebuilding:
+It then writes the models location into your shell startup file — `~/.zshrc` for zsh,
+`~/.bash_profile` or `~/.bashrc` for bash — so it survives new terminals:
 
 ```bash
-git checkout models/2026-03
-git pull
-python scripts/rebuild_pth_chunks.py --skip-existing
+# >>> arterial models >>>
+export ARTERIAL_MODELS_DIR="/path/to/arterial/arterial/models"
+# <<< arterial models <<<
+```
+
+The block is marked, so running the script again updates it in place rather than appending a second
+copy, and nothing else in the file is touched. Pass `--no-persist` to skip this and set the variable
+yourself. Run `source ~/.zshrc`, or open a new terminal, for it to take effect.
+
+*(For more on the CLI, see the [Hugging Face CLI guide](https://huggingface.co/docs/huggingface_hub/guides/cli).)*
+
+#### Installing the weights somewhere else
+
+By default the weights land in `$arterial_dir/models`, which is gitignored. To keep them elsewhere —
+a shared drive, a larger volume, a location several checkouts can share — set `ARTERIAL_MODELS_DIR`
+before running the script, and keep it set so Arterial can find them afterwards:
+
+```bash
+export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
+bash scripts/download_models.sh
+```
+
+`ARTERIAL_MODELS_DIR` always takes precedence over the default location.
+
+#### Offline and air-gapped machines
+
+Clinical environments frequently have no outbound network access. Download on a connected machine,
+copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
+
+```bash
+# on a connected machine
+hf download FLOWCAT-CV/arterial-models --local-dir arterial-models
+tar czf arterial-models.tar.gz arterial-models
+
+# on the target machine
+tar xzf arterial-models.tar.gz -C /data
+export ARTERIAL_MODELS_DIR=/data/arterial-models
+```
+
+#### Layout
+
+```
+<models directory>/
+├── access_prediction/     dataset.json, fold_{0..4}/model_weights.pth
+├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
+├── segmentation/          extracranial_vessels/, intracranial_vessels/,
+│                          totalsegmentator_mandible/
+└── vessel_labelling/      extracranial_vessels/
 ```
 
 ---
