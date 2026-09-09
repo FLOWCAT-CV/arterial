@@ -157,3 +157,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Local notes for Claude Code
+CLAUDE.md
