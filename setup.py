@@ -13,11 +13,13 @@ setup(
     license="CC-BY-NC-4.0",
     license_files=["LICENSE"],
     url="https://github.com/FLOWCAT-CV/arterial",
+    python_requires=">=3.11",
     classifiers=[
         "License :: Other/Proprietary License",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
     ],
     packages=find_packages(),
     package_data={

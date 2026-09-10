@@ -2,6 +2,8 @@
 
 ## System requirements
 
+Python 3.11.
+
 ## Operating System
 Arterial has been developed and tested on Linux (Ubuntu 22.04), and MacOS (14.X, 15.X).
 
@@ -10,7 +12,6 @@ Arterial has been developed and tested on Linux (Ubuntu 22.04), and MacOS (14.X,
 For Ubuntu:
 
 ```bash
-# <=3.9 necessary for vmtk, otherwise it won't install
 conda create -n arterial_env python=3.11
 conda activate arterial_env
 conda install -c conda-forge vmtk
@@ -22,8 +23,7 @@ pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6
 For MacOS (outdated, not tested):
 
 ```bash
-# <=3.9 necessary for vmtk, otherwise it won't install
-conda create -n arterial_env python=3.9
+conda create -n arterial_env python=3.11
 conda activate arterial_env
 conda install -c conda-forge vmtk
 
@@ -35,7 +35,7 @@ pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https:
 To clone repo and install arterial as a Python package:
 
 ```bash
-git clone --branch no_slicer https://github.com/FLOWCAT-CV/arterial.git
+git clone https://github.com/FLOWCAT-CV/arterial.git
 cd arterial
 pip install -e .
 ```

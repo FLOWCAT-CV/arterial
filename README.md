@@ -2,7 +2,7 @@
 
 **An AI framework for automated vascular analysis and endovascular intervention planning**
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue.svg)](LICENSE)
 
 ---
@@ -67,7 +67,7 @@ Arterial is organized into specialized modules, each with detailed documentation
 ### System Requirements
 
 - **Operating System**: Linux (Ubuntu 22.04 tested), macOS (14.x, 15.x)
-- **Python**: 3.9+ (3.11 recommended for Linux)
+- **Python**: 3.11
 - **GPU**: NVIDIA GPU with CUDA support (recommended for inference)
 
 ### Linux (Ubuntu)
@@ -92,8 +92,8 @@ pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 \
 ### macOS
 
 ```bash
-# Create conda environment (Python 3.9 required for VMTK on macOS)
-conda create -n arterial_env python=3.9
+# Create conda environment
+conda create -n arterial_env python=3.11
 conda activate arterial_env
 
 # Install VMTK
