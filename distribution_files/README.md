@@ -36,7 +36,7 @@ it downloads the archive, verifies its SHA256 against the published one, extract
 expects, and checks the result:
 
 ```bash
-bash scripts/download_models.sh --record <RECORD_ID>
+bash scripts/download_models.sh --record 22694951
 ```
 
 Otherwise, download `arterial-models-v1.tar.gz` and `arterial-models-v1.tar.gz.sha256` from this
@@ -115,7 +115,8 @@ and accessibility predictions.
 The Arterial weights are released under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
 — **noncommercial use only**, with attribution.
 
-Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain,
+and Universitat de Barcelona (UB). Intellectual property is jointly held by VHIR and UB.
 
 The same terms apply to the Arterial source code. Arterial's dependencies carry their own licences
 (nnU-Net and MONAI under Apache-2.0, VMTK under BSD, PyTorch Geometric under MIT), which you must
@@ -212,8 +213,13 @@ model and nnU-Net, as their authors ask:
 
 ## Acknowledgments
 
-Developed by the FlowCAT lab, a division of the Stroke Research group at the Vall d'Hebron Research
-Institute (VHIR), Barcelona, Spain.
+Developed at the Vall d'Hebron Research Institute (VHIR), Barcelona, Spain, by the FlowCAT lab of the
+Stroke Research group, in collaboration with the Universitat de Barcelona (UB).
+
+**Funding.** This work was supported by the Catalan Health Department (Departament de Salut,
+Generalitat de Catalunya) through a pre-doctoral scholarship (PERIS PIF-Salut 2021, grant
+SLT017/20/000180), and by the Spanish Health Institute Carlos III (Instituto de Salud Carlos III,
+Ministerio de Ciencia e Innovación, Gobierno de España) through grant PI21/01967.
 
 Built on [nnU-Net](https://github.com/MIC-DKFZ/nnUNet), [VMTK](https://github.com/vmtk/vmtk),
 [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) and [MONAI](https://github.com/Project-MONAI/MONAI).

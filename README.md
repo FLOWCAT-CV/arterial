@@ -132,7 +132,7 @@ The trained weights are **not** stored in this repository. They are archived on 
 and downloaded by a bundled script. No account, no token and no licence gate: the weights come down
 as a single archive, verified against the published checksum.
 
-> 📦 **[Zenodo record](https://zenodo.org/records/<RECORD_ID>)** — DOI `10.5281/zenodo.<RECORD_ID>`
+> 📦 **[Zenodo record](https://zenodo.org/records/22694951)** — DOI `10.5281/zenodo.22694951`
 
 Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 `segmentation/totalsegmentator_mandible/`, which is redistributed from
@@ -142,7 +142,7 @@ Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 #### Download
 
 ```bash
-bash scripts/download_models.sh --record <RECORD_ID>
+bash scripts/download_models.sh --record 22694951
 ```
 
 That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
@@ -173,7 +173,7 @@ before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
-bash scripts/download_models.sh --record <RECORD_ID>
+bash scripts/download_models.sh --record 22694951
 ```
 
 `ARTERIAL_MODELS_DIR` always takes precedence over the default location.
@@ -186,7 +186,7 @@ copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
 ```bash
 # on a connected machine
 curl -L -o arterial-models-v1.tar.gz \
-  "https://zenodo.org/records/<RECORD_ID>/files/arterial-models-v1.tar.gz?download=1"
+  "https://zenodo.org/records/22694951/files/arterial-models-v1.tar.gz?download=1"
 
 # on the target machine
 mkdir -p /data/arterial-models
