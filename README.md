@@ -3,7 +3,7 @@
 **An AI framework for automated vascular analysis and endovascular intervention planning**
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue.svg)](LICENSE)
+[![License: PolyForm NC 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
 
 ---
 
@@ -460,17 +460,26 @@ A multi-scale graph neural network (ArterialGNet) designed to predict impossible
 
 ## License
 
-Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+Intellectual property is jointly held by VHIR and UB.
 
-Arterial is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/) (CC BY-NC 4.0). See [LICENSE](LICENSE) for the full terms.
+**Source code** — this repository — is licensed under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).
+See [LICENSE](LICENSE) for the full terms. Any noncommercial purpose is permitted, and use by
+educational institutions, public research organisations, and public health or safety organisations is
+permitted regardless of funding source. Commercial use requires a separate licence — contact the authors.
 
-[![CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc/4.0/)
+**Trained model weights** — distributed separately via Zenodo, not in this repository — are licensed
+under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): noncommercial use only, with
+attribution. **One exception:** `<models directory>/segmentation/totalsegmentator_mandible/` is
+redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the
+[Apache License 2.0](licenses/Apache-2.0.txt), copyright the TotalSegmentator authors. Apache-2.0, not
+CC BY-NC 4.0, governs that model — including commercial use of it — and its licence text and
+attribution notice ship inside that directory as `LICENSE` and `NOTICE`. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full statement.
 
-**Noncommercial use only.** You may share and adapt this work for noncommercial purposes, provided you give appropriate credit and indicate if changes were made. Commercial use requires a separate license — contact the authors.
-
-The same noncommercial terms apply to the trained model weights distributed with this project, **with one exception**: `<models directory>/segmentation/totalsegmentator_mandible/` is redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the [Apache License 2.0](licenses/Apache-2.0.txt), copyright the TotalSegmentator authors. Apache-2.0, not CC BY-NC 4.0, governs that model — including commercial use of it — and its licence text and attribution notice ship inside that directory as `LICENSE` and `NOTICE`. The weights are unmodified; the directory is renamed for nnU-Net, only fold 0 is included, and Arterial uses only its skull class to split a head-and-neck CTA. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full statement.
-
-This license covers Arterial itself. Its dependencies carry their own licenses (nnU-Net and MONAI under Apache-2.0, VMTK under BSD, PyTorch Geometric under MIT), which you must comply with independently.
+Arterial's dependencies carry their own licences (nnU-Net and MONAI under Apache-2.0, VMTK under BSD,
+PyTorch Geometric under MIT), which you must comply with independently.
 
 ---
 

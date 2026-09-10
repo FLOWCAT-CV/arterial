@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-#    SPDX-License-Identifier: CC-BY-NC-4.0
+#    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+#    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 from setuptools import setup, find_packages
 
@@ -10,7 +10,7 @@ setup(
     description="Arterial: framework for vascular tortuosity analysis",
     author="Pere Canals",
     author_email="perecanalscanals@gmail.com",
-    license="CC-BY-NC-4.0",
+    license="PolyForm-Noncommercial-1.0.0",
     license_files=["LICENSE"],
     url="https://github.com/FLOWCAT-CV/arterial",
     python_requires=">=3.11",

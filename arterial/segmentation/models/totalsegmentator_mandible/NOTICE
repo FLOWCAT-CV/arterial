@@ -3,7 +3,7 @@ TotalSegmentator - craniofacial_structures model
 
 This directory contains a redistributed copy of a pretrained model from the
 TotalSegmentator project. It is NOT an Arterial model, and it is NOT covered by
-the CC BY-NC 4.0 licence that applies to the rest of this repository.
+the CC BY-NC 4.0 licence that applies to the Arterial model weights.
 
   Upstream project  https://github.com/wasserth/TotalSegmentator
   Copyright         The TotalSegmentator authors

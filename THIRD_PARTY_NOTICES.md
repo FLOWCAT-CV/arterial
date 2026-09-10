@@ -1,6 +1,7 @@
 # Third-party notices
 
-Arterial itself is licensed under [CC BY-NC 4.0](LICENSE). This file lists third-party material that
+Arterial's source code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE); its
+own trained weights are released under CC BY-NC 4.0 (see the end of this file). This file lists third-party material that
 Arterial **redistributes**, and the third-party software it **depends on**. The two are different in
 kind: redistributed material carries its own licence wherever it travels, including inside the
 Arterial model weights repository, and that licence is not replaced by Arterial's.

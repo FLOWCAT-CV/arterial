@@ -115,10 +115,12 @@ and accessibility predictions.
 The Arterial weights are released under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
 — **noncommercial use only**, with attribution.
 
-Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain,
-and Universitat de Barcelona (UB). Intellectual property is jointly held by VHIR and UB.
+Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+Intellectual property is jointly held by VHIR and UB.
 
-The same terms apply to the Arterial source code. Arterial's dependencies carry their own licences
+The Arterial source code is licensed separately, under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) —
+see the [repository](https://github.com/FLOWCAT-CV/arterial). Arterial's dependencies carry their own licences
 (nnU-Net and MONAI under Apache-2.0, VMTK under BSD, PyTorch Geometric under MIT), which you must
 comply with independently.
 

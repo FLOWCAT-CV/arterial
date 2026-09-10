@@ -54,7 +54,7 @@ The module intelligently combines different resolution models to balance accurac
 
 > **`totalsegmentator_mandible/` is third-party.** It is the `craniofacial_structures` model
 > (nnU-Net `Dataset115_mandible`) from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator),
-> redistributed unmodified under the Apache License 2.0 — not under Arterial's CC BY-NC 4.0 terms.
+> redistributed unmodified under the Apache License 2.0 — not under the CC BY-NC 4.0 terms of the Arterial weights.
 > Its `LICENSE` and `NOTICE` files ship inside the directory and must stay with the weights wherever
 > they are copied. Arterial loads it directly with nnU-Net, without TotalSegmentator's own pre- and
 > post-processing, and uses only class 3 (`skull`) of its seven classes. See
