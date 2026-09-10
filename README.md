@@ -148,8 +148,10 @@ pip install huggingface_hub
 **2. Accept the licence**
 
 Open **[the model page](https://huggingface.co/FLOWCAT-CV/arterial-models)**, sign in, and click
-*Agree and access repository*. You will be asked to confirm noncommercial use and to acknowledge
-that these are research models, not an approved medical device.
+*Agree and access repository*. You will be asked to confirm noncommercial use of the Arterial
+weights and to acknowledge that these are research models, not an approved medical device. The
+noncommercial terms do not extend to the third-party TotalSegmentator model in the repository, which
+stays under Apache-2.0.
 
 **3. Log in**
 
@@ -222,9 +224,14 @@ export ARTERIAL_MODELS_DIR=/data/arterial-models
 ├── access_prediction/     dataset.json, fold_{0..4}/model_weights.pth
 ├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
 ├── segmentation/          extracranial_vessels/, intracranial_vessels/,
-│                          totalsegmentator_mandible/
+│                          totalsegmentator_mandible/  (+ LICENSE, NOTICE — Apache-2.0)
 └── vessel_labelling/      extracranial_vessels/
 ```
+
+All of these are Arterial models under CC BY-NC 4.0 except `segmentation/totalsegmentator_mandible/`,
+which is redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under
+Apache-2.0 and carries its own `LICENSE` and `NOTICE`. Keep those two files with the weights if you
+copy them anywhere — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -397,6 +404,42 @@ If you use Arterial in your research, please cite:
 
 > 🔗 [https://www.sciencedirect.com/science/article/pii/S0895611122001409](https://www.sciencedirect.com/science/article/pii/S0895611122001409)
 
+### Third-party models
+
+Arterial's default pipeline runs the `craniofacial_structures` model from TotalSegmentator to split
+a head-and-neck CTA. Its authors ask that you cite the following alongside your own work:
+
+```bibtex
+@article{wasserthal2023totalsegmentator,
+  title={TotalSegmentator: Robust Segmentation of 104 Anatomic Structures in CT Images},
+  author={Wasserthal, Jakob and Breit, Hanns-Christian and Meyer, Manfred T. and Pradella, Maurice and Hinck, Daniel and Sauter, Alexander W. and Heye, Tobias and Boll, Daniel and Cyriac, Joshy and Yang, Shan and Bach, Michael and Segeroth, Martin},
+  journal={Radiology: Artificial Intelligence},
+  volume={5},
+  number={5},
+  year={2023},
+  doi={10.1148/ryai.230024}
+}
+
+@article{beyer2026craniofacial,
+  title={An innovative AI-based dual segmentation application for head surgery},
+  author={Beyer, M. and Brasse, A. and Abazi, S. and Beyer, M. and Vinayahalingam, S. and Seifert, L. and Wasserthal, J. and Segeroth, M. and Sharma, N. and Thieringer, F. M.},
+  journal={International Journal of Oral and Maxillofacial Surgery},
+  year={2026},
+  doi={10.1016/j.ijom.2025.11.005}
+}
+
+@article{isensee2021nnunet,
+  title={nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation},
+  author={Isensee, Fabian and Jaeger, Paul F. and Kohl, Simon A. A. and Petersen, Jens and Maier-Hein, Klaus H.},
+  journal={Nature Methods},
+  volume={18},
+  number={2},
+  pages={203--211},
+  year={2021},
+  doi={10.1038/s41592-020-01008-z}
+}
+```
+
 ---
 
 ## Relevant Work Enabled by Arterial
@@ -448,7 +491,7 @@ Arterial is licensed under a [Creative Commons Attribution-NonCommercial 4.0 Int
 
 **Noncommercial use only.** You may share and adapt this work for noncommercial purposes, provided you give appropriate credit and indicate if changes were made. Commercial use requires a separate license — contact the authors.
 
-The same noncommercial terms apply to the trained model weights distributed with this project.
+The same noncommercial terms apply to the trained model weights distributed with this project, **with one exception**: `<models directory>/segmentation/totalsegmentator_mandible/` is redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the [Apache License 2.0](licenses/Apache-2.0.txt), copyright the TotalSegmentator authors. Apache-2.0, not CC BY-NC 4.0, governs that model — including commercial use of it — and its licence text and attribution notice ship inside that directory as `LICENSE` and `NOTICE`. The weights are unmodified; the directory is renamed for nnU-Net, only fold 0 is included, and Arterial uses only its skull class to split a head-and-neck CTA. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full statement.
 
 This license covers Arterial itself. Its dependencies carry their own licenses (nnU-Net and MONAI under Apache-2.0, VMTK under BSD, PyTorch Geometric under MIT), which you must comply with independently.
 
@@ -460,9 +503,11 @@ Arterial was developed at the Stroke Research group at Vall d'Hebron Research In
 
 **Key dependencies:**
 - [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) - Deep learning segmentation
-- [VMTK](http://www.vmtk.org/) - Vascular Modeling Toolkit
+- [VMTK](https://github.com/vmtk/vmtk) - Vascular Modeling Toolkit
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) - Graph Neural Networks
-- [MONAI](https://monai.io/) - Medical image analysis
+- [MONAI](https://github.com/Project-MONAI/MONAI) - Medical image analysis
+
+**Third-party model:** head/neck splitting uses the `craniofacial_structures` model from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator), redistributed unmodified under Apache-2.0 with thanks to its authors. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

@@ -52,6 +52,14 @@ The module intelligently combines different resolution models to balance accurac
 - **3d_lowres**: Lower-resolution model for faster processing of larger neck regions
 - **TotalSegmentator**: Used for cranium detection to enable head/neck slicing
 
+> **`totalsegmentator_mandible/` is third-party.** It is the `craniofacial_structures` model
+> (nnU-Net `Dataset115_mandible`) from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator),
+> redistributed unmodified under the Apache License 2.0 — not under Arterial's CC BY-NC 4.0 terms.
+> Its `LICENSE` and `NOTICE` files ship inside the directory and must stay with the weights wherever
+> they are copied. Arterial loads it directly with nnU-Net, without TotalSegmentator's own pre- and
+> post-processing, and uses only class 3 (`skull`) of its seven classes. See
+> [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md).
+
 ---
 
 ## Usage
@@ -291,7 +299,11 @@ export arterial_dir="/path/to/arterial"
 
 ## References
 
-1. Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). **nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation.** *Nature methods*, 18(2), 203-211.
+1. Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). **nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation.** *Nature methods*, 18(2), 203-211. [doi:10.1038/s41592-020-01008-z](https://doi.org/10.1038/s41592-020-01008-z)
+
+2. Wasserthal, J., Breit, H.-C., Meyer, M. T., Pradella, M., Hinck, D., Sauter, A. W., Heye, T., Boll, D., Cyriac, J., Yang, S., Bach, M., & Segeroth, M. (2023). **TotalSegmentator: Robust segmentation of 104 anatomic structures in CT images.** *Radiology: Artificial Intelligence*, 5(5). [doi:10.1148/ryai.230024](https://doi.org/10.1148/ryai.230024) — source of the `totalsegmentator_mandible` model.
+
+3. Beyer, M., Brasse, A., Abazi, S., Beyer, M., Vinayahalingam, S., Seifert, L., Wasserthal, J., Segeroth, M., Sharma, N., & Thieringer, F. M. (2026). **An innovative AI-based dual segmentation application for head surgery.** *International Journal of Oral and Maxillofacial Surgery*. [doi:10.1016/j.ijom.2025.11.005](https://doi.org/10.1016/j.ijom.2025.11.005) — the `craniofacial_structures` model used for head/neck splitting.
 
 ---
 

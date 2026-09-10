@@ -71,8 +71,10 @@ pip install huggingface_hub
 **2. Accept the licence**
 
 Open [the model page](https://huggingface.co/FLOWCAT-CV/arterial-models), sign in, and click
-*Agree and access repository*. You will be asked to confirm noncommercial use and to acknowledge
-that these are research models, not an approved medical device.
+*Agree and access repository*. You will be asked to confirm noncommercial use of the Arterial
+weights and to acknowledge that these are research models, not an approved medical device. Those
+noncommercial terms do not cover `segmentation/totalsegmentator_mandible/`, which is redistributed
+from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under Apache-2.0.
 
 **3. Log in**
 
@@ -146,6 +148,13 @@ export ARTERIAL_MODELS_DIR=/data/arterial-models
 ├── access_prediction/     dataset.json, fold_{0..4}/model_weights.pth
 ├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
 ├── segmentation/          extracranial_vessels/, intracranial_vessels/,
-│                          totalsegmentator_mandible/
+│                          totalsegmentator_mandible/  (+ LICENSE, NOTICE — Apache-2.0)
 └── vessel_labelling/      extracranial_vessels/
 ```
+
+Everything here is an Arterial model under CC BY-NC 4.0 except
+`segmentation/totalsegmentator_mandible/`, which comes from
+[TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under Apache-2.0. Its `LICENSE` and
+`NOTICE` files are downloaded alongside the checkpoint and must stay with it if you copy the weights
+to another machine or archive — the tar-and-copy recipe above preserves them. See
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

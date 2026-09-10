@@ -412,7 +412,7 @@ export arterial_dir="/path/to/arterial"
 
 ## References
 
-1. **MONAI**: Medical Open Network for AI - [https://monai.io/](https://monai.io/)
+1. **MONAI**: Medical Open Network for AI - [https://github.com/Project-MONAI/MONAI](https://github.com/Project-MONAI/MONAI)
 
 ---
 

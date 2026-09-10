@@ -1,0 +1,79 @@
+TotalSegmentator - craniofacial_structures model
+================================================
+
+This directory contains a redistributed copy of a pretrained model from the
+TotalSegmentator project. It is NOT an Arterial model, and it is NOT covered by
+the CC BY-NC 4.0 licence that applies to the rest of this repository.
+
+  Upstream project  https://github.com/wasserth/TotalSegmentator
+  Copyright         The TotalSegmentator authors
+                    (J. Wasserthal et al., University Hospital Basel)
+  Licence           Apache License, Version 2.0 - see the LICENSE file
+                    next to this notice
+  Task              craniofacial_structures (nnU-Net Dataset115_mandible)
+  Configuration     nnUNetTrainer_DASegOrd0_NoMirroring__nnUNetPlans__3d_fullres
+                    resampled to 0.5 x 0.5 x 0.5 mm
+  Classes           1 mandible, 2 teeth_lower, 3 skull, 4 head,
+                    5 sinus_maxillary, 6 sinus_frontal, 7 teeth_upper
+
+TotalSegmentator distributes its models in two groups: openly available models
+under Apache-2.0, and models that require a licence key from the authors. The
+craniofacial_structures task belongs to the openly available Apache-2.0 group
+(it is absent from the `commercial_models` map in TotalSegmentator's
+`map_to_binary.py`), which is why it can be redistributed here.
+
+
+Contents
+--------
+
+What this directory holds depends on where you obtained it:
+
+  * with the Arterial model weights (Hugging Face Hub or the Zenodo archive):
+    the nnU-Net metadata (`plans.json`, `dataset.json`) and fold 0 of the
+    trained model (`fold_0/checkpoint_final.pth`);
+  * in the Arterial source repository on GitHub: the same metadata plus the
+    upstream training fingerprint and logs (`dataset_fingerprint.json`,
+    `fold_0/debug.json`, `fold_0/progress.png`). The checkpoint is not under
+    version control there; it arrives with the weights download.
+
+
+Changes made in this redistribution
+-----------------------------------
+
+The files are the upstream files. Nothing was retrained, fine-tuned or
+converted, and no values were edited. The packaging differs:
+
+  * the directory is named `totalsegmentator_mandible/` rather than following
+    the upstream nnU-Net dataset naming, so that Arterial can hand it straight
+    to `nnUNetPredictor.initialize_from_trained_model_folder`;
+  * only fold 0 of the trained model is included;
+  * TotalSegmentator's own pre- and post-processing (cropping to the skull,
+    resampling, class remapping) is not included. Arterial calls nnU-Net
+    directly and uses only class 3 (skull), to split a head-and-neck CTA into
+    its head and neck parts before vessel segmentation.
+
+No claim of endorsement by the TotalSegmentator authors is made or implied, and
+no trademark rights in the name "TotalSegmentator" are granted by the Apache-2.0
+licence.
+
+
+Citation
+--------
+
+If you use this model, the TotalSegmentator authors ask that you cite:
+
+  Wasserthal J, Breit H-C, Meyer MT, Pradella M, Hinck D, Sauter AW, Heye T,
+  Boll D, Cyriac J, Yang S, Bach M, Segeroth M. TotalSegmentator: Robust
+  Segmentation of 104 Anatomic Structures in CT Images. Radiology: Artificial
+  Intelligence, 2023. https://doi.org/10.1148/ryai.230024
+
+  Beyer M, Brasse A, Abazi S, Beyer M, Vinayahalingam S, Seifert L,
+  Wasserthal J, Segeroth M, Sharma N, Thieringer FM. An innovative AI-based
+  dual segmentation application for head surgery. International Journal of
+  Oral and Maxillofacial Surgery, 2026.
+  https://doi.org/10.1016/j.ijom.2025.11.005
+
+  Isensee F, Jaeger PF, Kohl SAA, Petersen J, Maier-Hein KH. nnU-Net: a
+  self-configuring method for deep learning-based biomedical image
+  segmentation. Nature Methods 18(2):203-211, 2021.
+  https://doi.org/10.1038/s41592-020-01008-z
