@@ -22,6 +22,11 @@ pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6
 
 For MacOS (outdated, not tested):
 
+> **Not recommended for segmentation or landmark detection.** macOS has no CUDA, so those two stages
+> run full 3D inference on CPU — on the order of ten minutes per case for segmentation alone. Run them
+> on a Linux machine with an NVIDIA GPU. macOS is fine for development and for the remaining stages
+> (centerline extraction, vessel labelling, feature extraction, access prediction).
+
 ```bash
 conda create -n arterial_env python=3.11
 conda activate arterial_env
@@ -42,12 +47,22 @@ pip install -e .
 
 ## Setting up paths
 
-```bash
-nano ~/.bashrc
-```
+Arterial finds its package directory through the `arterial_dir` variable. From the repository root —
+where the previous step left you — append it to your shell startup file. This writes the absolute
+path, so run it once, from that directory:
 
 ```bash
-export arterial_dir="/path/to/arterial/arterial"
+# Linux
+echo "export arterial_dir=\"$PWD/arterial\"" >> ~/.bashrc && source ~/.bashrc
+
+# macOS
+echo "export arterial_dir=\"$PWD/arterial\"" >> ~/.zshrc && source ~/.zshrc
+```
+
+Confirm it points at the inner package directory, not the repository root:
+
+```bash
+echo "$arterial_dir"      # should end in .../arterial/arterial
 ```
 
 ## Model weights
