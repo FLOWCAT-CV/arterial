@@ -28,7 +28,7 @@ Contents
 
 What this directory holds depends on where you obtained it:
 
-  * with the Arterial model weights (Hugging Face Hub or the Zenodo archive):
+  * with the Arterial model weights (the Zenodo archive):
     the nnU-Net metadata (`plans.json`, `dataset.json`) and fold 0 of the
     trained model (`fold_0/checkpoint_final.pth`);
   * in the Arterial source repository on GitHub: the same metadata plus the

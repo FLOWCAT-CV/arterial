@@ -2,11 +2,10 @@
 #    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
 #    SPDX-License-Identifier: CC-BY-NC-4.0
 #
-# Downloads the Arterial model weights from the Hugging Face Hub.
+# Downloads the Arterial model weights from Zenodo.
 #
-# The weights are gated: you must accept the CC BY-NC 4.0 terms once, on the
-# model page, before any download will succeed. This script checks for that and
-# tells you what to do if a step is missing.
+# No account, no token and no licence gate: the weights come down as a single
+# archive, verified against the published SHA256, then extracted and checked.
 #
 # Destination, in order of precedence:
 #   1. $ARTERIAL_MODELS_DIR   if set   (any location you like)
@@ -14,16 +13,25 @@
 
 set -euo pipefail
 
-REPO="FLOWCAT-CV/arterial-models"
-REPO_URL="https://huggingface.co/${REPO}"
+# Set this once the record is published. Override with --record <id>.
+ZENODO_RECORD="${ZENODO_RECORD:-CHANGEME}"
+# Point at https://sandbox.zenodo.org to test against a sandbox record.
+ZENODO_SITE="${ZENODO_SITE:-https://zenodo.org}"
+ARCHIVE="arterial-models-v1.tar.gz"
 PERSIST=1
+
+say()  { printf '%s\n' "$*"; }
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<USAGE
-Usage: bash scripts/download_models.sh [--no-persist] [--help]
+Usage: bash scripts/download_models.sh [--record ID] [--no-persist] [--help]
 
-Downloads the Arterial model weights from the Hugging Face Hub.
+Downloads the Arterial model weights from Zenodo.
 
+  --record ID    Zenodo record id (default: ${ZENODO_RECORD}).
+  --site URL     Zenodo site (default: ${ZENODO_SITE}).
+                 Use https://sandbox.zenodo.org for a sandbox record.
   --no-persist   Do not write ARTERIAL_MODELS_DIR to your shell startup file.
   --help         Show this message.
 USAGE
@@ -31,6 +39,8 @@ USAGE
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --record)     ZENODO_RECORD="${2:?--record needs an id}"; shift ;;
+        --site)       ZENODO_SITE="${2:?--site needs a URL}"; shift ;;
         --no-persist) PERSIST=0 ;;
         -h|--help)    usage; exit 0 ;;
         *)            printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -38,8 +48,8 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-say()  { printf '%s\n' "$*"; }
-fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+[ "$ZENODO_RECORD" = "CHANGEME" ] && fail "No Zenodo record id set.
+       Pass one with --record <id>, or edit ZENODO_RECORD in this script."
 
 # ---------------------------------------------------------------- destination
 if [ -n "${ARTERIAL_MODELS_DIR:-}" ]; then
@@ -56,59 +66,62 @@ else
          export ARTERIAL_MODELS_DIR=/data/arterial-models"
 fi
 
-# ------------------------------------------------------------------- hf client
-if ! command -v hf >/dev/null 2>&1; then
-    fail "The 'hf' command was not found.
-       Install the Hugging Face client:
-         pip install huggingface_hub"
+# -------------------------------------------------------------- sha256 helper
+if command -v sha256sum >/dev/null 2>&1; then
+    sha256_of() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null 2>&1; then
+    sha256_of() { shasum -a 256 "$1" | awk '{print $1}'; }   # macOS
+else
+    sha256_of() { printf ''; }
 fi
 
-# ---------------------------------------------------------------------- login
-if ! hf auth whoami >/dev/null 2>&1; then
-    cat >&2 <<MSG
-ERROR: Not logged in to Hugging Face.
+# ------------------------------------------------------------------ download
+BASE="${ZENODO_SITE}/records/${ZENODO_RECORD}/files"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
 
-  1. Create an access token (role: read) at
-       https://huggingface.co/settings/tokens
-  2. Log in:
-       hf auth login
-MSG
-    exit 1
-fi
-say "Logged in   : $(hf auth whoami 2>/dev/null | head -1)"
-
-# --------------------------------------------------------------------- terms
 say ""
 say "The Arterial weights are released under CC BY-NC 4.0 - noncommercial use only."
-say "If you have not done so already, open the model page and accept the terms:"
-say "  ${REPO_URL}"
+say "  ${ZENODO_SITE}/records/${ZENODO_RECORD}"
 say ""
 say "One directory is third party and is NOT noncommercial:"
 say "  segmentation/totalsegmentator_mandible/  - the craniofacial_structures model"
 say "  from TotalSegmentator, redistributed under Apache-2.0. Its LICENSE and"
 say "  NOTICE files come with it and must stay with the weights if you copy them."
 say ""
+say "Downloading ${ARCHIVE} (about 1.1 GB) ..."
 
-# ------------------------------------------------------------------ download
-mkdir -p "$DEST"
-say "Downloading ${REPO} (about 1.2 GB) ..."
-if ! hf download "$REPO" --local-dir "$DEST"; then
-    cat >&2 <<MSG
-
-ERROR: Download failed.
-
-If the error above mentions 403, 401 or 'gated', you have not yet accepted the
-licence terms for this model. Open the page below, click 'Agree and access
-repository', then run this script again:
-
-  ${REPO_URL}
-
-Access is granted automatically once you accept - there is no waiting period.
-MSG
-    exit 1
+# -L follows redirects, -C - resumes a partial file if the server allows it
+if ! curl -L -C - --fail --progress-bar \
+        -o "${WORK}/${ARCHIVE}" "${BASE}/${ARCHIVE}?download=1"; then
+    fail "Download failed. Check that record ${ZENODO_RECORD} exists and is public on ${ZENODO_SITE}."
 fi
 
-# -------------------------------------------------------------------- verify
+# --------------------------------------------------------------- verify hash
+say ""
+if curl -sL --fail -o "${WORK}/${ARCHIVE}.sha256" "${BASE}/${ARCHIVE}.sha256?download=1"; then
+    expected="$(awk '{print $1}' "${WORK}/${ARCHIVE}.sha256")"
+    actual="$(sha256_of "${WORK}/${ARCHIVE}")"
+    if [ -z "$actual" ]; then
+        say "No sha256 tool available; skipping checksum verification."
+    elif [ "$expected" = "$actual" ]; then
+        say "Checksum OK."
+    else
+        fail "Checksum mismatch.
+       expected ${expected}
+       got      ${actual}
+       The download is corrupt. Run this script again."
+    fi
+else
+    say "No published checksum found; skipping verification."
+fi
+
+# -------------------------------------------------------------------- extract
+say "Extracting ..."
+mkdir -p "$DEST"
+tar xzf "${WORK}/${ARCHIVE}" -C "$DEST"
+
+# --------------------------------------------------------------------- verify
 say ""
 say "Verifying ..."
 missing=0
@@ -135,8 +148,6 @@ if [ "$missing" -ne 0 ] || [ "$n_pth" -ne 18 ]; then
 fi
 
 # ------------------------------------------------------------------ persist
-# Writes ARTERIAL_MODELS_DIR into the shell startup file, inside a marked block
-# so repeated runs update it in place rather than appending duplicates.
 persist_env() {
     local dest="$1" rc shell_name
     shell_name="$(basename "${SHELL:-}")"

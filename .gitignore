@@ -1,7 +1,7 @@
 # Added by Pere
 *.DS_Store
 *.model
-# Model weights are downloaded from the Hugging Face Hub into arterial/models/
+# Model weights are downloaded from Zenodo into arterial/models/
 # (see scripts/download_models.sh). They are never committed.
 arterial/models/
 

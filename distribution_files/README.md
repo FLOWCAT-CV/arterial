@@ -1,54 +1,15 @@
----
-license: cc-by-nc-4.0
-library_name: arterial
-tags:
-  - medical
-  - medical-imaging
-  - cta
-  - vascular
-  - stroke
-  - segmentation
-  - nnunet
-  - graph-neural-network
-extra_gated_heading: Access the Arterial model weights
-extra_gated_description: >-
-  The Arterial weights are released under CC BY-NC 4.0 for noncommercial research
-  use. They are research software, not an approved medical device. One directory,
-  segmentation/totalsegmentator_mandible/, is redistributed from TotalSegmentator
-  under Apache-2.0 and is not subject to the noncommercial restriction.
-extra_gated_prompt: >-
-  By requesting access you confirm that you have read and accept the Creative
-  Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) licence for
-  the Arterial weights, and that you understand these models are provided for
-  research purposes only. They have not been cleared or approved by any
-  regulatory body and must not be used to inform clinical decisions about
-  individual patients. The directory
-  segmentation/totalsegmentator_mandible/ is third-party material redistributed
-  from TotalSegmentator under the Apache License 2.0; that licence, not CC BY-NC
-  4.0, governs your use of it, and the LICENSE and NOTICE files shipped inside
-  that directory state its terms.
-extra_gated_fields:
-  Full name: text
-  Affiliation: text
-  Country: country
-  Intended use: text
-  I accept the CC BY-NC 4.0 terms for the Arterial weights and will not use them commercially: checkbox
-  I understand these are research models and not an approved medical device: checkbox
-extra_gated_button_content: Request access
----
-
 # Arterial — model weights
 
 Trained model weights for [**Arterial**](https://github.com/FLOWCAT-CV/arterial), an AI framework for
 automated vascular analysis of CT Angiography (CTA) in the supra-aortic region, developed to support
 mechanical thrombectomy planning in acute ischaemic stroke.
 
-This repository contains **only the weights**. The code, installation instructions and documentation
+This record contains **only the weights**. The code, installation instructions and documentation
 live in the [GitHub repository](https://github.com/FLOWCAT-CV/arterial).
 
 ---
 
-## What is in this repository
+## What is in this archive
 
 | Directory | Task | Architecture | Licence |
 |---|---|---|---|
@@ -69,51 +30,22 @@ and carries no noncommercial restriction — see [Third-party models](#third-par
 
 ## Usage
 
-You must accept the licence above before any download will work. Access is granted **automatically**
-the moment you accept — there is no waiting period and no manual approval.
-
-### Recommended: the Hugging Face CLI
-
-**1. Install the client**
+No account, no token and no licence gate. If you have the
+[Arterial repository](https://github.com/FLOWCAT-CV/arterial) checked out, use the bundled script —
+it downloads the archive, verifies its SHA256 against the published one, extracts it where Arterial
+expects, and checks the result:
 
 ```bash
-pip install huggingface_hub
+bash scripts/download_models.sh --record <RECORD_ID>
 ```
 
-**2. Accept the licence** — click *Agree and access repository* at the top of this page.
-
-**3. Log in**
-
-Create an access token with the **read** role at
-[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), then:
+Otherwise, download `arterial-models-v1.tar.gz` and `arterial-models-v1.tar.gz.sha256` from this
+record, then verify and extract:
 
 ```bash
-hf auth login
-```
-
-Paste the token when prompted. This is a one-off step per machine.
-
-**4. Download**
-
-If you have the [Arterial repository](https://github.com/FLOWCAT-CV/arterial) checked out, use the
-bundled script — it places the weights where Arterial expects them and verifies the result:
-
-```bash
-bash scripts/download_models.sh
-```
-
-Otherwise, fetch them directly:
-
-```bash
-hf download FLOWCAT-CV/arterial-models --local-dir arterial-models
-```
-
-or from Python:
-
-```python
-from huggingface_hub import snapshot_download
-
-snapshot_download("FLOWCAT-CV/arterial-models", local_dir="arterial-models")
+shasum -a 256 -c arterial-models-v1.tar.gz.sha256      # sha256sum -c on Linux
+mkdir -p arterial-models
+tar xzf arterial-models-v1.tar.gz -C arterial-models
 ```
 
 ### Telling Arterial where the weights are
@@ -123,21 +55,6 @@ By default Arterial looks in `$arterial_dir/models`. To keep the weights anywher
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"
-```
-
-### Offline and air-gapped machines
-
-Clinical environments frequently have no outbound network access. Download on a connected machine,
-copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
-
-```bash
-# on a connected machine
-hf download FLOWCAT-CV/arterial-models --local-dir arterial-models
-tar czf arterial-models.tar.gz arterial-models
-
-# on the target machine
-tar xzf arterial-models.tar.gz -C /data
-export ARTERIAL_MODELS_DIR=/data/arterial-models
 ```
 
 ### Layout

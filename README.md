@@ -128,67 +128,26 @@ export arterial_dir="/path/to/arterial/arterial"
 
 ### Model Weights
 
-The trained weights are **not** stored in this repository. They are archived on Zenodo, with a DOI,
-and mirrored on the Hugging Face Hub:
+The trained weights are **not** stored in this repository. They are archived on Zenodo, under a DOI,
+and downloaded by a bundled script. No account, no token and no licence gate: the weights come down
+as a single archive, verified against the published checksum.
 
-> 🤗 **[FLOWCAT-CV/arterial-models](https://huggingface.co/FLOWCAT-CV/arterial-models)**
+> 📦 **[Zenodo record](https://zenodo.org/records/<RECORD_ID>)** — DOI `10.5281/zenodo.<RECORD_ID>`
 
-They are gated under CC BY-NC 4.0. Access is granted **automatically** the moment you accept the
-terms — there is no waiting period and no manual approval — but you must accept them once before
-any download will work.
+Everything in the archive is an Arterial model under CC BY-NC 4.0 except
+`segmentation/totalsegmentator_mandible/`, which is redistributed from
+[TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under Apache-2.0 and carries its own
+`LICENSE` and `NOTICE` — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-#### Recommended: Zenodo
-
-The archival copy. No account, no token and no licence gate — the weights come down as a single
-archive, verified against a published checksum:
-
-```bash
-bash scripts/download_models_zenodo.sh --record <RECORD_ID>
-```
-
-That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256, extracts it, verifies
-every expected checkpoint arrived, and records the location in your shell startup file. Pass
-`--no-persist` to skip that last step.
-
-Because it is a single archive there is no per-file caching: re-running re-downloads everything.
-`curl -C -` will resume an interrupted transfer if the server allows it.
-
-#### Alternative: the Hugging Face CLI
-
-**1. Install the client**
+#### Download
 
 ```bash
-pip install huggingface_hub
+bash scripts/download_models.sh --record <RECORD_ID>
 ```
 
-**2. Accept the licence**
-
-Open **[the model page](https://huggingface.co/FLOWCAT-CV/arterial-models)**, sign in, and click
-*Agree and access repository*. You will be asked to confirm noncommercial use of the Arterial
-weights and to acknowledge that these are research models, not an approved medical device. The
-noncommercial terms do not extend to the third-party TotalSegmentator model in the repository, which
-stays under Apache-2.0.
-
-**3. Log in**
-
-Create an access token with the **read** role at
-[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), then:
-
-```bash
-hf auth login
-```
-
-Paste the token when prompted. This is a one-off step per machine.
-
-**4. Download**
-
-```bash
-bash scripts/download_models.sh
-```
-
-The script downloads about 1.2 GB into `$arterial_dir/models`, then verifies that every expected
-checkpoint arrived. If you have not accepted the licence yet, it says so and points you back to
-step 2.
+That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
+one, extracts it, and verifies that every expected checkpoint — and the two Apache-2.0 files —
+arrived.
 
 It then writes the models location into your shell startup file — `~/.zshrc` for zsh,
 `~/.bash_profile` or `~/.bashrc` for bash — so it survives new terminals:
@@ -203,7 +162,8 @@ The block is marked, so running the script again updates it in place rather than
 copy, and nothing else in the file is touched. Pass `--no-persist` to skip this and set the variable
 yourself. Run `source ~/.zshrc`, or open a new terminal, for it to take effect.
 
-*(For more on the CLI, see the [Hugging Face CLI guide](https://huggingface.co/docs/huggingface_hub/guides/cli).)*
+Because it is a single archive there is no per-file caching: re-running re-downloads everything.
+`curl -C -` will resume an interrupted transfer if the server allows it.
 
 #### Installing the weights somewhere else
 
@@ -213,7 +173,7 @@ before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
-bash scripts/download_models.sh
+bash scripts/download_models.sh --record <RECORD_ID>
 ```
 
 `ARTERIAL_MODELS_DIR` always takes precedence over the default location.
@@ -225,11 +185,12 @@ copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
 
 ```bash
 # on a connected machine
-hf download FLOWCAT-CV/arterial-models --local-dir arterial-models
-tar czf arterial-models.tar.gz arterial-models
+curl -L -o arterial-models-v1.tar.gz \
+  "https://zenodo.org/records/<RECORD_ID>/files/arterial-models-v1.tar.gz?download=1"
 
 # on the target machine
-tar xzf arterial-models.tar.gz -C /data
+mkdir -p /data/arterial-models
+tar xzf arterial-models-v1.tar.gz -C /data/arterial-models
 export ARTERIAL_MODELS_DIR=/data/arterial-models
 ```
 
