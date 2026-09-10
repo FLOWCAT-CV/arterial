@@ -27,11 +27,15 @@ Edit the files here, then push them to the Hub:
 ```bash
 hf auth login                     # a token with the write role
 hf upload FLOWCAT-CV/arterial-models distribution_files . \
+    --exclude "UPLOADING.md" \
     --commit-message "Update model card and third-party notices"
 ```
 
 `hf upload <repo> <local dir> <path in repo>` uploads the directory contents to the repository root,
 preserving the subdirectory layout above. Run it from the repository root.
+
+`--exclude "UPLOADING.md"` matters: this file is a note to maintainers, not part of what the weights
+are distributed with. Without it, these instructions would publish themselves to the Hub.
 
 ## Zenodo
 
