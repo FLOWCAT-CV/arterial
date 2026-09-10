@@ -128,8 +128,8 @@ export arterial_dir="/path/to/arterial/arterial"
 
 ### Model Weights
 
-The trained weights are **not** stored in this repository. They are distributed through the
-Hugging Face Hub:
+The trained weights are **not** stored in this repository. They are archived on Zenodo, with a DOI,
+and mirrored on the Hugging Face Hub:
 
 > 🤗 **[FLOWCAT-CV/arterial-models](https://huggingface.co/FLOWCAT-CV/arterial-models)**
 
@@ -137,7 +137,23 @@ They are gated under CC BY-NC 4.0. Access is granted **automatically** the momen
 terms — there is no waiting period and no manual approval — but you must accept them once before
 any download will work.
 
-#### Recommended: the Hugging Face CLI
+#### Recommended: Zenodo
+
+The archival copy. No account, no token and no licence gate — the weights come down as a single
+archive, verified against a published checksum:
+
+```bash
+bash scripts/download_models_zenodo.sh --record <RECORD_ID>
+```
+
+That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256, extracts it, verifies
+every expected checkpoint arrived, and records the location in your shell startup file. Pass
+`--no-persist` to skip that last step.
+
+Because it is a single archive there is no per-file caching: re-running re-downloads everything.
+`curl -C -` will resume an interrupted transfer if the server allows it.
+
+#### Alternative: the Hugging Face CLI
 
 **1. Install the client**
 
