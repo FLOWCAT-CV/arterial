@@ -1,5 +1,5 @@
-#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-#    SPDX-License-Identifier: CC-BY-NC-4.0
+#    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+#    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
 import torch
@@ -10,6 +10,8 @@ from time import time
 from scipy.ndimage import gaussian_laplace
 from skimage.measure import label
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+
+from arterial import model_registry
 
 def get_largest_connected_component(segmentation):
     """
@@ -96,7 +98,7 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
     )
     # Initializes the network architecture, loads the checkpoint
     predictor.initialize_from_trained_model_folder(
-        os.path.join(os.environ["arterial_dir"], 'segmentation/models/totalsegmentator_mandible/nnUNetTrainer_DASegOrd0_NoMirroring__nnUNetPlans__3d_fullres'),
+        model_registry.model_path("segmentation", "totalsegmentator_mandible", "nnUNetTrainer_DASegOrd0_NoMirroring__nnUNetPlans__3d_fullres"),
         use_folds=("0"), 
         checkpoint_name='checkpoint_final.pth',
     )

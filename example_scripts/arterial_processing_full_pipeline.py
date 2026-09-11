@@ -1,5 +1,5 @@
-#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-#    SPDX-License-Identifier: CC-BY-NC-4.0
+#    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+#    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 from arterial.run.processor import ArterialProcessor
 from arterial.io.dicom_and_nifti import convert_dicom_to_nifti_d2n

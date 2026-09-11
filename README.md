@@ -2,8 +2,8 @@
 
 **An AI framework for automated vascular analysis and endovascular intervention planning**
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![License: PolyForm NC 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
 
 ---
 
@@ -19,6 +19,16 @@ Arterial is a comprehensive AI framework for fully automated vascular tortuosity
 - **Catheter pathway mapping** and **accessibility prediction**
 
 The framework processes a single CTA image and outputs a complete vascular analysis including segmentation masks, labeled centerlines, geometric features, and procedural predictions—all without manual input.
+
+<p align="center">
+  <img src="documentation/figures/arterial_pipeline.png"
+       alt="Arterial pipeline: head-and-neck basal CTA, vascular segmentation, centerline extraction, vessel labelling, and multi-scale feature extraction"
+       width="100%">
+</p>
+
+<p align="center">
+  <em>The Arterial pipeline, from a basal head-and-neck CTA through to multi-scale vascular features.</em>
+</p>
 
 ---
 
@@ -57,7 +67,7 @@ Arterial is organized into specialized modules, each with detailed documentation
 ### System Requirements
 
 - **Operating System**: Linux (Ubuntu 22.04 tested), macOS (14.x, 15.x)
-- **Python**: 3.9+ (3.11 recommended for Linux)
+- **Python**: 3.11
 - **GPU**: NVIDIA GPU with CUDA support (recommended for inference)
 
 ### Linux (Ubuntu)
@@ -81,9 +91,14 @@ pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 \
 
 ### macOS
 
+> **Not recommended for segmentation or landmark detection.** macOS has no CUDA, so those two stages
+> run full 3D inference on CPU — on the order of ten minutes per case for segmentation alone. Run them
+> on a Linux machine with an NVIDIA GPU. macOS is fine for development and for the remaining stages
+> (centerline extraction, vessel labelling, feature extraction, access prediction).
+
 ```bash
-# Create conda environment (Python 3.9 required for VMTK on macOS)
-conda create -n arterial_env python=3.9
+# Create conda environment
+conda create -n arterial_env python=3.11
 conda activate arterial_env
 
 # Install VMTK
@@ -109,62 +124,107 @@ pip install -e .
 
 ### Environment Configuration
 
-Add the Arterial directory to your environment:
+Arterial finds its package directory through the `arterial_dir` variable. From the repository root —
+where the previous step left you — append it to your shell startup file. This writes the absolute
+path, so run it once, from that directory:
 
 ```bash
-# Add to ~/.bashrc (Linux) or ~/.zshrc (macOS)
-export arterial_dir="/path/to/arterial/arterial"
+# Linux
+echo "export arterial_dir=\"$PWD/arterial\"" >> ~/.bashrc && source ~/.bashrc
+
+# macOS
+echo "export arterial_dir=\"$PWD/arterial\"" >> ~/.zshrc && source ~/.zshrc
 ```
 
-### Model Weights Via Plain Git
-
-Raw `.pth` files remain ignored in this repo. To move them through plain `git`, export them into deterministic chunk files plus a manifest under `model_chunks/`, commit those artifacts, and rebuild the original paths on the destination machine.
-
-Source machine:
+Confirm it points at the inner package directory, not the repository root:
 
 ```bash
-python scripts/export_pth_chunks.py --clean
+echo "$arterial_dir"      # should end in .../arterial/arterial
 ```
 
-Destination machine:
+### Model Weights
+
+The trained weights are **not** stored in this repository. They are archived on Zenodo, under a DOI,
+and downloaded by a bundled script. No account, no token and no licence gate: the weights come down
+as a single archive, verified against the published checksum.
+
+> 📦 **[Zenodo record](https://zenodo.org/records/22694951)** — DOI `10.5281/zenodo.22694951`
+
+Everything in the archive is an Arterial model under CC BY-NC 4.0 except
+`segmentation/totalsegmentator_mandible/`, which is redistributed from
+[TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under Apache-2.0 and carries its own
+`LICENSE` and `NOTICE` — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+#### Download
 
 ```bash
-python scripts/rebuild_pth_chunks.py --skip-existing
+bash scripts/download_models.sh --record 22694951
 ```
 
-The export script scans `arterial/**/*.pth`, writes sub-100MB chunk files under `model_chunks/arterial/...`, and records file hashes in `model_chunks/manifest.json`. The rebuild script restores the original `.pth` paths expected by the runtime and verifies SHA256 checksums after reconstruction.
+That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
+one, extracts it, and verifies that every expected checkpoint — and the two Apache-2.0 files —
+arrived.
 
-### Recommended Branch Workflow For Model Payloads
-
-Keep code changes on `main`, then create a dedicated payload branch from the exact code commit that introduced the chunking scripts and docs.
+It then writes the models location into your shell startup file — `~/.zshrc` for zsh,
+`~/.bash_profile` or `~/.bashrc` for bash — so it survives new terminals:
 
 ```bash
-# On the code commit you want to deploy
-git checkout main
-git pull
-
-# Create a versioned payload branch
-git checkout -b models/2026-03
-
-# Export chunk artifacts
-python scripts/export_pth_chunks.py --clean
+# >>> arterial models >>>
+export ARTERIAL_MODELS_DIR="/path/to/arterial/arterial/models"
+# <<< arterial models <<<
 ```
 
-Commit chunk payloads in small batches so each push is easier to retry and review. A practical order is:
+The block is marked, so running the script again updates it in place rather than appending a second
+copy, and nothing else in the file is touched. Pass `--no-persist` to skip this and set the variable
+yourself. Run `source ~/.zshrc`, or open a new terminal, for it to take effect.
 
-1. access prediction plus landmark detection chunks
-2. vessel labelling chunks
-3. extracranial segmentation chunks
-4. intracranial segmentation chunks
-5. mandible segmentation chunks
+Because it is a single archive there is no per-file caching: re-running re-downloads everything.
+`curl -C -` will resume an interrupted transfer if the server allows it.
 
-On the destination machine, clone or pull the corresponding payload branch before rebuilding:
+#### Installing the weights somewhere else
+
+By default the weights land in `$arterial_dir/models`, which is gitignored. To keep them elsewhere —
+a shared drive, a larger volume, a location several checkouts can share — set `ARTERIAL_MODELS_DIR`
+before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
-git checkout models/2026-03
-git pull
-python scripts/rebuild_pth_chunks.py --skip-existing
+export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
+bash scripts/download_models.sh --record 22694951
 ```
+
+`ARTERIAL_MODELS_DIR` always takes precedence over the default location.
+
+#### Offline and air-gapped machines
+
+Clinical environments frequently have no outbound network access. Download on a connected machine,
+copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
+
+```bash
+# on a connected machine
+curl -L -o arterial-models-v1.tar.gz \
+  "https://zenodo.org/records/22694951/files/arterial-models-v1.tar.gz?download=1"
+
+# on the target machine
+mkdir -p /data/arterial-models
+tar xzf arterial-models-v1.tar.gz -C /data/arterial-models
+export ARTERIAL_MODELS_DIR=/data/arterial-models
+```
+
+#### Layout
+
+```
+<models directory>/
+├── access_prediction/     dataset.json, fold_{0..4}/model_weights.pth
+├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
+├── segmentation/          extracranial_vessels/, intracranial_vessels/,
+│                          totalsegmentator_mandible/  (+ LICENSE, NOTICE — Apache-2.0)
+└── vessel_labelling/      extracranial_vessels/
+```
+
+All of these are Arterial models under CC BY-NC 4.0 except `segmentation/totalsegmentator_mandible/`,
+which is redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under
+Apache-2.0 and carries its own `LICENSE` and `NOTICE`. Keep those two files with the weights if you
+copy them anywhere — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -337,6 +397,42 @@ If you use Arterial in your research, please cite:
 
 > 🔗 [https://www.sciencedirect.com/science/article/pii/S0895611122001409](https://www.sciencedirect.com/science/article/pii/S0895611122001409)
 
+### Third-party models
+
+Arterial's default pipeline runs the `craniofacial_structures` model from TotalSegmentator to split
+a head-and-neck CTA. Its authors ask that you cite the following alongside your own work:
+
+```bibtex
+@article{wasserthal2023totalsegmentator,
+  title={TotalSegmentator: Robust Segmentation of 104 Anatomic Structures in CT Images},
+  author={Wasserthal, Jakob and Breit, Hanns-Christian and Meyer, Manfred T. and Pradella, Maurice and Hinck, Daniel and Sauter, Alexander W. and Heye, Tobias and Boll, Daniel and Cyriac, Joshy and Yang, Shan and Bach, Michael and Segeroth, Martin},
+  journal={Radiology: Artificial Intelligence},
+  volume={5},
+  number={5},
+  year={2023},
+  doi={10.1148/ryai.230024}
+}
+
+@article{beyer2026craniofacial,
+  title={An innovative AI-based dual segmentation application for head surgery},
+  author={Beyer, M. and Brasse, A. and Abazi, S. and Beyer, M. and Vinayahalingam, S. and Seifert, L. and Wasserthal, J. and Segeroth, M. and Sharma, N. and Thieringer, F. M.},
+  journal={International Journal of Oral and Maxillofacial Surgery},
+  year={2026},
+  doi={10.1016/j.ijom.2025.11.005}
+}
+
+@article{isensee2021nnunet,
+  title={nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation},
+  author={Isensee, Fabian and Jaeger, Paul F. and Kohl, Simon A. A. and Petersen, Jens and Maier-Hein, Klaus H.},
+  journal={Nature Methods},
+  volume={18},
+  number={2},
+  pages={203--211},
+  year={2021},
+  doi={10.1038/s41592-020-01008-z}
+}
+```
+
 ---
 
 ## Relevant Work Enabled by Arterial
@@ -380,17 +476,26 @@ A multi-scale graph neural network (ArterialGNet) designed to predict impossible
 
 ## License
 
-Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+Intellectual property is jointly held by VHIR and UB.
 
-Arterial is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/) (CC BY-NC 4.0). See [LICENSE](LICENSE) for the full terms.
+**Source code** — this repository — is licensed under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).
+See [LICENSE](LICENSE) for the full terms. Any noncommercial purpose is permitted, and use by
+educational institutions, public research organisations, and public health or safety organisations is
+permitted regardless of funding source. Commercial use requires a separate licence — contact the authors.
 
-[![CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc/4.0/)
+**Trained model weights** — distributed separately via Zenodo, not in this repository — are licensed
+under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): noncommercial use only, with
+attribution. **One exception:** `<models directory>/segmentation/totalsegmentator_mandible/` is
+redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the
+[Apache License 2.0](licenses/Apache-2.0.txt), copyright the TotalSegmentator authors. Apache-2.0, not
+CC BY-NC 4.0, governs that model — including commercial use of it — and its licence text and
+attribution notice ship inside that directory as `LICENSE` and `NOTICE`. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full statement.
 
-**Noncommercial use only.** You may share and adapt this work for noncommercial purposes, provided you give appropriate credit and indicate if changes were made. Commercial use requires a separate license — contact the authors.
-
-The same noncommercial terms apply to the trained model weights distributed with this project.
-
-This license covers Arterial itself. Its dependencies carry their own licenses (nnU-Net and MONAI under Apache-2.0, VMTK under BSD, PyTorch Geometric under MIT), which you must comply with independently.
+Arterial's dependencies carry their own licences (nnU-Net and MONAI under Apache-2.0, VMTK under BSD,
+PyTorch Geometric under MIT), which you must comply with independently.
 
 ---
 
@@ -400,9 +505,11 @@ Arterial was developed at the Stroke Research group at Vall d'Hebron Research In
 
 **Key dependencies:**
 - [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) - Deep learning segmentation
-- [VMTK](http://www.vmtk.org/) - Vascular Modeling Toolkit
+- [VMTK](https://github.com/vmtk/vmtk) - Vascular Modeling Toolkit
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) - Graph Neural Networks
-- [MONAI](https://monai.io/) - Medical image analysis
+- [MONAI](https://github.com/Project-MONAI/MONAI) - Medical image analysis
+
+**Third-party model:** head/neck splitting uses the `craniofacial_structures` model from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator), redistributed unmodified under Apache-2.0 with thanks to its authors. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

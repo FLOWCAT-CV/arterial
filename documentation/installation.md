@@ -2,6 +2,8 @@
 
 ## System requirements
 
+Python 3.11.
+
 ## Operating System
 Arterial has been developed and tested on Linux (Ubuntu 22.04), and MacOS (14.X, 15.X).
 
@@ -10,7 +12,6 @@ Arterial has been developed and tested on Linux (Ubuntu 22.04), and MacOS (14.X,
 For Ubuntu:
 
 ```bash
-# <=3.9 necessary for vmtk, otherwise it won't install
 conda create -n arterial_env python=3.11
 conda activate arterial_env
 conda install -c conda-forge vmtk
@@ -21,9 +22,13 @@ pip install pyg_lib torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6
 
 For MacOS (outdated, not tested):
 
+> **Not recommended for segmentation or landmark detection.** macOS has no CUDA, so those two stages
+> run full 3D inference on CPU — on the order of ten minutes per case for segmentation alone. Run them
+> on a Linux machine with an NVIDIA GPU. macOS is fine for development and for the remaining stages
+> (centerline extraction, vessel labelling, feature extraction, access prediction).
+
 ```bash
-# <=3.9 necessary for vmtk, otherwise it won't install
-conda create -n arterial_env python=3.9
+conda create -n arterial_env python=3.11
 conda activate arterial_env
 conda install -c conda-forge vmtk
 
@@ -35,74 +40,106 @@ pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https:
 To clone repo and install arterial as a Python package:
 
 ```bash
-git clone --branch no_slicer https://github.com/FLOWCAT-CV/arterial.git
+git clone https://github.com/FLOWCAT-CV/arterial.git
 cd arterial
 pip install -e .
 ```
 
 ## Setting up paths
 
-```bash
-nano ~/.bashrc
-```
+Arterial finds its package directory through the `arterial_dir` variable. From the repository root —
+where the previous step left you — append it to your shell startup file. This writes the absolute
+path, so run it once, from that directory:
 
 ```bash
-export arterial_dir="/path/to/arterial/arterial"
+# Linux
+echo "export arterial_dir=\"$PWD/arterial\"" >> ~/.bashrc && source ~/.bashrc
+
+# macOS
+echo "export arterial_dir=\"$PWD/arterial\"" >> ~/.zshrc && source ~/.zshrc
 ```
 
-## Copy models
-
-Raw `.pth` files stay ignored in the repo. To move them with plain `git`, export them into chunk files plus a manifest, commit those artifacts, and rebuild the original model paths after cloning.
-
-Source machine:
+Confirm it points at the inner package directory, not the repository root:
 
 ```bash
-python scripts/export_pth_chunks.py --clean
+echo "$arterial_dir"      # should end in .../arterial/arterial
 ```
 
-This writes:
+## Model weights
 
-- `model_chunks/manifest.json`
-- chunk files under `model_chunks/arterial/.../*.partNNN`
+The trained weights are not stored in this repository. They are archived on Zenodo, under a DOI, and
+downloaded by a bundled script. No account, no token and no licence gate.
 
-Destination machine:
+> 📦 **[Zenodo record](https://zenodo.org/records/22694951)** — DOI `10.5281/zenodo.22694951`
+
+### Download
 
 ```bash
-python scripts/rebuild_pth_chunks.py --skip-existing
+bash scripts/download_models.sh --record 22694951
 ```
 
-This reconstructs the original `.pth` files under `$arterial_dir/...` and verifies their SHA256 checksums.
-
-## Suggested Git branch strategy
-
-Use two branch roles:
-
-- `main` for normal code, docs, and the chunking scripts
-- `models/<version>` for chunk payload commits
-
-Recommended workflow:
+This downloads about 1.1 GB into `$arterial_dir/models`, verifies the published SHA256, extracts it,
+checks that every expected checkpoint and the two Apache-2.0 files arrived, and writes
+`ARTERIAL_MODELS_DIR` into your shell startup file:
 
 ```bash
-git checkout main
-git pull
-
-# after the chunking scripts are already in main
-git checkout -b models/2026-03
-python scripts/export_pth_chunks.py --clean
+# >>> arterial models >>>
+export ARTERIAL_MODELS_DIR="/path/to/arterial/arterial/models"
+# <<< arterial models <<<
 ```
 
-Commit payloads in module-sized batches:
+The block is marked, so running the script again updates it in place rather than appending a second
+copy, and nothing else in the file is touched. Pass `--no-persist` to skip this and set the variable
+yourself. Run `source ~/.zshrc`, or open a new terminal, for it to take effect.
 
-1. access prediction plus landmark detection
-2. vessel labelling
-3. extracranial segmentation
-4. intracranial segmentation
-5. mandible segmentation
+Add `--site https://sandbox.zenodo.org` to pull from a sandbox record.
 
-On the destination machine:
+There is no per-file caching, so re-running re-downloads the whole archive; `curl -C -` resumes an
+interrupted transfer where the server supports it.
+
+### Installing the weights somewhere else
+
+By default the weights land in `$arterial_dir/models`, which is gitignored. To keep them elsewhere —
+a shared drive, a larger volume, a location several checkouts can share — set `ARTERIAL_MODELS_DIR`
+before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
-git checkout models/2026-03
-git pull
-python scripts/rebuild_pth_chunks.py --skip-existing
+export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
+bash scripts/download_models.sh --record 22694951
 ```
+
+`ARTERIAL_MODELS_DIR` always takes precedence over the default location.
+
+### Offline and air-gapped machines
+
+Clinical environments frequently have no outbound network access. Download on a connected machine,
+copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
+
+```bash
+# on a connected machine
+curl -L -o arterial-models-v1.tar.gz \
+  "https://zenodo.org/records/22694951/files/arterial-models-v1.tar.gz?download=1"
+
+# on the target machine
+mkdir -p /data/arterial-models
+tar xzf arterial-models-v1.tar.gz -C /data/arterial-models
+export ARTERIAL_MODELS_DIR=/data/arterial-models
+```
+
+### Layout
+
+```
+<models directory>/
+├── access_prediction/     dataset.json, fold_{0..4}/model_weights.pth
+├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
+├── segmentation/          extracranial_vessels/, intracranial_vessels/,
+│                          totalsegmentator_mandible/  (+ LICENSE, NOTICE — Apache-2.0)
+└── vessel_labelling/      extracranial_vessels/
+```
+
+Everything here is an Arterial model under CC BY-NC 4.0 except
+`segmentation/totalsegmentator_mandible/`, which comes from
+[TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under Apache-2.0. Its `LICENSE` and
+`NOTICE` files are downloaded alongside the checkpoint and must stay with it if you copy the weights
+to another machine or archive — the tar-and-copy recipe above preserves them. See
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

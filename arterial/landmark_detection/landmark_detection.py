@@ -1,12 +1,12 @@
-#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-#    SPDX-License-Identifier: CC-BY-NC-4.0
+#    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+#    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-import os
 import torch
 
 import numpy as np
 import nibabel as nib
 
+from arterial import model_registry
 from arterial.landmark_detection.model import load_trained_model_seg
 from arterial.landmark_detection.utils import preprocess_for_landmark_detection, postprocess_preds, resample_mask_to_original_cta, refine_landmarks_with_segmentation
 from arterial.centerline_extraction.utils import build_endpoints_json
@@ -61,14 +61,12 @@ def infer_landmarks_from_array(cta_array, cta_affine, mode="extracranial_vessels
     print(f"Using device: {device}")
 
     # Determine model path and input channels
-    arterial_dir = os.environ["arterial_dir"]
-    
     if use_segmentation_model:
-        model_path = os.path.join(arterial_dir, "landmark_detection/models/six_landmarks_2ch.pth")
+        model_path = model_registry.model_path("landmark_detection", "six_landmarks_2ch.pth")
         in_channels = 2
         print("Using 2-channel model (CTA + segmentation)")
     else:
-        model_path = os.path.join(arterial_dir, "landmark_detection/models/six_landmarks_11_7.pth")
+        model_path = model_registry.model_path("landmark_detection", "six_landmarks_11_7.pth")
         in_channels = 1
         print("Using 1-channel model (CTA only)")
 

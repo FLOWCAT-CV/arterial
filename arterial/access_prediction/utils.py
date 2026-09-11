@@ -1,5 +1,5 @@
-#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-#    SPDX-License-Identifier: CC-BY-NC-4.0
+#    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+#    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
 
@@ -18,6 +18,7 @@ import scipy.sparse as sp
 import vtk
 from vtk.util import numpy_support
 
+from arterial import model_registry
 from arterial.io.load_and_save_operations import load_json
 
 def supersegment_sanity_check(supersegment):
@@ -77,9 +78,9 @@ class ArterialGNetDatasetInference(Dataset):
 
         """
         self.raw_file = preprocessed_supersegment_dict
-        if not os.path.exists(os.path.join(os.environ["arterial_dir"], "access_prediction/models/dataset.json")):
+        if not os.path.exists(model_registry.model_path("access_prediction", "dataset.json")):
             raise FileNotFoundError("No dataset description file found. This will be an issue for normalization of features.")
-        self.dataset_description = load_json(os.path.join(os.environ["arterial_dir"], "access_prediction/models/dataset.json"))
+        self.dataset_description = load_json(model_registry.model_path("access_prediction", "dataset.json"))
         self.use_lap_pos_enc = use_lap_pos_enc
         self.pos_enc_dim = pos_enc_dim
         self.pre_transform = pre_transform

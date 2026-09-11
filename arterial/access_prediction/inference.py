@@ -1,5 +1,5 @@
-#    Copyright 2022-2026 Stroke Research at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
-#    SPDX-License-Identifier: CC-BY-NC-4.0
+#    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
+#    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
 
@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch_geometric.transforms import Compose, ToDevice
 
+from arterial import model_registry
 from arterial.access_prediction.utils import ArterialGNetDatasetInference, DenseRadiusGraph, collate_ArterialGNetInference, build_final_attention_map
 from arterial.access_prediction.models import ArterialGNet
 
@@ -44,9 +45,9 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
         with torch.no_grad():
             for fold in range(5):
                 # Load the trained model for inference
-                # model = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_latest.pth"), map_location=torch.device(device), weights_only=False).to(device)
+                # model = torch.load(model_registry.model_path("access_prediction", f"fold_{fold}", "model_latest.pth"), map_location=torch.device(device), weights_only=False).to(device)
                 # Load the trained model for inference
-                state_dict = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+                state_dict = torch.load(model_registry.model_path("access_prediction", f"fold_{fold}", "model_weights.pth"), map_location=torch.device(device), weights_only=False)
                 model = ArterialGNet(
                     global_in_dim=state_dict["init_kwargs"]["global_in_dim"],
                     segment_node_in_dim=state_dict["init_kwargs"]["segment_node_in_dim"],
@@ -84,9 +85,9 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
         with torch.no_grad():
             for fold in range(5):
                 # Load the trained model for inference
-                # model = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_latest.pth"), map_location=torch.device(device), weights_only=False).to(device)
+                # model = torch.load(model_registry.model_path("access_prediction", f"fold_{fold}", "model_latest.pth"), map_location=torch.device(device), weights_only=False).to(device)
                 # Load the trained model for inference
-                state_dict = torch.load(os.path.join(os.environ["arterial_dir"], f"access_prediction/models/fold_{fold}/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+                state_dict = torch.load(model_registry.model_path("access_prediction", f"fold_{fold}", "model_weights.pth"), map_location=torch.device(device), weights_only=False)
                 model = ArterialGNet(
                     global_in_dim=state_dict["init_kwargs"]["global_in_dim"],
                     segment_node_in_dim=state_dict["init_kwargs"]["segment_node_in_dim"],

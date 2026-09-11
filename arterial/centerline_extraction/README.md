@@ -420,7 +420,7 @@ The module includes robust error handling for common issues:
 
 ## References
 
-1. **VMTK**: The Vascular Modeling Toolkit - [http://www.vmtk.org/](http://www.vmtk.org/)
+1. **VMTK**: The Vascular Modeling Toolkit - [https://github.com/vmtk/vmtk](https://github.com/vmtk/vmtk)
 2. Antiga, L., Piccinelli, M., Botti, L., Ene-Iordache, B., Remuzzi, A., & Steinman, D. A. (2008). **An image-based modeling framework for patient-specific computational hemodynamics.** *Medical & Biological Engineering & Computing*, 46(11), 1097-1112.
 
 ---
