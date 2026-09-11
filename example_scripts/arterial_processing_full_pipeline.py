@@ -5,35 +5,46 @@ from arterial.run.processor import ArterialProcessor
 from arterial.io.dicom_and_nifti import convert_dicom_to_nifti_d2n
 import os, shutil
 import json
-import pydicom
 import argparse
 import logging
 import sys
 from datetime import datetime
 
 def load_args_from_params_json(params):
-    # Load params into args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--case_dir", type=str, default=params.get('case_dir', None))
-    parser.add_argument("--cta_nifti_path", type=str, default=params.get('cta_nifti_path', os.path.join(params.get('case_dir', None), "cta.nii.gz")))
-    parser.add_argument("--mode", type=str, default=params.get('mode', "extracranial_vessels"))
-    parser.add_argument("--sampling_distance_mm", type=float, default=params.get('sampling_distance_mm', 2.0))
-    parser.add_argument("--fast_segmentation", type=bool, default=params.get('fast_segmentation', False))
-    parser.add_argument("--skip_segmentation", type=bool, default=params.get('skip_segmentation', False))
-    parser.add_argument("--skip_centerline_extraction", type=bool, default=params.get('skip_centerline_extraction', False))
-    parser.add_argument("--skip_branching", type=bool, default=params.get('skip_branch_model_extraction', False))
-    parser.add_argument("--skip_clipping", type=bool, default=params.get('skip_centerline_postprocessing', True))
-    parser.add_argument("--skip_vessel_labelling", type=bool, default=params.get('skip_vessel_labelling', False))
-    parser.add_argument("--skip_feature_extraction", type=bool, default=params.get('skip_feature_extraction', False))
-    parser.add_argument("--skip_access_prediction", type=bool, default=params.get('skip_access_prediction', False))
-    parser.add_argument("--skip_landmark_detection", type=bool, default=params.get('skip_landmark_detection', False))
-    parser.add_argument("--cl_dice_nnunet", type=bool, default=params.get('cl_dice_nnunet', False))  
-    parser.add_argument("--no_slicing", type=bool, default=params.get('no_slicing', False))
-    parser.add_argument("--set_threshold_099", type=bool, default=params.get('set_threshold_099', False))
-    args = parser.parse_args()
+    """
+    Builds the argument namespace expected by ArterialProcessor from a params dict.
+
+    Keys mirror the flags of perform_analysis.py; missing keys take the CLI defaults.
+
+    Parameters
+    ----------
+    params : dict
+        Parameters loaded from a JSON file such as arterial_processing_params.json.
+
+    Returns
+    -------
+    args : argparse.Namespace
+        Namespace accepted by ArterialProcessor.
+
+    """
+    case_dir = params.get("case_dir")
+    if not case_dir:
+        raise ValueError("case_dir is required in the parameters file")
+    flags = ["fast_segmentation", "skip_segmentation", "skip_centerline_extraction", "skip_branching", "skip_clipping",
+             "skip_vessel_labelling", "skip_feature_extraction", "skip_access_prediction", "skip_landmark_detection",
+             "cl_dice_nnunet", "no_slicing", "set_threshold_099"]
+    args = argparse.Namespace(
+        case_dir=case_dir,
+        cta_nifti_path=params.get("cta_nifti_path") or os.path.join(case_dir, "cta.nii.gz"),
+        mode=params.get("mode", "extracranial_vessels"),
+        sampling_distance_mm=float(params.get("sampling_distance_mm", 2.0)),
+        **{flag: bool(params.get(flag, False)) for flag in flags},
+    )
     return args
 
 def print_dcm_info(cta_dicom_path):
+    import pydicom  # only needed when converting from DICOM
+
     dcm = pydicom.dcmread(os.path.join(cta_dicom_path, sorted(os.listdir(cta_dicom_path))[0]))
     print("Study description: ", getattr(dcm, 'StudyDescription', None))
     print("Series description: ", getattr(dcm, 'SeriesDescription', None))

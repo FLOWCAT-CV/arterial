@@ -19,6 +19,8 @@ If save is enabled, the following files will be saved:
 
 """
 
+import os
+
 from arterial.landmark_detection.landmark_detector import LandmarkDetector
 
 def run_landmark_detection_single_case(case_dir, mode="extracranial_vessels", cta_nifti_path=None):
@@ -50,7 +52,10 @@ def run_landmark_detection_batch_processing(src_dir, mode, cta_nifti_path_conven
     landmarks_slicer_json_path_dict = {}
     predicted_mask_nifti_path_dict = {}
 
-    for case_dir in os.listdir(src_dir):
+    for case_name in sorted(os.listdir(src_dir)):
+        case_dir = os.path.join(src_dir, case_name)
+        if not os.path.isdir(case_dir):
+            continue
         if cta_nifti_path_convention is not None:
             cta_nifti_path = os.path.join(case_dir, cta_nifti_path_convention)
         else:
@@ -59,9 +64,9 @@ def run_landmark_detection_batch_processing(src_dir, mode, cta_nifti_path_conven
         landmarks_ras_mm_dict_, landmarks_slicer_json_path_, predicted_mask_nifti_path_ = run_landmark_detection_single_case(case_dir, mode, cta_nifti_path)
 
         # Output objects are stored as attributes of the landmark_detector object
-        landmarks_ras_mm_dict[case_dir] = landmarks_ras_mm_dict_
-        landmarks_slicer_json_path_dict[case_dir] = landmarks_slicer_json_path_
-        predicted_mask_nifti_path_dict[case_dir] = predicted_mask_nifti_path_
+        landmarks_ras_mm_dict[case_name] = landmarks_ras_mm_dict_
+        landmarks_slicer_json_path_dict[case_name] = landmarks_slicer_json_path_
+        predicted_mask_nifti_path_dict[case_name] = predicted_mask_nifti_path_
 
     return landmarks_ras_mm_dict, landmarks_slicer_json_path_dict, predicted_mask_nifti_path_dict
 

@@ -1,6 +1,6 @@
 {
-    "case_dir": "/home/vhir/github/arterial/tests/test_data/output",
-    "cta_nifti_path": "/home/vhir/github/arterial/tests/test_data/input_test_data/cta.nii.gz",
+    "case_dir": "/path/to/case_dir",
+    "cta_nifti_path": "",
     "mode": "extracranial_vessels",
     "fast_segmentation": false,
     "sampling_distance_mm": 2.0,

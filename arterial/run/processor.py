@@ -12,6 +12,9 @@ from arterial.landmark_detection.landmark_detector import LandmarkDetector
 
 from time import time
 
+SUPPORTED_MODES = ("extracranial_vessels", "intracranial_vessels")
+
+
 class ArterialProcessor():
     """
     ArterialProcessor class to perform the desired analysis specified by the parsed arguments upon
@@ -52,23 +55,25 @@ class ArterialProcessor():
         """
         # Parameters from args
         self.case_dir = args.case_dir
-        self.mode = args.mode
-        self.cta_nifti_path = args.cta_nifti_path
+        self.mode = getattr(args, "mode", "extracranial_vessels")
+        if self.mode not in SUPPORTED_MODES:
+            raise ValueError(f"mode should be one of {SUPPORTED_MODES}, got {self.mode!r}")
+        self.cta_nifti_path = getattr(args, "cta_nifti_path", None)
         if self.cta_nifti_path is None:
             self.cta_nifti_path = os.path.join(self.case_dir, "cta.nii.gz")
-        self.sampling_distance_mm = args.sampling_distance_mm
-        self.skip_segmentation = args.skip_segmentation
-        self.fast_segmentation = args.fast_segmentation
-        self.skip_centerline_extraction = args.skip_centerline_extraction
-        self.skip_branching = args.skip_branching
-        self.skip_clipping = args.skip_clipping
-        self.skip_vessel_labelling = args.skip_vessel_labelling
-        self.skip_feature_extraction = args.skip_feature_extraction
-        self.skip_access_prediction = args.skip_access_prediction
-        self.skip_landmark_detection = args.skip_landmark_detection
-        self.use_vanilla_nnunet = not args.cl_dice_nnunet
-        self.no_slicing = args.no_slicing
-        self.set_threshold_099 = args.set_threshold_099
+        self.sampling_distance_mm = getattr(args, "sampling_distance_mm", 2)
+        self.skip_segmentation = getattr(args, "skip_segmentation", False)
+        self.fast_segmentation = getattr(args, "fast_segmentation", False)
+        self.skip_centerline_extraction = getattr(args, "skip_centerline_extraction", False)
+        self.skip_branching = getattr(args, "skip_branching", False)
+        self.skip_clipping = getattr(args, "skip_clipping", False)  # kept for CLI compatibility; clipping is not part of the pipeline
+        self.skip_vessel_labelling = getattr(args, "skip_vessel_labelling", False)
+        self.skip_feature_extraction = getattr(args, "skip_feature_extraction", False)
+        self.skip_access_prediction = getattr(args, "skip_access_prediction", False)
+        self.skip_landmark_detection = getattr(args, "skip_landmark_detection", False)
+        self.use_vanilla_nnunet = not getattr(args, "cl_dice_nnunet", False)
+        self.no_slicing = getattr(args, "no_slicing", False)
+        self.set_threshold_099 = getattr(args, "set_threshold_099", False)
 
         # Initialize module classes
         self.vessel_segmenter = VesselSegmenter(self.case_dir,
@@ -101,7 +106,8 @@ class ArterialProcessor():
         """
         Calls wrapper method from each of the Arterial modules.
 
-        Binary arguments from args are used to specify 
+        The skip_* flags given at construction decide which stages run; feature extraction and
+        access prediction only run in extracranial_vessels mode.
 
         """
         print("Performing analysis over {}. \n".format(self.cta_nifti_path))
@@ -129,8 +135,8 @@ class ArterialProcessor():
             step4 = time()
             feature_extraction_time = step4 - step3
             print("Feature extraction took {:.2f} s".format(step4 - step3))
-            step5 = time()
             self.perform_access_prediction()
+            step5 = time()
             access_prediction_time = step5 - step4
             print("Access prediction took {:.2f} s".format(step5 - step4))
         final_time = time()
@@ -154,7 +160,7 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
 
-        >>> case_dir/{os.path.basename(case_dir)}_segmentation.nii.gz
+        >>> case_dir/{mode}/segmentation.nii.gz
     
         Parmeters
         ---------
@@ -203,13 +209,8 @@ class ArterialProcessor():
                 print("done")
             else:
                 print("Skipping centerline branching")
-            if not self.skip_clipping:
-                print("Performing surface model clipping...")
-                # Performs surface model clipping with VMTK
-                # self.centerline_extractor.perform_clipped_model_extraction()
-                print("done")
-            else:
-                print("Skipping surface model clipping")
+            # Surface model clipping (perform_clipped_model_extraction) is not part of the
+            # pipeline; --skip_clipping is accepted for compatibility and has no effect.
             # Creates array for easier centerline analysis
             self.centerline_extractor.perform_centerline_postprocessing()
             print("done \n")
@@ -328,15 +329,15 @@ class ArterialProcessor():
 
         At the end of the execution, the following files should be generated:
 
-        >>> case_dir/extracranial_vessels/landmarks/landmarks.json
-        >>> case_dir/extracranial_vessels/landmarks/landmarks_slicer.json
+        >>> case_dir/{mode}/landmarks.json
+        >>> case_dir/{mode}/landmarks_slicer.json
         >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.vtk
         >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.pickle
         >>> case_dir/extracranial_vessels/individual_centerlines/individual_centerline_{centerline_id}.png
         """
         from arterial.io.load_and_save_operations import load_vtkpolydata
-        feature_extractor_for_landmark_detection = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path)
         if not self.skip_landmark_detection:
+            feature_extractor_for_landmark_detection = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path)
             print("Performing landmark detection...")
             self.landmark_detector.detect_landmarks_on_cta()
             print("done \n")
@@ -356,6 +357,8 @@ class ArterialProcessor():
                         'l-mca': ('l-tica', 'l-mca'),
                         'r-mca': ('r-tica', 'r-mca'),
                     }
+                else:
+                    raise ValueError(f"No landmark pairs defined for mode {self.mode!r}")
                 for landmark_pair_key in landmark_pairs.keys():
                     try:
                         self.centerline_extractor.extract_centerline_between_endpoints(self.landmark_detector.landmarks_ras_mm_dict[landmark_pairs[landmark_pair_key][0]], self.landmark_detector.landmarks_ras_mm_dict[landmark_pairs[landmark_pair_key][1]], landmark_pair_key, save=True)

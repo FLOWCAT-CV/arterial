@@ -375,6 +375,10 @@ case_dir/
 | `-sfe`, `--skip_feature_extraction` | Skip feature extraction |
 | `-sap`, `--skip_access_prediction` | Skip access prediction |
 | `-sld`, `--skip_landmark_detection` | Skip landmark detection |
+| `-sc`, `--skip_clipping` | No effect; accepted for backwards compatibility |
+| `-clnn`, `--cl_dice_nnunet` | Use the nnU-Net trained with centerline Dice instead of the vanilla one |
+| `-ns`, `--no_slicing` | Segment the whole volume without the head/neck split (intracranial mode) |
+| `-s99`, `--set_threshold_099` | Binarise the segmentation at probability 0.99 |
 
 ---
 

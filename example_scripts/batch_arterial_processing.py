@@ -7,18 +7,20 @@ import sys
 import json
 import logging
 from datetime import datetime
-from test_arterial_processing import main
+from arterial_processing_full_pipeline import main
 import pandas as pd
 import traceback
 
 SRC_DIR = ""
 DST_DIR = ""
 XLSX_PATH = ""
-TEMPLATE_PARAMETERS_FILE_PATH = os.path.join(os.environ["arterial_dir"], "../example_scripts", "arterial_processing_params.json")
+TEMPLATE_PARAMETERS_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arterial_processing_params.json")
 USE_SYMLINKS = True
 
 # Connect to the database. Use any logic here, as long as you have an iterator with identifiers and existing images it'll be fine
 # Also, you will have to define a logic for the filename
+if not XLSX_PATH:
+    raise SystemExit("Set SRC_DIR, DST_DIR and XLSX_PATH at the top of this script before running it.")
 df = pd.read_excel(XLSX_PATH)
 
 # Custom class to redirect stdout/stderr to logger
