@@ -16,6 +16,29 @@ from arterial.feature_extraction.vtk_centerline_geometry.utils import (
 )
 
 
+def _point_array(polydata, name):
+    """
+    Reads a point-data array as numpy, failing clearly when it is missing.
+
+    Parameters
+    ----------
+    polydata : vtk.vtkPolyData
+        Centerline polydata.
+    name : str
+        Name of the point-data array.
+
+    Returns
+    -------
+    array : numpy.ndarray
+        The array values.
+
+    """
+    array = polydata.GetPointData().GetArray(name)
+    if array is None:
+        raise RuntimeError(f"Centerline has no point-data array {name!r}.")
+    return vtk_to_numpy(array)
+
+
 def perform_radius_extraction(centerline, surface, mis_array_name="MaximumInscribedSphereRadius"):
     """
     Adds cross-section-based radius measurements as point-data arrays to a centerline
@@ -54,8 +77,8 @@ def perform_radius_extraction(centerline, surface, mis_array_name="MaximumInscri
     out = vtk.vtkPolyData()
     out.DeepCopy(centerline)
 
-    radius_mis = vtk_to_numpy(out.GetPointData().GetArray(mis_array_name))
-    tangents = vtk_to_numpy(out.GetPointData().GetArray("Tangents"))
+    radius_mis = _point_array(out, mis_array_name)
+    tangents = _point_array(out, "Tangents")
     n_points = out.GetNumberOfPoints()
 
     radius_ce = np.empty(n_points)
@@ -80,7 +103,7 @@ def perform_radius_extraction(centerline, surface, mis_array_name="MaximumInscri
         points_2d = project_to_plane_2d(points_3d, center, normal)
         _, _, radius_cc[point_idx] = minimum_enclosing_circle(points_2d)
 
-    ovality = radius_mis / radius_cc
+    ovality = np.divide(radius_mis, radius_cc, out=np.ones_like(radius_mis, dtype=float), where=radius_cc > 0)
 
     add_point_array(out, radius_ce, "Radius CE")
     add_point_array(out, radius_cc, "Radius CC")
@@ -126,9 +149,9 @@ def perform_curvature_extraction(centerline, savgol_window_length=50, savgol_pol
     distance_from_origin = np.zeros(n_points)
     distance_from_origin[1:] = np.cumsum(np.linalg.norm(np.diff(coordinates, axis=0), axis=1))
 
-    tangents = vtk_to_numpy(out.GetPointData().GetArray("Tangents"))
-    normals = vtk_to_numpy(out.GetPointData().GetArray("Normals"))
-    binormals = vtk_to_numpy(out.GetPointData().GetArray("Binormals"))
+    tangents = _point_array(out, "Tangents")
+    normals = _point_array(out, "Normals")
+    binormals = _point_array(out, "Binormals")
 
     curvature = np.linalg.norm(np.gradient(tangents, axis=0), axis=1)
     torsion = (-np.gradient(binormals, axis=0) * normals).sum(axis=1)

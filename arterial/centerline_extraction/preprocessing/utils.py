@@ -2,6 +2,7 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import vtk
+from vtk.util.numpy_support import numpy_to_vtk
 
 import numpy as np
 
@@ -99,15 +100,16 @@ def numpy_array_to_vtk_image_data(numpy_array):
         
 
     """
-    # Convert a numpy array to a VTK ImageData object
-    importer = vtk.vtkImageImport()
-    importer.SetDataScalarTypeToDouble()
-    importer.SetNumberOfScalarComponents(1)
-    importer.SetDataExtent(0, numpy_array.shape[2] - 1, 0, numpy_array.shape[1] - 1, 0, numpy_array.shape[0] - 1)
-    importer.SetWholeExtent(0, numpy_array.shape[2] - 1, 0, numpy_array.shape[1] - 1, 0, numpy_array.shape[0] - 1)
-    importer.SetImportVoidPointer(numpy_array)
-    importer.Update()
-    return importer.GetOutput()
+    # Copy the values into VTK as doubles. The previous vtkImageImport path declared the
+    # buffer as double whatever its dtype (garbage for uint8/int arrays) and kept a raw
+    # pointer to a possibly non-contiguous, possibly garbage-collected numpy buffer.
+    array = np.ascontiguousarray(numpy_array, dtype=np.float64)
+    image = vtk.vtkImageData()
+    image.SetDimensions(array.shape[2], array.shape[1], array.shape[0])  # VTK x runs along the last numpy axis
+    scalars = numpy_to_vtk(array.ravel(order="C"), deep=1, array_type=vtk.VTK_DOUBLE)
+    scalars.SetName("scalars")
+    image.GetPointData().SetScalars(scalars)
+    return image
 
 def add_affine_information(vtk_image_data, affine=None):
     """

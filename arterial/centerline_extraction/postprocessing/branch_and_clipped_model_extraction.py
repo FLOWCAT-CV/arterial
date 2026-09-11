@@ -2,6 +2,7 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import vtk
+import vtk.util.numpy_support
 
 from vmtk import vtkvmtk
 
@@ -108,6 +109,8 @@ def unify_branch_models(branch_model_list, radius_array_name="MaximumInscribedSp
         Unified branch model.
 
     """
+    if len(branch_model_list) == 0:
+        raise ValueError("No models to unify.")
     if len(branch_model_list) == 1:
         return branch_model_list[0]
     else:
@@ -284,6 +287,8 @@ def unify_clipped_models(clipped_model_list):
         Unified clipped model.
 
     """
+    if len(clipped_model_list) == 0:
+        raise ValueError("No models to unify.")
     if len(clipped_model_list) == 1:
         return clipped_model_list[0]
     else:
@@ -301,7 +306,7 @@ def unify_clipped_models(clipped_model_list):
             else:
                 print("Processing clipped model {}...".format(clipped_model_idx))
                 # Get point data (we only get groupId)
-                group_id_point_array_clipped_model = vtk.numpy_support.vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
+                group_id_point_array_clipped_model = vtk.util.numpy_support.vtk_to_numpy(clipped_model.GetPointData().GetArray("GroupIds"))
                 # Update groupIds of current clipped_model
                 group_id_point_array_clipped_model = group_id_point_array_clipped_model + acc_group_id_clipped_model
                 # Update accumulated groupId

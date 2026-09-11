@@ -6,7 +6,7 @@ import numpy as np
 import nibabel as nib
 
 from scipy.spatial import ConvexHull, cKDTree
-from scipy.spatial.qhull import QhullError
+from scipy.spatial import QhullError
 from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
 
 
