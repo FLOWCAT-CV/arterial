@@ -12,6 +12,7 @@ import torch
 
 from torch_geometric.data import Data, InMemoryDataset
 
+from arterial import model_registry
 from arterial.io.load_and_save_operations import load_json
 
 class EVCDatasetInference(InMemoryDataset):
@@ -45,7 +46,7 @@ class EVCDatasetInference(InMemoryDataset):
 
     """
     def __init__(self, raw_graph, pre_transform = None):
-        dataset_path = os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels", "dataset.json")
+        dataset_path = model_registry.model_path("vessel_labelling", "extracranial_vessels", "dataset.json")
         if os.path.exists(dataset_path):
             self.dataset_description = load_json(dataset_path)
         else:

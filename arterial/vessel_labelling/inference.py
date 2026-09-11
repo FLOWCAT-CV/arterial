@@ -9,6 +9,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.transforms import Compose, RadiusGraph, ToDevice
 from torch_geometric.nn.models import GAT
 
+from arterial import model_registry
 from arterial.vessel_labelling.utils import EVCDatasetInference
 from arterial.io.load_and_save_operations import load_json
 
@@ -80,7 +81,7 @@ def predict_extracranial_vessel_types(graph):
     # Load graph to the DataLoader through the ArterialDatasetInference class, with the inference transforms
     data_loader = DataLoader(data, batch_size = 1, shuffle = False) 
     # Load the trained model for inference
-    state_dict = torch.load(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+    state_dict = torch.load(model_registry.model_path("vessel_labelling", "extracranial_vessels", "model_weights.pth"), map_location=torch.device(device), weights_only=False)
     model = GAT(
         in_channels = state_dict["init_kwargs"]["in_channels"],
         hidden_channels = state_dict["init_kwargs"]["hidden_channels"],
@@ -107,7 +108,7 @@ def predict_extracranial_vessel_types(graph):
     # Save that information in the graph
     predicted_graph = graph.copy()
     # Get edge type dict from the dataset.json
-    dataset_description = load_json(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/dataset.json"))
+    dataset_description = load_json(model_registry.model_path("vessel_labelling", "extracranial_vessels", "dataset.json"))
     edge_labels_dict = dataset_description["edge_labels_dict"]
     # For edges, we keep all information from the original graph, and in addition we set the vessel type from the predicted_vessels dict
     for src, dst in predicted_graph.edges:
@@ -148,7 +149,7 @@ def predict_extracranial_vessel_types_ensemble(graph):
     data_loader = DataLoader(data, batch_size = 1, shuffle = False) 
 
     # Get edge type dict from the dataset.json
-    dataset_description = load_json(os.path.join(os.environ["arterial_dir"], "vessel_labelling/models/extracranial_vessels/dataset.json"))
+    dataset_description = load_json(model_registry.model_path("vessel_labelling", "extracranial_vessels", "dataset.json"))
 
     # create tensor of size of length(graph_preprocessed.x), with numi_classes number of channels, and depth 5 for folds
     # We will average logits across folds and then argmax to choose final class
@@ -157,8 +158,8 @@ def predict_extracranial_vessel_types_ensemble(graph):
     with torch.no_grad():
         for fold in range(5):
             # Load the trained model for inference
-            # model = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model.pth"), map_location=torch.device(device), weights_only=False).to(device)
-            state_dict = torch.load(os.path.join(os.environ["arterial_dir"], f"vessel_labelling/models/extracranial_vessels/fold_{fold}/model_weights.pth"), map_location=torch.device(device), weights_only=False)
+            # model = torch.load(model_registry.model_path("vessel_labelling", "extracranial_vessels", f"fold_{fold}", "model.pth"), map_location=torch.device(device), weights_only=False).to(device)
+            state_dict = torch.load(model_registry.model_path("vessel_labelling", "extracranial_vessels", f"fold_{fold}", "model_weights.pth"), map_location=torch.device(device), weights_only=False)
             model = GAT(
                 in_channels = state_dict["init_kwargs"]["in_channels"],
                 hidden_channels = state_dict["init_kwargs"]["hidden_channels"],

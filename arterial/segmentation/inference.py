@@ -11,6 +11,8 @@ from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 import warnings
 warnings.filterwarnings("ignore") # There is a warning that is wrong with nnunet 
                                   # (something about the version of trained model)
+
+from arterial import model_registry
     
 def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False):
     """
@@ -65,7 +67,7 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
     # Initializes the network architecture, loads the checkpoint
     print("Using vanilla nnunet:", use_vanilla_nnunet)
     predictor.initialize_from_trained_model_folder(
-        os.path.join(os.environ["arterial_dir"], f'segmentation/models/{mode}/nnUNetTrainer__nnUNetPlans__{nnunet_mode}'),
+        model_registry.model_path("segmentation", mode, f"nnUNetTrainer__nnUNetPlans__{nnunet_mode}"),
         use_folds=("all" if use_vanilla_nnunet else "0",), # Models set by use_vanilla_nnunet. "0" is model trained with nnUNetClDiceLossTrainer, "all" is trained with vanilla nnUNetTrainer
         # use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer (these have an error on inference, sometimes return tensors with nan values)
         # use_folds=("all",), # Models trained with vanilla nnUNetTrainer
