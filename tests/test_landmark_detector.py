@@ -1,135 +1,99 @@
 #    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-import unittest
-import os, shutil
+import os
+
 import numpy as np
+import nibabel as nib
+
+from helpers import ArterialTestCase, slow, ras_bounding_box
 from arterial.landmark_detection.landmark_detector import LandmarkDetector
 
-class TestLandmarkDetector(unittest.TestCase):
-    def setUp(self):
-        self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
-        self.mode = "extracranial_vessels"
-        self.cta_nifti_path = os.path.join(self.case_dir, "input_test_data", "cta.nii.gz")
-        self.landmark_detector = LandmarkDetector(self.case_dir, self.mode, self.cta_nifti_path)
+EXPECTED_LANDMARKS = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
 
-    def test_init(self):
-        self.assertEqual(self.landmark_detector.case_dir, self.case_dir)
-        self.assertEqual(self.landmark_detector.mode, self.mode)
-        self.assertEqual(self.landmark_detector.cta_nifti_path, self.cta_nifti_path)
-        self.assertIsNone(self.landmark_detector.cta_nifti)
-        self.assertIsNone(self.landmark_detector.cta_array)
-        self.assertIsNone(self.landmark_detector.cta_affine)
-        self.assertIsNone(self.landmark_detector.landmarks_ras_mm_dict)
-        self.assertIsNone(self.landmark_detector.landmarks_slicer_json)
-        self.assertIsNone(self.landmark_detector.predicted_mask_nifti)
-        self.assertEqual(self.landmark_detector.landmarks_ras_json_path, 
-                        os.path.join(self.case_dir, self.mode, "landmarks.json"))
-        self.assertEqual(self.landmark_detector.landmarks_slicer_json_path, 
-                        os.path.join(self.case_dir, self.mode, "landmarks_slicer.json"))
-        self.assertEqual(self.landmark_detector.predicted_mask_nifti_path, 
-                        os.path.join(self.case_dir, self.mode, "landmarks_mask.nii.gz"))
+
+class TestLandmarkDetectorInit(ArterialTestCase):
+    """Constructor, paths and CTA loading. No inference."""
+
+    def setUp(self):
+        super().setUp()
+        self.cta_nifti_path = self.require_fixture("cta.nii.gz")
+        self.detector = LandmarkDetector(self.case_dir, self.mode, self.cta_nifti_path)
+
+    def test_init_stores_arguments_and_paths(self):
+        self.assertEqual(self.detector.case_dir, self.case_dir)
+        self.assertEqual(self.detector.mode, self.mode)
+        self.assertEqual(self.detector.cta_nifti_path, self.cta_nifti_path)
+        self.assertEqual(self.detector.landmarks_ras_json_path, os.path.join(self.mode_dir, "landmarks.json"))
+        self.assertEqual(self.detector.landmarks_slicer_json_path, os.path.join(self.mode_dir, "landmarks_slicer.json"))
+        self.assertEqual(self.detector.predicted_mask_nifti_path, os.path.join(self.mode_dir, "landmarks_mask.nii.gz"))
+
+    def test_init_leaves_results_empty(self):
+        for attr in ["cta_nifti", "cta_array", "cta_affine", "landmarks_ras_mm_dict",
+                     "landmarks_slicer_json", "predicted_mask_nifti"]:
+            with self.subTest(attr=attr):
+                self.assertIsNone(getattr(self.detector, attr))
 
     def test_load_cta_nifti(self):
-        self.landmark_detector._load_cta_nifti_from_file()
-        self.assertIsNotNone(self.landmark_detector.cta_nifti)
-        self.assertIsNotNone(self.landmark_detector.cta_array)
-        self.assertIsNotNone(self.landmark_detector.cta_affine)
-        self.assertEqual(self.landmark_detector.cta_affine.shape, (4, 4))
-        self.assertGreater(self.landmark_detector.cta_array.ndim, 0)
+        self.detector._load_cta_nifti_from_file()
+        self.assertIsNotNone(self.detector.cta_nifti)
+        self.assertEqual(self.detector.cta_array.ndim, 3)
+        self.assertEqual(self.detector.cta_affine.shape, (4, 4))
 
-    def test_detect_landmarks_without_mask(self):
-        # Remove existing files if any
-        if os.path.exists(os.path.join(self.case_dir, self.mode)):
-            shutil.rmtree(os.path.join(self.case_dir, self.mode))
-        
-        self.landmark_detector.detect_landmarks_on_cta(return_mask=False, save=True)
-        
-        # Check that landmarks were detected
-        self.assertIsNotNone(self.landmark_detector.landmarks_ras_mm_dict)
-        self.assertIsNotNone(self.landmark_detector.landmarks_slicer_json)
-        self.assertIsNone(self.landmark_detector.predicted_mask_nifti)
-        
-        # Check that landmark dict has expected structure
-        expected_landmarks = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
-        for landmark in expected_landmarks:
-            self.assertIn(landmark, self.landmark_detector.landmarks_ras_mm_dict)
-            self.assertEqual(len(self.landmark_detector.landmarks_ras_mm_dict[landmark]), 3)
-        
-        # Check that files were saved
-        self.assertTrue(os.path.exists(self.landmark_detector.landmarks_ras_json_path))
-        self.assertTrue(os.path.exists(self.landmark_detector.landmarks_slicer_json_path))
-        self.assertFalse(os.path.exists(self.landmark_detector.predicted_mask_nifti_path))
 
-    def test_detect_landmarks_with_mask(self):
-        # Reset landmarks
-        self.landmark_detector.landmarks_ras_mm_dict = None
-        self.landmark_detector.landmarks_slicer_json = None
-        self.landmark_detector.predicted_mask_nifti = None
-        
-        # Remove existing files if any
-        if os.path.exists(os.path.join(self.case_dir, self.mode)):
-            shutil.rmtree(os.path.join(self.case_dir, self.mode))
-        
-        self.landmark_detector.detect_landmarks_on_cta(return_mask=True, save=True)
-        
-        # Check that landmarks and mask were detected
-        self.assertIsNotNone(self.landmark_detector.landmarks_ras_mm_dict)
-        self.assertIsNotNone(self.landmark_detector.landmarks_slicer_json)
-        self.assertIsNotNone(self.landmark_detector.predicted_mask_nifti)
-        
-        # Check that all files were saved including mask
-        self.assertTrue(os.path.exists(self.landmark_detector.landmarks_ras_json_path))
-        self.assertTrue(os.path.exists(self.landmark_detector.landmarks_slicer_json_path))
-        self.assertTrue(os.path.exists(self.landmark_detector.predicted_mask_nifti_path))
+class TestLandmarkDetectorInference(ArterialTestCase):
+    """3D U-Net inference on the fixture CTA."""
 
-    def test_detect_landmarks_without_save(self):
-        # Reset landmarks
-        self.landmark_detector.landmarks_ras_mm_dict = None
-        self.landmark_detector.landmarks_slicer_json = None
-        
-        # Remove existing directory if any
-        if os.path.exists(os.path.join(self.case_dir, self.mode)):
-            shutil.rmtree(os.path.join(self.case_dir, self.mode))
-        
-        self.landmark_detector.detect_landmarks_on_cta(return_mask=False, save=False)
-        
-        # Check that landmarks were detected
-        self.assertIsNotNone(self.landmark_detector.landmarks_ras_mm_dict)
-        self.assertIsNotNone(self.landmark_detector.landmarks_slicer_json)
-        
-        # Check that no files were created (directory shouldn't exist or should be empty)
-        if os.path.exists(os.path.join(self.case_dir, self.mode)):
-            files = os.listdir(os.path.join(self.case_dir, self.mode))
-            self.assertEqual(len(files), 0, "No files should be created when save=False")
+    def setUp(self):
+        super().setUp()
+        self.cta_nifti_path = self.require_fixture("cta.nii.gz")
+        self.lower, self.upper = ras_bounding_box(nib.load(self.cta_nifti_path))
 
-    def test_landmark_coordinates_validity(self):
-        # Run detection
-        if self.landmark_detector.landmarks_ras_mm_dict is None:
-            self.landmark_detector.detect_landmarks_on_cta(return_mask=False, save=False)
-        
-        # Check that all coordinates are finite numbers
-        for landmark, coords in self.landmark_detector.landmarks_ras_mm_dict.items():
-            self.assertEqual(len(coords), 3, f"Landmark {landmark} should have 3 coordinates")
-            for coord in coords:
-                self.assertTrue(np.isfinite(coord), 
-                              f"Landmark {landmark} has non-finite coordinate: {coord}")
-            
-            # Check that no landmark is at origin (0, 0, 0) - would indicate failure
-            distance_from_origin = np.linalg.norm(coords)
-            self.assertGreater(distance_from_origin, 1.0,
-                             f"Landmark {landmark} too close to origin: {coords}")
+    def _check_landmarks(self, landmarks):
+        self.assertIsNotNone(landmarks)
+        self.assertEqual(set(landmarks.keys()), set(EXPECTED_LANDMARKS))
+        for name, coords in landmarks.items():
+            with self.subTest(landmark=name):
+                coords = np.asarray(coords, dtype=float)
+                self.assertEqual(coords.shape, (3,))
+                self.assertTrue(np.all(np.isfinite(coords)), f"non-finite coordinate {coords}")
+                self.assertTrue(np.all(coords >= self.lower - 1) and np.all(coords <= self.upper + 1),
+                                f"{name} at {coords} lies outside the CTA bounding box {self.lower}..{self.upper}")
 
-    @classmethod
-    def tearDownClass(cls):
-        # Remove all the files generated during the tests
-        cls.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
-        for filename in os.listdir(cls.case_dir):
-            if filename not in ["input_test_data", "output"]:
-                if os.path.isfile(os.path.join(cls.case_dir, filename)):
-                    os.remove(os.path.join(cls.case_dir, filename))
-                elif os.path.isdir(os.path.join(cls.case_dir, filename)):
-                    shutil.rmtree(os.path.join(cls.case_dir, filename))
+    @slow
+    def test_detect_cta_only_saves_json(self):
+        detector = LandmarkDetector(self.case_dir, self.mode, self.cta_nifti_path)
+        landmarks = detector.detect_landmarks_on_cta(return_mask=False, save=True, use_segmentation_model=False, refine_with_segmentation=False)
+        self._check_landmarks(landmarks)
+        self.assertIs(landmarks, detector.landmarks_ras_mm_dict)
+        self.assertIsNotNone(detector.landmarks_slicer_json)
+        self.assertFileExists(detector.landmarks_ras_json_path)
+        self.assertFileExists(detector.landmarks_slicer_json_path)
+        self.assertFileMissing(detector.predicted_mask_nifti_path)
 
-if __name__ == '__main__':
-    unittest.main()
+    @slow
+    def test_detect_with_mask(self):
+        detector = LandmarkDetector(self.case_dir, self.mode, self.cta_nifti_path)
+        detector.detect_landmarks_on_cta(return_mask=True, save=True, use_segmentation_model=False, refine_with_segmentation=False)
+        self._check_landmarks(detector.landmarks_ras_mm_dict)
+        self.assertFileExists(detector.predicted_mask_nifti_path)
+        mask = np.asarray(nib.load(detector.predicted_mask_nifti_path).dataobj)
+        self.assertEqual(mask.ndim, 3)
+        self.assertTrue(set(np.unique(mask).tolist()) <= set(range(7)), "mask labels should be 0..6")
+        self.assertGreater(int((mask > 0).sum()), 0, "mask is empty")
+
+    @slow
+    def test_detect_without_save_writes_nothing(self):
+        detector = LandmarkDetector(self.case_dir, self.mode, self.cta_nifti_path)
+        detector.detect_landmarks_on_cta(return_mask=False, save=False, use_segmentation_model=False, refine_with_segmentation=False)
+        self._check_landmarks(detector.landmarks_ras_mm_dict)
+        self.assertFalse(os.path.exists(self.mode_dir) and os.listdir(self.mode_dir), "no files should be written when save=False")
+
+    @slow
+    def test_detect_with_segmentation_model(self):
+        # The two-channel model and segmentation-based refinement, using the fixture segmentation.
+        segmentation_path = self.require_fixture("segmentation.nii.gz")
+        detector = LandmarkDetector(self.case_dir, self.mode, self.cta_nifti_path, segmentation_nifti_path=segmentation_path)
+        detector.detect_landmarks_on_cta(return_mask=False, save=True, use_segmentation_model=True, refine_with_segmentation=True)
+        self._check_landmarks(detector.landmarks_ras_mm_dict)
+        self.assertFileExists(detector.landmarks_ras_json_path)
