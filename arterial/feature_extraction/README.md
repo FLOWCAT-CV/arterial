@@ -112,7 +112,7 @@ Global features describe anatomical variants at the patient level.
 ### Minimal Example
 
 ```python
-from arterial.feature_extraction import FeatureExtractor
+from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
 # Initialize extractor
 extractor = FeatureExtractor(
@@ -132,7 +132,7 @@ extractor.extract_global_features()
 ### Full Pipeline
 
 ```python
-from arterial.feature_extraction import FeatureExtractor
+from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
 # Initialize with custom paths
 extractor = FeatureExtractor(
@@ -163,7 +163,7 @@ extractor.extract_supersegments(save=True)
 For targeted vessel analysis (e.g., intracranial vessels), use the individual centerline method:
 
 ```python
-from arterial.feature_extraction import FeatureExtractor
+from arterial.feature_extraction.feature_extractor import FeatureExtractor
 from arterial.io.load_and_save_operations import load_vtkpolydata
 
 # Initialize extractor

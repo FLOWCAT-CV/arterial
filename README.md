@@ -251,16 +251,16 @@ python perform_analysis.py -cd /path/to/case_dir -ss
 ### Python API
 
 ```python
-from arterial.segmentation import VesselSegmenter
-from arterial.centerline_extraction import CenterlineExtractor
-from arterial.vessel_labelling import VesselLabeller
-from arterial.feature_extraction import FeatureExtractor
+from arterial.segmentation.segmenter import VesselSegmenter
+from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
+from arterial.vessel_labelling.vessel_labeller import VesselLabeller
+from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
 case_dir = "/path/to/case"
 cta_nifti_path = "/path/to/cta.nii.gz"
 
 # Step 1: Segment vessels
-segmenter = VesselSegmenter(case_dir, cta_nifti_path, mode="extracranial_vessels")
+segmenter = VesselSegmenter(case_dir, mode="extracranial_vessels", cta_nifti_path=cta_nifti_path)
 segmenter.segment_vessels_from_cta()
 
 # Step 2: Extract centerlines
@@ -334,13 +334,13 @@ After running the full pipeline:
 ```
 case_dir/
 ├── cta.nii.gz                              # Input
-├── extracranial_vessels_segmentation.nii.gz # Vessel mask
 └── extracranial_vessels/
+    ├── segmentation.nii.gz                  # Vessel mask
     ├── centerlines/                         # Individual centerline models
     ├── branch_model.vtk                     # Merged branch model
     ├── centerline_segments_array.npy        # Centerline data
-    ├── landmarks/
-    │   └── landmarks.json                   # Detected landmarks
+    ├── landmarks.json                       # Detected landmarks (RAS mm)
+    ├── landmarks_slicer.json                # Same, as 3D Slicer markups
     ├── segments_graph_pred.pickle           # Labeled vessel graph
     ├── local_graph.pickle                   # Featurized graph
     ├── supersegments/                       # Catheter pathways (8 configs)

@@ -437,37 +437,31 @@ Feature extraction:
 
 ## Model Files
 
-Pre-trained models are stored in the `models/` directory:
+The weights are downloaded by `scripts/download_models.sh` (see the main README, "Model Weights")
+and live under `<models directory>/vessel_labelling/`:
 
 ```
-models/
-├── extracranial_vessels/
-│   ├── dataset.json           # Dataset statistics for normalization
-│   ├── model_weights.pth      # Single model weights
-│   ├── model.pth              # Full model checkpoint
-│   ├── fold_0/
-│   │   ├── model_weights.pth
-│   │   └── model.pth
-│   ├── fold_1/
-│   │   └── ...
-│   ├── fold_2/
-│   │   └── ...
-│   ├── fold_3/
-│   │   └── ...
-│   └── fold_4/
-│       └── ...
-└── intracranial_vessels/      # (Not yet implemented)
-    └── model.model
+<models directory>/vessel_labelling/
+└── extracranial_vessels/
+    ├── dataset.json           # Edge labels and normalisation statistics
+    ├── model_weights.pth      # Single model (ensemble=False)
+    └── fold_{0..4}/
+        └── model_weights.pth  # Five folds for the ensemble (ensemble=True)
 ```
+
+Only extracranial vessel labelling is available.
 
 ---
 
 ## Environment Requirements
 
-The module requires the `arterial_dir` environment variable to be set:
+Weights are resolved through `arterial.model_registry`: `ARTERIAL_MODELS_DIR` if set, otherwise
+`$arterial_dir/models`, where `arterial_dir` points at the *package* directory:
 
 ```bash
-export arterial_dir="/path/to/arterial"
+export arterial_dir="/path/to/arterial/arterial"     # the inner package directory
+# or, to keep the weights elsewhere:
+export ARTERIAL_MODELS_DIR="/data/arterial-models"
 ```
 
 ### Hardware Requirements

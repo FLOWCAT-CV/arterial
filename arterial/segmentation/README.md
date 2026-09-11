@@ -283,10 +283,13 @@ Utility functions for image processing:
 
 ## Environment Requirements
 
-The module requires the `arterial_dir` environment variable to be set, pointing to the Arterial installation directory containing the pre-trained models:
+Weights are resolved through `arterial.model_registry`: `ARTERIAL_MODELS_DIR` if set, otherwise
+`$arterial_dir/models`, where `arterial_dir` points at the *package* directory:
 
 ```bash
-export arterial_dir="/path/to/arterial"
+export arterial_dir="/path/to/arterial/arterial"     # the inner package directory
+# or, to keep the weights elsewhere:
+export ARTERIAL_MODELS_DIR="/data/arterial-models"
 ```
 
 ### Hardware Requirements

@@ -72,7 +72,7 @@ The `ArterialProcessor` wraps all Arterial modules into a single orchestration c
 │  │  • nnU-Net inference (hybrid/fast modes)                            │  │
 │  │  • Head/neck slicing for extracranial vessels                       │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
-│                           Output: {mode}_segmentation.nii.gz              │
+│                           Output: {mode}/segmentation.nii.gz              │
 └───────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -312,7 +312,7 @@ local_graph = processor.feature_extractor.local_graph
 Performs deep learning-based vessel segmentation using nnU-Net.
 
 **Outputs:**
-- `{mode}_segmentation.nii.gz` - Binary vessel mask
+- `{mode}/segmentation.nii.gz` - Binary vessel mask
 
 **Skip flag:** `-ss` / `--skip_segmentation`
 
@@ -359,8 +359,8 @@ Detects anatomical landmarks and extracts targeted centerlines between them.
 | `r-ica_mca` | R-EICA | R-MCA |
 
 **Outputs:**
-- `{mode}/landmarks/landmarks.json` - Detected landmark coordinates
-- `{mode}/landmarks/landmarks_slicer.json` - 3D Slicer format
+- `{mode}/landmarks.json` - Detected landmark coordinates
+- `{mode}/landmarks_slicer.json` - 3D Slicer format
 - `{mode}/individual_centerlines/individual_centerline_{id}.vtk` - Centerline models
 - `{mode}/individual_centerlines/individual_centerline_{id}.pickle` - Featurized graphs
 
@@ -445,7 +445,7 @@ Predicts catheter accessibility and generates attention maps.
 ```
 case_dir/
 ├── cta.nii.gz                              # Input CTA image
-├── {mode}_segmentation.nii.gz              # Vessel segmentation mask
+├── {mode}/segmentation.nii.gz              # Vessel segmentation mask
 └── {mode}/
     ├── centerlines/
     │   ├── centerlines_0.vtk
