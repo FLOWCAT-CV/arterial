@@ -28,6 +28,15 @@ durations on a server with one RTX 3090 and a healthy GPU:
 | `test_feature_extractor` | seconds | ~1 min |
 | `test_access_predictor` | seconds | seconds |
 
+## Fast, fixture-free modules
+
+`test_io`, `test_packaging`, `test_docs`, `test_processor`, `test_download_script`,
+`test_feature_geometry`, `test_global_features`, `test_centerline_utils`,
+`test_vtk_geometry`, `test_segmentation_utils`, `test_landmark_utils`,
+`test_labelling_utils`, `test_access_utils` and `test_package` run on synthetic inputs
+(plus the fixture branch model where noted) and need neither weights nor a GPU.
+`test_download_script` starts a local HTTP server and needs `bash`, `curl` and `tar`.
+
 ## Fixtures
 
 Inputs live in `tests/test_data/input_test_data/`, which is gitignored (about
