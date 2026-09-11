@@ -160,5 +160,5 @@ def main(parameters_file_path):
             logger.removeHandler(handler)
 
 if __name__ == "__main__":
-    parameters_file_path = os.path.join(os.environ["arterial_dir"], "../example_scripts", "arterial_processing_params.json")
+    parameters_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arterial_processing_params.json")
     main(parameters_file_path)
