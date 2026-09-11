@@ -53,5 +53,14 @@ checkout. Contents:
 | `segments_graph_pred.pickle` | `VesselLabeller.predict_vessel_types` | vessel labeller (loader), feature extractor |
 | `supersegments/*.pickle` | `FeatureExtractor.extract_supersegments` | access predictor |
 
+### Derived fixtures
+
+`tests/test_products.py` needs real execution products. Regenerate them locally (they
+are gitignored, ~15 MB) with the weights installed:
+
+```bash
+python tests/make_derived_fixtures.py        # writes input_test_data/derived/extracranial_vessels/
+```
+
 The model weights must be installed (see the main README, "Model Weights") for
 the slow tier; the fast tier only touches the fixtures.
