@@ -53,10 +53,10 @@ class TestVesselSegmenterInference(ArterialTestCase):
         self.cta_nifti_path = self.require_fixture("cta.nii.gz")
         self.cta_shape = nib.load(self.cta_nifti_path).shape
 
-    def _check_segmentation(self, segmenter):
+    def _check_segmentation(self, segmenter, expected_shape):
         self.assertIsNotNone(segmenter.segmentation_nifti)
         self.assertIsNotNone(segmenter.segmentation_array)
-        self.assertEqual(tuple(segmenter.segmentation_array.shape), tuple(self.cta_shape))
+        self.assertEqual(tuple(segmenter.segmentation_array.shape), tuple(expected_shape))
         labels = np.unique(segmenter.segmentation_array)
         self.assertTrue(set(labels.tolist()) <= {0, 1}, f"unexpected labels {labels}")
         self.assertGreater(int((segmenter.segmentation_array > 0).sum()), 1000, "segmentation is (almost) empty")
@@ -66,13 +66,13 @@ class TestVesselSegmenterInference(ArterialTestCase):
     def test_extracranial_fast_segmentation(self):
         segmenter = VesselSegmenter(self.case_dir, "extracranial_vessels", self.cta_nifti_path, fast_segmentation=True)
         segmenter.segment_vessels_from_cta()
-        self._check_segmentation(segmenter)
+        self._check_segmentation(segmenter, self.cta_shape)
 
     @slow
     def test_extracranial_full_segmentation(self):
         segmenter = VesselSegmenter(self.case_dir, "extracranial_vessels", self.cta_nifti_path, fast_segmentation=False)
         segmenter.segment_vessels_from_cta()
-        self._check_segmentation(segmenter)
+        self._check_segmentation(segmenter, self.cta_shape)
         for attr in ["cta_head_array", "cta_neck_array", "cta_head_affine",
                      "segmentation_head_array", "segmentation_neck_array"]:
             with self.subTest(attr=attr):
@@ -84,6 +84,8 @@ class TestVesselSegmenterInference(ArterialTestCase):
         self.mode = "intracranial_vessels"
         segmenter = VesselSegmenter(self.case_dir, "intracranial_vessels", self.cta_nifti_path)
         segmenter.segment_vessels_from_cta()
-        self._check_segmentation(segmenter)
+        # Intracranial mode segments the cropped head slab, so the output lives in head-slab space.
         self.assertIsNotNone(segmenter.cta_head_array)
         self.assertIsNotNone(segmenter.cta_head_affine)
+        self._check_segmentation(segmenter, segmenter.cta_head_array.shape)
+        self.assertTrue(all(h <= c for h, c in zip(segmenter.cta_head_array.shape, self.cta_shape)), "head slab larger than the CTA")
