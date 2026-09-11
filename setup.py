@@ -37,7 +37,6 @@ setup(
         'scikit-image',
         'mycolorpy',
         'vtk',
-        'connected-components-3d',
-        'opencv-python'
+        'connected-components-3d'
         ]
 )

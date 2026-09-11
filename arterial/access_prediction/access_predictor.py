@@ -20,8 +20,8 @@ class AccessPredictor():
                  case_dir,
                  cta_nifti_path=None,
                  supersegments_dir_path=None,
-                 access=["femoral"],
-                 side=["left", "right"]
+                 access=None,
+                 side=None
                 ):
         """
         Initializes object of the AccessPredictor class.
@@ -47,8 +47,8 @@ class AccessPredictor():
             self.supersegments_dir_path = os.path.join(self.case_dir, "extracranial_vessels", "supersegments")
         else:
             self.supersegments_dir_path = supersegments_dir_path
-        self.access = access
-        self.side = side
+        self.access = ["femoral"] if access is None else access
+        self.side = ["left", "right"] if side is None else side
 
         self.cta_nifti = None
 

@@ -15,7 +15,7 @@ The LandmarkDetector class will run a segmentation model of the following struct
 If save is enabled, the following files will be saved:
 >>> case_dir/extracranial_vessels/landmarks.json : landmarks in RAS coordinates, saved as a dictionary {label: [x, y, z]}
 >>> case_dir/extracranial_vessels/landmarks_slicer.json : landmarks in json format for Slicer to read
->>> case_dir/extracranial_vessels/predicted_mask.nii.gz : predicted mask of the landmarks, with each structure being encoded by a different value
+>>> case_dir/extracranial_vessels/landmarks_mask.nii.gz : predicted mask of the landmarks, with each structure being encoded by a different value
 
 """
 

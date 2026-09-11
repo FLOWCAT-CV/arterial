@@ -28,7 +28,7 @@ class TestLandmarkDetector(unittest.TestCase):
         self.assertEqual(self.landmark_detector.landmarks_slicer_json_path, 
                         os.path.join(self.case_dir, self.mode, "landmarks_slicer.json"))
         self.assertEqual(self.landmark_detector.predicted_mask_nifti_path, 
-                        os.path.join(self.case_dir, self.mode, "predicted_mask.nii.gz"))
+                        os.path.join(self.case_dir, self.mode, "landmarks_mask.nii.gz"))
 
     def test_load_cta_nifti(self):
         self.landmark_detector._load_cta_nifti_from_file()

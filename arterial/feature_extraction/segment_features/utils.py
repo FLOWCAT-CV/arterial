@@ -1529,7 +1529,7 @@ def curvature_energy(segment):
     """
     Computes the curvature energy of a segment.
     """
-    return np.sum(segment.nodes[node]["features femoral"]["curvature"] ** 2 for node in segment)
+    return sum(segment.nodes[node]["features femoral"]["curvature"] ** 2 for node in segment)
 
 ## Measurements between two segments
 
