@@ -9,6 +9,7 @@ import numpy as np
 
 import pickle
 import subprocess
+import sys
 from arterial.io.load_and_save_operations import *
 
 def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radius_array_name="MaximumInscribedSphereRadius", group_ids_array_name="GroupIds", centerline_ids_array_name="CenterlineIds", tract_ids_array_name="TractIds"):
@@ -54,7 +55,7 @@ def extract_branch_model(centerlines_model, blanking_array_name="Blanking", radi
 
         # Start the subprocess
         proc = subprocess.Popen(
-            ['python3', os.path.join(os.environ["arterial_dir"], 'centerline_extraction/postprocessing/run_branch_model_extraction.py')],
+            [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'run_branch_model_extraction.py')],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE

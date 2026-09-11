@@ -48,16 +48,17 @@ def run_branch_extractor_subprocessing(serialized_centerlines_model, blanking_ar
         branchExtractor.Update()
         branch_model = branchExtractor.GetOutput()
         result = serialize_vtk_polydata(branch_model)
-        print("    Centerline branching completed.")
+        print("    Centerline branching completed.", file=sys.stderr)
     except Exception as e:
         print(f"    Centerline branching failed: {e}. \nThis is most likely a VMTK issue. \nIf this is the first model (idx=0) " \
               "the process will be interrupted, otherwise, the process will continue, ignoring the failed model "\
-              "(Usually the first one is the largest and most relevant).")
+              "(Usually the first one is the largest and most relevant).", file=sys.stderr)
         result = None
-    print("    Subprocess completed execution.")
+    print("    Subprocess completed execution.", file=sys.stderr)
 
-    # Output result as bytes
+    # stdout carries only the pickled result; every message above goes to stderr
     sys.stdout.buffer.write(pickle.dumps(result))
+    sys.stdout.buffer.flush()
     sys.exit(0 if result else 1)
 
 if __name__ == "__main__":

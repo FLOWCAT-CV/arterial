@@ -4,13 +4,38 @@
 import numpy as np
 import networkx as nx
 
+import matplotlib
 import matplotlib.pyplot as plt
-from mycolorpy import colorlist as mcp
+from matplotlib import colors as mcolors
 
 import nibabel as nib
 from vtk.util.numpy_support import vtk_to_numpy
 
 from scipy.interpolate import interp1d, splprep, splev
+
+
+def gen_color(cmap, n):
+    """
+    Samples n evenly spaced colours from a matplotlib colormap.
+
+    Replaces mycolorpy.colorlist.gen_color, which relies on
+    matplotlib.cm.get_cmap and breaks on matplotlib >= 3.9.
+
+    Parameters
+    ----------
+    cmap : str
+        Name of a matplotlib colormap.
+    n : int
+        Number of colours to sample.
+
+    Returns
+    -------
+    colorlist : list of str
+        Hex colour strings, from the start to the end of the colormap.
+
+    """
+    colormap = matplotlib.colormaps[str(cmap)]
+    return [mcolors.to_hex(colormap(value)) for value in np.linspace(0, 1, n)]
 
 
 def get_predicted_vessels_dict(segments_graph_pred):
@@ -670,7 +695,7 @@ def make_graph_plot(graph, feature=None, access="femoral", cmap="bwr", subplot=N
         if feature_lims is not None:
             # Clip feature values to the limits
             feature_values = np.clip(feature_values, feature_lims[0], feature_lims[1])
-        color_palette = mcp.gen_color(cmap = cmap, n = len(np.unique(feature_values)))
+        color_palette = gen_color(cmap, len(np.unique(feature_values)))
         # Choose color for each node. Each node feature will have to be rounded to the nearest integer to be used as an index for the color_palette
         # color_palette indices do not have physical meaning. The whole range of the fetaure_values is divided into the n nodes of the supersegment. 
         # Each feature value should be mapped to the corresponding index of the color_palette. To do that, we have to divide the feature value of each node by the range of the feature values and multiply by the number of nodes in the supersegment.

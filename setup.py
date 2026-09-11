@@ -35,7 +35,6 @@ setup(
         'numpy',
         'scipy',
         'scikit-image',
-        'mycolorpy',
         'vtk',
         'connected-components-3d'
         ]

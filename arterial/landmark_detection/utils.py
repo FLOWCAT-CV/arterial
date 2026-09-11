@@ -255,7 +255,7 @@ def postprocess_preds(preds, affine, return_mask=False):
     if return_mask:
         combined_largest_components = np.zeros(preds.shape[1:], dtype=np.uint8)
         for i, mask in enumerate(all_largest_components):
-            combined_largest_components += mask * (i + 1)
+            combined_largest_components[mask > 0] = i + 1
         combined_largest_components = combined_largest_components.transpose(1, 2, 0)
         return centroids_ras, combined_largest_components
     else:

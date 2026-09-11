@@ -767,22 +767,42 @@ class FeatureExtractor():
         return side_to_substring[side]
 
     def is_local_featurized(self):
-        if "features femoral" in self.local_graph.nodes[0].keys():
-            return True
-        else:
+        """
+        Tells whether local features have been extracted on the local graph.
+
+        Returns
+        -------
+        is_featurized : bool
+            False when the local graph has not been built yet.
+
+        """
+        if self.local_graph is None or self.local_graph.number_of_nodes() == 0:
             return False
-    
+        return "features femoral" in self.local_graph.nodes[0]
+
     def is_segment_featurized(self):
-        if "segment_features" in self.local_graph.graph.keys():
-            return True
-        else:
-            return False
-    
+        """
+        Tells whether segment features have been extracted on the local graph.
+
+        Returns
+        -------
+        is_featurized : bool
+            False when the local graph has not been built yet.
+
+        """
+        return self.local_graph is not None and "segment_features" in self.local_graph.graph
+
     def is_global_featurized(self):
-        if "aortic_arch_type" in self.local_graph.graph.keys():
-            return True
-        else:
-            return False
+        """
+        Tells whether global features have been extracted on the local graph.
+
+        Returns
+        -------
+        is_featurized : bool
+            False when the local graph has not been built yet.
+
+        """
+        return self.local_graph is not None and "aortic_arch_type" in self.local_graph.graph
 
     def _load_cta_nifti_from_file           (self):
         if not os.path.isfile(self.cta_nifti_path):
