@@ -5,7 +5,9 @@ import numpy as np
 import networkx as nx
 
 import matplotlib.pyplot as plt
-from mycolorpy import colorlist as mcp
+
+from arterial.feature_extraction.utils import gen_color
+
 
 def supersegment_prediction(local_graph):
     """ 
@@ -521,8 +523,11 @@ def build_supersegments(local_graph, predicted_configurations):
                 else:
                     supersegment.nodes[node]["is_supersegment"] = 0
                 supersegment.nodes[node]["hierarchy"] = supersegment.nodes[node][f"hierarchy {access}"]
-                supersegment.nodes[node]["features"] = supersegment.nodes[node][f"features {access}"]
-                supersegment.nodes[node]["features"]["is_supersegment"] = supersegment.nodes[node]["is_supersegment"]
+                # Copy the feature dict: Graph.copy() is shallow, so writing into the shared dict
+                # would leak is_supersegment into local_graph and every other supersegment.
+                features = dict(supersegment.nodes[node][f"features {access}"])
+                features["is_supersegment"] = supersegment.nodes[node]["is_supersegment"]
+                supersegment.nodes[node]["features"] = features
                 supersegment.nodes[node].pop("features femoral")
                 supersegment.nodes[node].pop("features radial")
                 supersegment.nodes[node].pop("hierarchy femoral")
@@ -604,7 +609,7 @@ def make_supersegment_plots(supersegments, local_graph=None, show=False, output_
             if supersegment.nodes[node]["hierarchy"] == 0:
                 highlight_node = node
             
-        colorPalette = mcp.gen_color(cmap = "bwr", n = 2)
+        colorPalette = gen_color("bwr", 2)
         color_map = [colorPalette[not supersegment.nodes[node]["is_supersegment"]] for node in supersegment] 
         
         if highlight_node is not None:

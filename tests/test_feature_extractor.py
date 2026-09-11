@@ -1,99 +1,108 @@
 #    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-import unittest
-import os, shutil
+import os
+
+from helpers import ArterialTestCase, slow
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
 
-class TestFeatureExtractor(unittest.TestCase):
+
+class FeatureExtractorTestCase(ArterialTestCase):
+    """Builds a FeatureExtractor over the fixture inputs."""
+
     def setUp(self):
-        self.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
-        self.mode = "extracranial_vessels"
+        super().setUp()
         self.sampling_distance_mm = 2
-        self.cta_nifti_path = os.path.join(self.case_dir, "input_test_data", "cta.nii.gz")
-        self.centerline_segments_array_path = os.path.join(self.case_dir, "input_test_data", "centerline_segments_array.npy")
-        self.branch_model_path = os.path.join(self.case_dir, "input_test_data", "branch_model.vtk")
-        self.segments_graph_pred_path = os.path.join(self.case_dir, "input_test_data", "segments_graph_pred.pickle")
-        self.feature_extractor = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path, self.centerline_segments_array_path, self.branch_model_path, self.segments_graph_pred_path)
+        self.cta_nifti_path = self.require_fixture("cta.nii.gz")
+        self.centerline_segments_array_path = self.require_fixture("centerline_segments_array.npy")
+        self.branch_model_path = self.require_fixture("branch_model.vtk")
+        self.segments_graph_pred_path = self.require_fixture("segments_graph_pred.pickle")
+        self.extractor = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path,
+                                          self.centerline_segments_array_path, self.branch_model_path, self.segments_graph_pred_path)
 
-    def test_init(self):
-        self.assertEqual(self.feature_extractor.case_dir, self.case_dir)
-        self.assertEqual(self.feature_extractor.mode, self.mode)
-        self.assertEqual(self.feature_extractor.sampling_distance_mm, self.sampling_distance_mm)
-        self.assertEqual(self.feature_extractor.cta_nifti_path, self.cta_nifti_path)
-        self.assertEqual(self.feature_extractor.centerline_segments_array_path, self.centerline_segments_array_path)
-        self.assertEqual(self.feature_extractor.branch_model_path, self.branch_model_path)
-        self.assertEqual(self.feature_extractor.segments_graph_pred_path, self.segments_graph_pred_path)
-        self.assertIsNone(self.feature_extractor.cta_nifti)
-        self.assertIsNone(self.feature_extractor.cta_array)
-        self.assertIsNone(self.feature_extractor.cta_affine)
-        self.assertIsNone(self.feature_extractor.centerline_segments_array)
-        self.assertIsNone(self.feature_extractor.branch_model)
-        self.assertIsNone(self.feature_extractor.segments_graph)
-        self.assertEqual(self.feature_extractor.local_graph, None)
-        self.assertEqual(self.feature_extractor.local_graph_path, os.path.join(self.case_dir, self.mode, "local_graph.pickle"))
-        self.assertEqual(self.feature_extractor.local_graph_plot_path, os.path.join(self.case_dir, self.mode, "local_graph.png"))
-        self.assertIsNone(self.feature_extractor.segment_features)
-        self.assertIsNone(self.feature_extractor.segments_vessel_type_dict)
-        self.assertEqual(self.feature_extractor.single_segments_dir_path, os.path.join(self.case_dir, self.mode, "single_segments"))
-        self.assertEqual(self.feature_extractor.single_segments_plot_path, os.path.join(self.case_dir, self.mode, "single_segments.png"))
-        self.assertIsNone(self.feature_extractor.supersegments)
-        self.assertEqual(self.feature_extractor.supersegments_dir_path, os.path.join(self.case_dir, self.mode, "supersegments"))
-        self.assertEqual(self.feature_extractor.supersegments_plot_path, os.path.join(self.case_dir, self.mode, "supersegments.png"))
 
-    def test_full_pipeline(self):
-        self.feature_extractor.build_local_graph()
-        self.assertIsNotNone(self.feature_extractor.centerline_segments_array)
-        self.assertIsNotNone(self.feature_extractor.segments_graph)
-        self.assertTrue(os.path.exists(self.feature_extractor.local_graph_path))
-        self.assertTrue(os.path.exists(self.feature_extractor.local_graph_plot_path))
-        self.assertFalse(self.feature_extractor.is_local_featurized())
-        self.assertFalse(self.feature_extractor.is_segment_featurized())
-        self.assertFalse(self.feature_extractor.is_global_featurized())
+class TestFeatureExtractorInit(FeatureExtractorTestCase):
+    """Constructor and paths. No feature extraction."""
 
-        self.feature_extractor.extract_local_features()
-        self.assertIsNotNone(self.feature_extractor.cta_array)
-        self.assertIsNotNone(self.feature_extractor.cta_affine)
-        self.assertIsNotNone(self.feature_extractor.branch_model)
-        self.assertTrue(self.feature_extractor.is_local_featurized())
-        self.assertFalse(self.feature_extractor.is_segment_featurized())
-        self.assertFalse(self.feature_extractor.is_global_featurized())
+    def test_init_stores_arguments_and_paths(self):
+        self.assertEqual(self.extractor.case_dir, self.case_dir)
+        self.assertEqual(self.extractor.mode, self.mode)
+        self.assertEqual(self.extractor.sampling_distance_mm, self.sampling_distance_mm)
+        self.assertEqual(self.extractor.cta_nifti_path, self.cta_nifti_path)
+        self.assertEqual(self.extractor.centerline_segments_array_path, self.centerline_segments_array_path)
+        self.assertEqual(self.extractor.branch_model_path, self.branch_model_path)
+        self.assertEqual(self.extractor.segments_graph_pred_path, self.segments_graph_pred_path)
+        expected = {"local_graph_path": "local_graph.pickle", "local_graph_plot_path": "local_graph.png",
+                    "single_segments_dir_path": "single_segments", "single_segments_plot_path": "single_segments.png",
+                    "supersegments_dir_path": "supersegments", "supersegments_plot_path": "supersegments.png"}
+        for attr, name in expected.items():
+            with self.subTest(attr=attr):
+                self.assertEqual(getattr(self.extractor, attr), os.path.join(self.mode_dir, name))
 
-        self.feature_extractor.extract_segment_features()
-        self.assertIsNotNone(self.feature_extractor.segments_graph)
-        self.assertIsNotNone(self.feature_extractor.segment_features)
-        self.assertIsNotNone(self.feature_extractor.segments_vessel_type_dict)
-        self.assertTrue(os.path.exists(self.feature_extractor.single_segments_dir_path))
-        for vessel_type in self.feature_extractor.segments_vessel_type_dict.keys():
-            if self.feature_extractor.segments_vessel_type_dict[vessel_type] is not None:
-                self.assertTrue(os.path.exists(os.path.join(self.feature_extractor.single_segments_dir_path, "{}.pickle".format(vessel_type))))
-        self.assertTrue(os.path.exists(self.feature_extractor.single_segments_plot_path))
-        self.assertTrue(self.feature_extractor.is_local_featurized())
-        self.assertTrue(self.feature_extractor.is_segment_featurized())
-        self.assertFalse(self.feature_extractor.is_global_featurized())
+    def test_init_leaves_results_empty(self):
+        for attr in ["cta_nifti", "cta_array", "cta_affine", "centerline_segments_array", "branch_model",
+                     "segments_graph", "local_graph", "segment_features", "segments_vessel_type_dict", "supersegments"]:
+            with self.subTest(attr=attr):
+                self.assertIsNone(getattr(self.extractor, attr))
+        self.assertFalse(self.extractor.is_local_featurized())
+        self.assertFalse(self.extractor.is_segment_featurized())
+        self.assertFalse(self.extractor.is_global_featurized())
 
-        self.feature_extractor.extract_global_features()
-        self.assertTrue(self.feature_extractor.is_local_featurized())
-        self.assertTrue(self.feature_extractor.is_segment_featurized())
-        self.assertTrue(self.feature_extractor.is_global_featurized())
 
-        self.feature_extractor.extract_supersegments()
-        self.assertIsNotNone(self.feature_extractor.supersegments)
-        self.assertTrue(os.path.exists(self.feature_extractor.supersegments_dir_path))
-        for config in self.feature_extractor.supersegments.keys():
-            self.assertTrue(os.path.exists(os.path.join(self.feature_extractor.supersegments_dir_path, f"{config[0]} + {config[1]} + {config[2]}.pickle")))
-        self.assertTrue(os.path.exists(self.feature_extractor.supersegments_plot_path))
+class TestFeatureExtractorPipeline(FeatureExtractorTestCase):
+    """Feature extraction stages in order, one subtest per stage."""
 
-    @classmethod
-    def tearDownClass(cls):
-        # Remove all the files generated during the tests
-        cls.case_dir = os.path.join(os.path.dirname(__file__), "test_data")
-        for filename in os.listdir(cls.case_dir):
-            if filename not in ["input_test_data", "output"]:
-                if os.path.isfile(os.path.join(cls.case_dir, filename)):
-                    os.remove(os.path.join(cls.case_dir, filename))
-                elif os.path.isdir(os.path.join(cls.case_dir, filename)):
-                    shutil.rmtree(os.path.join(cls.case_dir, filename))
+    @slow
+    def test_pipeline(self):
+        extractor = self.extractor
 
-if __name__ == '__main__':
-    unittest.main()
+        with self.subTest(stage="build_local_graph"):
+            extractor.build_local_graph()
+            self.assertIsNotNone(extractor.centerline_segments_array)
+            self.assertIsNotNone(extractor.segments_graph)
+            self.assertIsNotNone(extractor.local_graph)
+            self.assertGreater(extractor.local_graph.number_of_nodes(), extractor.segments_graph.number_of_nodes(),
+                               "the resampled local graph should be denser than the segments graph")
+            self.assertFileExists(extractor.local_graph_path)
+            self.assertFileExists(extractor.local_graph_plot_path)
+            self.assertFalse(extractor.is_local_featurized())
+
+        with self.subTest(stage="local_features"):
+            extractor.extract_local_features()
+            self.assertIsNotNone(extractor.cta_array)
+            self.assertIsNotNone(extractor.cta_affine)
+            self.assertIsNotNone(extractor.branch_model)
+            self.assertTrue(extractor.is_local_featurized())
+            self.assertFalse(extractor.is_segment_featurized())
+
+        with self.subTest(stage="segment_features"):
+            extractor.extract_segment_features()
+            self.assertIsNotNone(extractor.segment_features)
+            self.assertIsNotNone(extractor.segments_vessel_type_dict)
+            self.assertTrue(extractor.is_segment_featurized())
+            self.assertFalse(extractor.is_global_featurized())
+            self.assertDirExists(extractor.single_segments_dir_path)
+            self.assertFileExists(extractor.single_segments_plot_path)
+            for vessel_type, segment in extractor.segments_vessel_type_dict.items():
+                if segment is not None:
+                    self.assertFileExists(os.path.join(extractor.single_segments_dir_path, f"{vessel_type}.pickle"))
+
+        with self.subTest(stage="global_features"):
+            extractor.extract_global_features()
+            self.assertTrue(extractor.is_global_featurized())
+
+        with self.subTest(stage="supersegments"):
+            extractor.extract_supersegments()
+            self.assertIsNotNone(extractor.supersegments)
+            self.assertGreater(len(extractor.supersegments), 0)
+            self.assertDirExists(extractor.supersegments_dir_path)
+            self.assertFileExists(extractor.supersegments_plot_path)
+            for config in extractor.supersegments:
+                self.assertEqual(len(config), 3, f"supersegment key should be (access, side, circulation): {config}")
+                self.assertFileExists(os.path.join(extractor.supersegments_dir_path, f"{config[0]} + {config[1]} + {config[2]}.pickle"))
+            # Supersegments must not share feature dicts with the local graph or each other.
+            for node, data in extractor.local_graph.nodes(data=True):
+                self.assertNotIn("is_supersegment", data["features femoral"], "supersegment flag leaked into the local graph")
+            flags = {config: sum(data["features"]["is_supersegment"] for _, data in graph.nodes(data=True))
+                     for config, graph in extractor.supersegments.items()}
+            self.assertGreater(len(set(flags.values())), 1, f"every supersegment has the same member count: {flags}")

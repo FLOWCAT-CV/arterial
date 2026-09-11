@@ -1529,7 +1529,7 @@ def curvature_energy(segment):
     """
     Computes the curvature energy of a segment.
     """
-    return np.sum(segment.nodes[node]["features femoral"]["curvature"] ** 2 for node in segment)
+    return sum(segment.nodes[node]["features femoral"]["curvature"] ** 2 for node in segment)
 
 ## Measurements between two segments
 
@@ -1819,6 +1819,8 @@ def plot_single_segments(local_graph, segments_vessel_type_dict, show=False, out
         rows += 1
     # Create template for subplots
     _, ax = plt.subplots(rows, columns, figsize = [5 * columns, 10 * rows])
+    if isinstance(ax, np.ndarray):
+        ax = ax.reshape(rows, columns)  # subplots returns a 1-D array when rows or columns is 1
     # Draw each segment in a subplot space
     for idx, vessel_type in enumerate(segments_vessel_type_dict.keys()):
         # In order to place the nodes in the visualization of the graph in a sagittal view, we use L and S coordinates (the view will be from the coronal plane, P axis)

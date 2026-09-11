@@ -265,6 +265,8 @@ class CenterlineComputationLogic(object):
             seed_ijk = np.array([350.0 * factor, 0.0, 0.0])
         elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
             seed_ijk = np.array([350.0 * factor, segmentation_array.shape[1], 0.0])
+        else:
+            raise ValueError(f"Unsupported segmentation orientation {nib.orientations.aff2axcodes(segmentation_affine)}; expected RAS, LAS or LPS")
 
         seed_ras = np.dot(segmentation_affine, np.append(seed_ijk, 1))[:3]
 
@@ -1007,6 +1009,8 @@ def aortic_arch_endpoint_check(endpoint_vtk_points, segmentation_array, segmenta
         aa_reference_voxel_coordinates = np.array([350.0 * factor, 0.0, 0.0])
     elif nib.orientations.aff2axcodes(segmentation_affine) == ("L", "P", "S"):
         aa_reference_voxel_coordinates = np.array([350.0 * factor, label_mask.shape[1], 0.0])
+    else:
+        raise ValueError(f"Unsupported segmentation orientation {nib.orientations.aff2axcodes(segmentation_affine)}; expected RAS, LAS or LPS")
     aa_reference_ras_coordinates = np.dot(segmentation_affine, np.append(aa_reference_voxel_coordinates, 1))[:3]
 
     # We store the distance to the reference point for each endpoint (in mm)

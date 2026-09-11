@@ -99,7 +99,7 @@ ArterialGNet is a multi-scale graph neural network that processes vascular infor
 ### Minimal Example
 
 ```python
-from arterial.access_prediction import AccessPredictor
+from arterial.access_prediction.access_predictor import AccessPredictor
 
 # Initialize predictor
 predictor = AccessPredictor(
@@ -117,7 +117,7 @@ for (access, side), prediction in predictor.predictions_dict.items():
 ### Full Pipeline with Attention Maps
 
 ```python
-from arterial.access_prediction import AccessPredictor
+from arterial.access_prediction.access_predictor import AccessPredictor
 
 # Initialize with custom configuration
 predictor = AccessPredictor(
@@ -154,7 +154,7 @@ for node in attention_graph.nodes():
 ### Custom Access/Side Configuration
 
 ```python
-from arterial.access_prediction import AccessPredictor
+from arterial.access_prediction.access_predictor import AccessPredictor
 
 # Predict only for femoral left
 predictor = AccessPredictor(
@@ -381,20 +381,12 @@ access_prediction/
 ├── preprocessing/
 │   ├── preprocessing.py      # Supersegment preprocessing
 │   └── utils.py              # Preprocessing utilities
-└── models/
-    ├── dataset.json          # Normalization statistics
-    ├── fold_0/
-    │   ├── model_weights.pth # Model weights
-    │   └── model_latest.pth  # Full model checkpoint
-    ├── fold_1/
-    │   └── ...
-    ├── fold_2/
-    │   └── ...
-    ├── fold_3/
-    │   └── ...
-    └── fold_4/
-        └── ...
+└── (weights are not in the package; see below)
 ```
+
+Weights are downloaded by `scripts/download_models.sh` to `<models directory>/access_prediction/`
+(`dataset.json` with the normalisation statistics and `fold_{0..4}/model_weights.pth`), resolved
+through `arterial.model_registry`: `ARTERIAL_MODELS_DIR` if set, otherwise `$arterial_dir/models`.
 
 ### Key Classes
 

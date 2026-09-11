@@ -20,7 +20,7 @@ live in the [GitHub repository](https://github.com/FLOWCAT-CV/arterial).
 | `vessel_labelling/` | Anatomical naming of centerline segments (e.g. LCCA) | Graph neural network | CC BY-NC 4.0 |
 | `access_prediction/` | Catheter accessibility prediction from pathway graphs | ArterialGNet (multi-scale GNN) | CC BY-NC 4.0 |
 
-The segmentation weights account for essentially all of the ~1.2 GB; the graph models are a few MB each.
+The segmentation weights account for essentially all of the ~1.1 GB; the graph models are a few MB each.
 
 `segmentation/totalsegmentator_mandible/` is not an Arterial model. It is redistributed unmodified
 from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the Apache License 2.0

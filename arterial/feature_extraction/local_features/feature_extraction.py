@@ -49,6 +49,8 @@ def perform_local_feature_extraction(local_graph, cta_array, cta_affine, branch_
         lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, 0, 0])
     elif orientation == ('L', 'P', 'S'):
         lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, 0])
+    else:
+        raise ValueError(f"Unsupported CTA orientation {orientation}; expected RAS, LAS or LPS")
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
     lpi_corner_coordinates = np.dot(cta_affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
@@ -136,6 +138,8 @@ def perform_local_feature_extraction_individual_centerline(individual_centerline
         lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, 0, 0])
     elif orientation == ('L', 'P', 'S'):
         lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, 0])
+    else:
+        raise ValueError(f"Unsupported CTA orientation {orientation}; expected RAS, LAS or LPS")
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
     lpi_corner_coordinates = np.dot(cta_affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]

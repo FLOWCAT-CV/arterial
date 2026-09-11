@@ -391,7 +391,8 @@ Preprocessing, postprocessing, and refinement utilities:
 
 ## Model Files
 
-Pre-trained models are stored in the `models/` directory:
+The weights are downloaded by `scripts/download_models.sh` (see the main README, "Model Weights")
+and live under `<models directory>/landmark_detection/`:
 
 | File | Input Channels | Description |
 |------|----------------|-------------|
@@ -402,13 +403,14 @@ Pre-trained models are stored in the `models/` directory:
 
 ## Environment Requirements
 
-The module requires the `arterial_dir` environment variable to be set:
+Weights are resolved through `arterial.model_registry`: `ARTERIAL_MODELS_DIR` if set, otherwise
+`$arterial_dir/models`, where `arterial_dir` points at the *package* directory:
 
 ```bash
-export arterial_dir="/path/to/arterial"
+export arterial_dir="/path/to/arterial/arterial"     # the inner package directory
+# or, to keep the weights elsewhere:
+export ARTERIAL_MODELS_DIR="/data/arterial-models"
 ```
-
----
 
 ## References
 

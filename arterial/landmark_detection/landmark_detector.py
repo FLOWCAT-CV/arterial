@@ -138,7 +138,7 @@ class LandmarkDetector:
         if refine_with_segmentation:
             print(f"  Will refine with segmentation (method={refinement_method})")
 
-        self.landmarks_ras_mm_dict, self.landmarks_slicer_json, self.predicted_mask_nib = \
+        self.landmarks_ras_mm_dict, self.landmarks_slicer_json, self.predicted_mask_nifti = \
             infer_landmarks_from_array(
                 self.cta_array, 
                 self.cta_affine, 
@@ -159,9 +159,9 @@ class LandmarkDetector:
             print(f"Saving landmarks in Slicer format to {self.landmarks_slicer_json_path}")
             save_json(self.landmarks_slicer_json, self.landmarks_slicer_json_path)
             
-            if return_mask and self.predicted_mask_nib is not None:
+            if return_mask and self.predicted_mask_nifti is not None:
                 print(f"Saving predicted mask to {self.predicted_mask_nifti_path}")
-                save_nifti(self.predicted_mask_nib, self.predicted_mask_nifti_path)
+                save_nifti(self.predicted_mask_nifti, self.predicted_mask_nifti_path)
 
         return self.landmarks_ras_mm_dict
 
@@ -191,7 +191,7 @@ class LandmarkDetector:
         self.cta_nifti = cta_nifti
         self.cta_array = cta_nifti.get_fdata()
         self.cta_affine = cta_nifti.affine
-        self.image_shape = self.cta_array
+        self.image_shape = self.cta_array.shape
     
     def _load_segmentation_nifti_from_nib(self, segmentation_nifti):
         self.segmentation_nifti = segmentation_nifti

@@ -13,8 +13,8 @@
 
 set -euo pipefail
 
-# Set this once the record is published. Override with --record <id>.
-ZENODO_RECORD="${ZENODO_RECORD:-CHANGEME}"
+# Published Zenodo record of the weights. Override with --record <id> or ZENODO_RECORD.
+ZENODO_RECORD="${ZENODO_RECORD:-22694951}"
 # Point at https://sandbox.zenodo.org to test against a sandbox record.
 ZENODO_SITE="${ZENODO_SITE:-https://zenodo.org}"
 ARCHIVE="arterial-models-v1.tar.gz"
@@ -25,7 +25,7 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<USAGE
-Usage: bash scripts/download_models.sh [--record ID] [--no-persist] [--help]
+Usage: bash scripts/download_models.sh [--record ID] [--site URL] [--no-persist] [--help]
 
 Downloads the Arterial model weights from Zenodo.
 
@@ -48,8 +48,9 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-[ "$ZENODO_RECORD" = "CHANGEME" ] && fail "No Zenodo record id set.
-       Pass one with --record <id>, or edit ZENODO_RECORD in this script."
+case "$ZENODO_RECORD" in
+    ""|*[!0-9]*) fail "Invalid Zenodo record id '${ZENODO_RECORD}': pass a numeric id with --record <id>." ;;
+esac
 
 # ---------------------------------------------------------------- destination
 if [ -n "${ARTERIAL_MODELS_DIR:-}" ]; then
@@ -99,27 +100,37 @@ fi
 
 # --------------------------------------------------------------- verify hash
 say ""
-if curl -sL --fail -o "${WORK}/${ARCHIVE}.sha256" "${BASE}/${ARCHIVE}.sha256?download=1"; then
-    expected="$(awk '{print $1}' "${WORK}/${ARCHIVE}.sha256")"
-    actual="$(sha256_of "${WORK}/${ARCHIVE}")"
-    if [ -z "$actual" ]; then
-        say "No sha256 tool available; skipping checksum verification."
-    elif [ "$expected" = "$actual" ]; then
-        say "Checksum OK."
-    else
-        fail "Checksum mismatch.
+# Only a definite 404 means "no checksum published"; any other failure (5xx, proxy,
+# network) must not silently downgrade to an unverified install.
+http_code="$(curl -sL -o "${WORK}/${ARCHIVE}.sha256" -w '%{http_code}' "${BASE}/${ARCHIVE}.sha256?download=1" || printf '000')"
+case "$http_code" in
+    200)
+        expected="$(awk '{print tolower($1)}' "${WORK}/${ARCHIVE}.sha256")"
+        case "$expected" in
+            *[!0-9a-f]*|"") fail "Published checksum file is malformed: $(head -c 120 "${WORK}/${ARCHIVE}.sha256")" ;;
+        esac
+        actual="$(sha256_of "${WORK}/${ARCHIVE}")"
+        if [ -z "$actual" ]; then
+            say "WARNING: no sha256 tool available; skipping checksum verification." >&2
+        elif [ "$expected" = "$actual" ]; then
+            say "Checksum OK."
+        else
+            fail "Checksum mismatch.
        expected ${expected}
        got      ${actual}
        The download is corrupt. Run this script again."
-    fi
-else
-    say "No published checksum found; skipping verification."
-fi
+        fi ;;
+    404)
+        say "No published checksum found (HTTP 404); skipping verification." ;;
+    *)
+        fail "Could not fetch the published checksum (HTTP ${http_code}). Refusing to install unverified weights; run this script again." ;;
+esac
 
 # -------------------------------------------------------------------- extract
 say "Extracting ..."
 mkdir -p "$DEST"
-tar xzf "${WORK}/${ARCHIVE}" -C "$DEST"
+# macOS archives may carry AppleDouble sidecars; never let them into the models directory.
+tar xzf "${WORK}/${ARCHIVE}" -C "$DEST" --exclude='._*' --exclude='.DS_Store'
 
 # --------------------------------------------------------------------- verify
 say ""
@@ -140,7 +151,7 @@ for f in \
     [ -f "${DEST}/${f}" ] || { say "  missing: $f"; missing=$((missing + 1)); }
 done
 
-n_pth=$(find "$DEST" -name "*.pth" -type f | wc -l | tr -d ' ')
+n_pth=$(find "$DEST" -name "*.pth" -type f ! -name '._*' | wc -l | tr -d ' ')
 say "  checkpoints found: ${n_pth} (expected 18)"
 
 if [ "$missing" -ne 0 ] || [ "$n_pth" -ne 18 ]; then
@@ -174,6 +185,16 @@ persist_env() {
         return 0
     fi
 
+    local n_open n_close
+    n_open="$(grep -c '^# >>> arterial models >>>$' "$rc" || true)"
+    n_close="$(grep -c '^# <<< arterial models <<<$' "$rc" || true)"
+    if [ "$n_open" != "$n_close" ]; then
+        say ""
+        say "${rc} has an unbalanced arterial models block; not touching it. Add this line by hand:"
+        say "  export ARTERIAL_MODELS_DIR=\"${dest}\""
+        return 0
+    fi
+
     local tmp; tmp="$(mktemp)"
     awk '/^# >>> arterial models >>>$/{skip=1} !skip{print} /^# <<< arterial models <<<$/{skip=0}' \
         "$rc" > "$tmp"
@@ -183,7 +204,9 @@ persist_env() {
         printf 'export ARTERIAL_MODELS_DIR="%s"\n' "$dest"
         printf '# <<< arterial models <<<\n'
     } >> "$tmp"
-    mv "$tmp" "$rc"
+    # Rewrite in place so the file keeps its mode and stays a symlink if it was one.
+    cat "$tmp" > "$rc"
+    rm -f "$tmp"
 
     say ""
     say "Added to ${rc}:"

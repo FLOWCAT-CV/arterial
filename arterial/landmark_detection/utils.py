@@ -3,7 +3,6 @@
 
 import torch
 import cc3d
-import cv2
 
 import numpy as np
 import torchio as tio
@@ -230,9 +229,10 @@ def postprocess_preds(preds, affine, return_mask=False):
 
     for label in range(1, 7):  # Classes 1-6
         binary_mask = (combined == label).astype(np.uint8)
-        # Apply morphological operations to clean up the mask
-        kernel = np.ones((2, 2), np.uint8)
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+        # Apply a 2x2 morphological closing on each (axis 0, axis 1) slice to clean up the mask.
+        # This reproduces the previous OpenCV call, which treated axis 2 as channels; OpenCV >= 5
+        # rejects 3D inputs, and scipy needs no extra dependency.
+        binary_mask = ndimage.binary_closing(binary_mask, structure=np.ones((2, 2, 1), dtype=bool)).astype(np.uint8)
         # Find largest connected component
         labels_cc = cc3d.largest_k(binary_mask, k=1, connectivity=26)
         all_largest_components.append(labels_cc)
@@ -255,7 +255,7 @@ def postprocess_preds(preds, affine, return_mask=False):
     if return_mask:
         combined_largest_components = np.zeros(preds.shape[1:], dtype=np.uint8)
         for i, mask in enumerate(all_largest_components):
-            combined_largest_components += mask * (i + 1)
+            combined_largest_components[mask > 0] = i + 1
         combined_largest_components = combined_largest_components.transpose(1, 2, 0)
         return centroids_ras, combined_largest_components
     else:

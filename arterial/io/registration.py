@@ -2,7 +2,6 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
-import ants
 
 import numpy as np
 import nibabel as nib
@@ -36,6 +35,8 @@ def registration(fixed_image_path, moving_image_path, output_image_path, transfo
         If the transformation type is not one of the following: "AffineFast", "Affine", "SyN".
         
     """
+    import ants  # optional dependency: pip install arterial[registration]
+
     fixed_image = ants.image_read(fixed_image_path)
     moving_image = ants.image_read(moving_image_path)
 
@@ -87,6 +88,8 @@ def registration_mask(fixed_image_path, moving_mask_path, output_mask_path, tran
         If the transformation file is not provided and the default path does not exist.
 
     """
+    import ants  # optional dependency: pip install arterial[registration]
+
     if transformation_file is None:
         if not os.path.exists(os.path.join(os.path.dirname(output_mask_path), 'transfomation_matrix.txt')):
             raise TypeError("Text file with transformation path does not exist.")       

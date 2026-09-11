@@ -3,6 +3,25 @@
 
 import numpy as np
 
+def _unit_vector(vector):
+    """
+    Normalises a vector, returning zeros for a (near) zero-length input.
+
+    Parameters
+    ----------
+    vector : numpy.ndarray
+        Vector to normalise.
+
+    Returns
+    -------
+    unit : numpy.ndarray
+        vector / ||vector||, or zeros when the norm is below 1e-6.
+
+    """
+    norm = np.linalg.norm(vector)
+    return vector / norm if norm > 1e-6 else np.zeros_like(vector, dtype=float)
+
+
 def extract_features_for_labelling(simple_centerline_graph):
     """
     Extracts segment-level features for labelling.
@@ -76,21 +95,21 @@ def extract_features_for_labelling(simple_centerline_graph):
         simple_centerline_graph[src][dst]["features_dict"]["mean radius"] = np.mean(radius_array)
         simple_centerline_graph[src][dst]["features_dict"]["proximal radius"] = radius_array[0]
         simple_centerline_graph[src][dst]["features_dict"]["distal radius"] = radius_array[-1]
-        simple_centerline_graph[src][dst]["features_dict"]["proximal/distal radius ratio"] = radius_array[0] / radius_array[-1]
+        simple_centerline_graph[src][dst]["features_dict"]["proximal/distal radius ratio"] = radius_array[0] / radius_array[-1] if radius_array[-1] > 1e-6 else 0.0
         simple_centerline_graph[src][dst]["features_dict"]["minimum radius"] = np.amin(radius_array)
         simple_centerline_graph[src][dst]["features_dict"]["maximum radius"] = np.amax(radius_array)
         simple_centerline_graph[src][dst]["features_dict"]["distance"] = np.linalg.norm(coordinate_array[-1] - coordinate_array[0])
         simple_centerline_graph[src][dst]["features_dict"]["relative length"] = relative_length(coordinate_array)
-        simple_centerline_graph[src][dst]["features_dict"]["direction r"] = ((coordinate_array[-1] - coordinate_array[0]) / np.linalg.norm(coordinate_array[-1] - coordinate_array[0]))[0]
-        simple_centerline_graph[src][dst]["features_dict"]["direction a"] = ((coordinate_array[-1] - coordinate_array[0]) / np.linalg.norm(coordinate_array[-1] - coordinate_array[0]))[1]
-        simple_centerline_graph[src][dst]["features_dict"]["direction s"] = ((coordinate_array[-1] - coordinate_array[0]) / np.linalg.norm(coordinate_array[-1] - coordinate_array[0]))[2]
+        simple_centerline_graph[src][dst]["features_dict"]["direction r"] = _unit_vector(coordinate_array[-1] - coordinate_array[0])[0]
+        simple_centerline_graph[src][dst]["features_dict"]["direction a"] = _unit_vector(coordinate_array[-1] - coordinate_array[0])[1]
+        simple_centerline_graph[src][dst]["features_dict"]["direction s"] = _unit_vector(coordinate_array[-1] - coordinate_array[0])[2]
         # To compute departure angle, we will be computing the direction of the first 10 mm of the segment from the bifurcation point
         idx = 1
         while np.linalg.norm(coordinate_array[idx] - coordinate_array[0]) < 10 and idx < len(coordinate_array) - 1:
             idx += 1
-        simple_centerline_graph[src][dst]["features_dict"]["departure angle r"] = ((coordinate_array[idx] - coordinate_array[0]) / np.linalg.norm(coordinate_array[idx] - coordinate_array[0]))[0]
-        simple_centerline_graph[src][dst]["features_dict"]["departure angle a"] = ((coordinate_array[idx] - coordinate_array[0]) / np.linalg.norm(coordinate_array[idx] - coordinate_array[0]))[1]
-        simple_centerline_graph[src][dst]["features_dict"]["departure angle s"] = ((coordinate_array[idx] - coordinate_array[0]) / np.linalg.norm(coordinate_array[idx] - coordinate_array[0]))[2]
+        simple_centerline_graph[src][dst]["features_dict"]["departure angle r"] = _unit_vector(coordinate_array[idx] - coordinate_array[0])[0]
+        simple_centerline_graph[src][dst]["features_dict"]["departure angle a"] = _unit_vector(coordinate_array[idx] - coordinate_array[0])[1]
+        simple_centerline_graph[src][dst]["features_dict"]["departure angle s"] = _unit_vector(coordinate_array[idx] - coordinate_array[0])[2]
         simple_centerline_graph[src][dst]["features_dict"]["number of points"] = len(coordinate_array)
         simple_centerline_graph[src][dst]["features_dict"]["proximal bifurcation position r"] = coordinate_array[0][0]
         simple_centerline_graph[src][dst]["features_dict"]["proximal bifurcation position a"] = coordinate_array[0][1]

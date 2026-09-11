@@ -81,7 +81,7 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
     
     else:
         # Initialize attention map tensor. 8 is the number of attention heads of the GAT operator (hardcoded here)
-        edge_attention_weights = torch.zeros(preprocessed_supersegment.dense_data.edge_index.shape[1], 8, 5, device="cpu")
+        edge_attention_weights = None  # allocated once the first checkpoint tells us its number of attention heads
         with torch.no_grad():
             for fold in range(5):
                 # Load the trained model for inference
@@ -113,7 +113,9 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
                 out, attention_weights = model(preprocessed_supersegment)
                 pred_list.append(out[0][1].item())
                 edge_indices, edge_attention_weights_ = attention_weights
-                edge_attention_weights[:, :, fold] = edge_attention_weights_
+                if edge_attention_weights is None:
+                    edge_attention_weights = torch.zeros(*edge_attention_weights_.shape, 5, device="cpu")
+                edge_attention_weights[:, :, fold] = edge_attention_weights_.detach().cpu()
 
 
         # Get mean and std of the predictions

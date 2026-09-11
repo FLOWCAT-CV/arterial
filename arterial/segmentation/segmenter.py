@@ -225,7 +225,7 @@ class VesselSegmenter():
         if path is None:
             path = self.segmentation_nifti_path
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        save_nifti(self.segmentation_nifti, self.segmentation_nifti_path)
+        save_nifti(self.segmentation_nifti, path)
 
     def save_head_cta_nifti(self, path=None):
         if self.cta_head_array is None or self.cta_head_affine is None:

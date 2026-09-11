@@ -129,6 +129,20 @@ class ArterialGNetDatasetInference(Dataset):
         for src, dst in raw_segment_graph.edges:
             segment_edge_index.append(np.array([src, dst]))
             segment_egde_attr.append(raw_segment_graph.edges[src, dst]["features_list"])
+        # Raise a descriptive error when the supersegment collapses to a single
+        # segment-graph node (no segment edges). Without this guard, the
+        # implicit `np.array([])` below produces a 1-D shape (0,) tensor that
+        # breaks normalize_segment_edge_features with a cryptic
+        # "IndexError: too many indices for tensor of dimension 1". Observed
+        # upstream cause: a degree>2 access start node mishandled by
+        # supersegment_prediction (mapping/utils.py:237–302), which collapses
+        # the supersegment to AA-only.
+        if len(raw_segment_graph.edges) == 0:
+            raise ValueError(
+                f"Supersegment has {len(raw_segment_graph.nodes)} segment-graph node(s) "
+                f"and 0 edges; cannot run access prediction on a degenerate supersegment "
+                f"(typical cause: vessel-type path collapsed to a single segment)."
+            )
         data.segment_data.pos = torch.tensor(np.array(segment_pos), dtype=torch.float32)
         data.segment_data.x = self.normalize_segment_node_features(torch.tensor(np.array(segment_x), dtype=torch.float32))
         data.segment_data.edge_attr = self.normalize_segment_edge_features(torch.tensor(np.array(segment_egde_attr), dtype=torch.float32))
@@ -207,6 +221,7 @@ class ArterialGNetDatasetInference(Dataset):
             Normalized global features.
 
         """
+        global_features = list(global_features)  # never normalise the caller's list in place
         if self.dataset_description is None:
             print("No dataset description file found. This will be an issue for normalization of features.")
             return global_features
@@ -600,17 +615,19 @@ def get_lpi_corner_coordinates(cta_nifti):
         LPI corner coordinates of the CTA nifti image.
 
     """
-    # Get lpi corner coordinates
-    cta_array = cta_nifti.get_fdata()
+    # Get lpi corner coordinates (only the shape is needed; do not materialise the volume)
+    cta_shape = cta_nifti.shape
     cta_affine = cta_nifti.affine
     # Depending on the orientation of the image, we have to define the corner voxel coordinates and the flipping array
     orientation = nib.aff2axcodes(cta_affine)
     if orientation == ('R', 'A', 'S'):
         lpi_corner_voxel_coordinates = np.array([0, 0, 0])
     elif orientation == ('L', 'A', 'S'):
-        lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, 0, 0])
+        lpi_corner_voxel_coordinates = np.array([cta_shape[0] - 1, 0, 0])
     elif orientation == ('L', 'P', 'S'):
-        lpi_corner_voxel_coordinates = np.array([cta_array.shape[0] - 1, cta_array.shape[1] - 1, 0])
+        lpi_corner_voxel_coordinates = np.array([cta_shape[0] - 1, cta_shape[1] - 1, 0])
+    else:
+        raise ValueError(f"Unsupported CTA orientation {orientation}; expected RAS, LAS or LPS")
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
     lpi_corner_coordinates = np.dot(cta_affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]

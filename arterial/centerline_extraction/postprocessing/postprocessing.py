@@ -47,6 +47,8 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
         lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, 0, 0])
     elif orientation == ('L', 'P', 'S'):
         lpi_corner_voxel_coordinates = np.array([image_shape[0] - 1, image_shape[1] - 1, 0])
+    else:
+        raise ValueError(f"Unsupported orientation {orientation}; expected RAS, LAS or LPS")
 
     # Compute lpi corner coordinates in real world coordinates, with the same orientation as the image
     lpi_corner_coordinates = np.dot(affine, np.append(lpi_corner_voxel_coordinates, 1))[:3]
