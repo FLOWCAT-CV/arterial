@@ -134,6 +134,8 @@ class ArterialGNet(nn.Module):
             self.aggregation = global_max_pool
         elif self.aggregation_ == "add":
             self.aggregation = global_add_pool
+        else:
+            raise ValueError(f"Unknown aggregation {self.aggregation_!r}; expected 'mean', 'max' or 'add'")
 
     def forward(self, data):
         global_data, segment_data, dense_data = data.global_data, data.segment_data, data.dense_data

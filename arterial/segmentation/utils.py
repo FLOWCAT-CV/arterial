@@ -34,7 +34,8 @@ def compute_cranium_mask(cta_array):
 
     """
     half_s_coordinate = cta_array.shape[2] // 2
-    upper_half_cta_array = cta_array[:, :, half_s_coordinate:]
+    # Filter in floating point: integer CTAs would be filtered in integer arithmetic and yield an empty mask.
+    upper_half_cta_array = np.asarray(cta_array[:, :, half_s_coordinate:], dtype=np.float32)
     filtered_upper_half_cta_array = gaussian_laplace(upper_half_cta_array, sigma=0.0001, mode="nearest")
 
     tolerance = 0.43 * np.ptp(filtered_upper_half_cta_array)
@@ -131,7 +132,7 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
     # Initializes the network architecture, loads the checkpoint
     predictor.initialize_from_trained_model_folder(
         model_registry.model_path("segmentation", "totalsegmentator_mandible", "nnUNetTrainer_DASegOrd0_NoMirroring__nnUNetPlans__3d_fullres"),
-        use_folds=("0"), 
+        use_folds=("0",),
         checkpoint_name='checkpoint_final.pth',
     )
 
@@ -207,7 +208,7 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_b
         except Exception as e:
             print(f"Error running TotalSegmentator: {e}")
             print("TotalSegmentator failed, using laplacian-gaussian filter instead...")
-            return slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=True)
+            return slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=True, return_bounding_box=return_bounding_box)
 
         # Get lowest coordinate with a non-zero voxel from cranium mask
         nonzero_coordinates = np.nonzero(cranium_mask)
@@ -350,6 +351,8 @@ def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_ar
         for idx in range(segmentation_neck_array.shape[2] - head_origin_k):
             dice.append(compute_dice(segmentation_neck_array[:, :, head_origin_k + idx], segmentation_head_array_[:, :, idx]))
 
+    if len(dice) == 0:
+        raise ValueError("Head and neck segmentations do not overlap; cannot find a transition slice.")
     # Get s coordinate for highest similarity
     slice_difference = np.argmax(dice)
     highest_similarity_k_coordinate = head_origin_k + slice_difference
