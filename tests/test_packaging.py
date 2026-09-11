@@ -34,7 +34,7 @@ def _setup_metadata():
     without executing it.
 
     """
-    tree = ast.parse(open(os.path.join(REPO_ROOT, "setup.py")).read())
+    tree = ast.parse(open(os.path.join(REPO_ROOT, "setup.py"), encoding="utf-8").read())
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "setup")
     kwargs = {k.arg: k.value for k in call.keywords}
     literal = lambda key: ast.literal_eval(kwargs[key]) if key in kwargs else None
@@ -51,7 +51,7 @@ def _third_party_imports():
     for path in glob.glob(os.path.join(PACKAGE_DIR, "**", "*.py"), recursive=True):
         if os.sep + "models" + os.sep in path:
             continue
-        for node in ast.walk(ast.parse(open(path).read())):
+        for node in ast.walk(ast.parse(open(path, encoding="utf-8").read())):
             names = []
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
@@ -100,7 +100,7 @@ class TestPackaging(unittest.TestCase):
     def test_optional_dependencies_are_not_imported_at_module_level(self):
         optional = {"SimpleITK", "dicom2nifti", "ants"}
         for path in [os.path.join(PACKAGE_DIR, "io", "dicom_and_nifti.py"), os.path.join(PACKAGE_DIR, "io", "registration.py")]:
-            tree = ast.parse(open(path).read())
+            tree = ast.parse(open(path, encoding="utf-8").read())
             for node in tree.body:
                 names = [a.name.split(".")[0] for a in node.names] if isinstance(node, ast.Import) else \
                         [node.module.split(".")[0]] if isinstance(node, ast.ImportFrom) and node.module else []

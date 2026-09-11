@@ -18,7 +18,7 @@ MARKDOWN = [os.path.join(REPO_ROOT, "README.md"), os.path.join(REPO_ROOT, "docum
 
 
 def python_blocks(path):
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         text = handle.read()
     return re.findall(r"```python\n(.*?)```", text, flags=re.S)
 
@@ -34,7 +34,7 @@ def module_top_level_names(module):
     if not os.path.isfile(path):
         return None
     names = set()
-    for node in ast.parse(open(path).read()).body:
+    for node in ast.parse(open(path, encoding="utf-8").read()).body:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             names.add(node.name)
         elif isinstance(node, ast.Assign):
@@ -76,7 +76,7 @@ class TestLinks(unittest.TestCase):
 
     def test_relative_links_point_at_existing_files(self):
         for path in MARKDOWN:
-            with open(path) as handle:
+            with open(path, encoding="utf-8") as handle:
                 text = handle.read()
             for target in re.findall(r"\]\(([^)#]+?)(?:#[^)]*)?\)", text):
                 if target.startswith(("http://", "https://", "mailto:")):
@@ -89,7 +89,7 @@ class TestLinks(unittest.TestCase):
 class TestOutputPathsMatchCode(unittest.TestCase):
 
     def test_documented_output_files_are_the_ones_the_code_writes(self):
-        with open(os.path.join(REPO_ROOT, "README.md")) as handle:
+        with open(os.path.join(REPO_ROOT, "README.md"), encoding="utf-8") as handle:
             readme = handle.read()
         self.assertNotIn("_segmentation.nii.gz", readme)
         self.assertNotIn("landmarks/", readme)

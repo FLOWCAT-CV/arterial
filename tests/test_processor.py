@@ -95,7 +95,7 @@ class TestCommandLine(ArterialTestCase):
     def test_readme_option_table_matches_parser(self):
         parser = perform_analysis.build_parser()
         parser_flags = {opt for action in parser._actions for opt in action.option_strings if opt not in ("-h", "--help")}
-        with open(os.path.join(REPO_ROOT, "README.md")) as handle:
+        with open(os.path.join(REPO_ROOT, "README.md"), encoding="utf-8") as handle:
             readme = handle.read()
         table = readme.split("## Command-Line Options", 1)[1].split("\n## ", 1)[0]
         documented = set(re.findall(r"`(-{1,2}[A-Za-z0-9_]+)`", table))
@@ -106,7 +106,7 @@ class TestCommandLine(ArterialTestCase):
 class TestFullPipelineExample(ArterialTestCase):
 
     def test_params_file_maps_to_processor_namespace(self):
-        with open(os.path.join(REPO_ROOT, "example_scripts", "arterial_processing_params.json")) as handle:
+        with open(os.path.join(REPO_ROOT, "example_scripts", "arterial_processing_params.json"), encoding="utf-8") as handle:
             params = json.load(handle)
         params["case_dir"] = self.case_dir
         params["cta_nifti_path"] = ""  # empty means case_dir/cta.nii.gz
