@@ -5,9 +5,6 @@ import os, shutil, glob
 import numpy as np
 import nibabel as nib
 from nibabel.orientations import axcodes2ornt, ornt_transform, apply_orientation, io_orientation, inv_ornt_aff
-import SimpleITK as sitk
-import dicom2nifti
-import dicom2nifti.settings as settings
 
 def convert_dicom_to_nifti_sitk(input_path, output_path):
     """
@@ -24,6 +21,8 @@ def convert_dicom_to_nifti_sitk(input_path, output_path):
     -------
 
     """
+    import SimpleITK as sitk  # optional dependency: pip install arterial[dicom]
+
     reader = sitk.ImageSeriesReader()
     dicom_names = reader.GetGDCMSeriesFileNames(input_path)
     reader.SetFileNames(dicom_names)
@@ -45,6 +44,9 @@ def convert_dicom_to_nifti_d2n(input_path, output_path):
     -------
 
     """
+    import dicom2nifti  # optional dependency: pip install arterial[dicom]
+    import dicom2nifti.settings as settings
+
     settings.disable_validate_orthogonal()
     settings.enable_resampling()
     settings.set_resample_spline_interpolation_order(1)

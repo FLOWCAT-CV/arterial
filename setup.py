@@ -21,21 +21,30 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.11",
     ],
-    packages=find_packages(),
-    package_data={
-        "arterial": [
-            "segmentation/models/*",
-            "vessel_labelling/models/*",
-            "landmark_extraction/models/*"],
-        "tests": ["test_data/*"]
-        },
+    packages=find_packages(exclude=["tests", "tests.*"]),
+    # Trained weights are not packaged: they are downloaded to arterial/models/
+    # by scripts/download_models.sh and resolved through arterial.model_registry.
     install_requires=[
-        'nibabel',
-        'networkx',
-        'numpy',
-        'scipy',
-        'scikit-image',
-        'vtk',
-        'connected-components-3d'
-        ]
+        "nibabel",
+        "networkx",
+        "numpy",
+        "scipy",
+        "scikit-image",
+        "matplotlib",
+        "vtk",
+        "connected-components-3d",
+        # Deep-learning stack. The README installs torch and the PyTorch Geometric
+        # wheels first so that the CUDA build is chosen; these entries only make
+        # the dependency explicit for an already prepared environment.
+        "torch",
+        "torch_geometric",
+        "monai",
+        "torchio",
+        "nnunetv2",
+        # vmtk is conda-only (conda install -c conda-forge vmtk) and cannot be listed here.
+    ],
+    extras_require={
+        "dicom": ["SimpleITK", "dicom2nifti"],   # arterial.io.dicom_and_nifti converters
+        "registration": ["antspyx"],             # arterial.io.registration
+    },
 )
