@@ -100,3 +100,9 @@ class TestFeatureExtractorPipeline(FeatureExtractorTestCase):
             for config in extractor.supersegments:
                 self.assertEqual(len(config), 3, f"supersegment key should be (access, side, circulation): {config}")
                 self.assertFileExists(os.path.join(extractor.supersegments_dir_path, f"{config[0]} + {config[1]} + {config[2]}.pickle"))
+            # Supersegments must not share feature dicts with the local graph or each other.
+            for node, data in extractor.local_graph.nodes(data=True):
+                self.assertNotIn("is_supersegment", data["features femoral"], "supersegment flag leaked into the local graph")
+            flags = {config: sum(data["features"]["is_supersegment"] for _, data in graph.nodes(data=True))
+                     for config, graph in extractor.supersegments.items()}
+            self.assertGreater(len(set(flags.values())), 1, f"every supersegment has the same member count: {flags}")

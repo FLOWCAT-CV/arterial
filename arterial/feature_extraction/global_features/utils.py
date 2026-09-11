@@ -82,9 +82,9 @@ def get_aortic_arch_type(centerline_graph):
         value = np.abs(A - B) / D
         if value < 1:
             aortic_arch_type = 1
-        elif value > 1 and value < 2:
+        elif value < 2:
             aortic_arch_type = 2
-        elif value > 2:
+        else:
             aortic_arch_type = 3
     else:
         aortic_arch_type = 1
@@ -190,7 +190,7 @@ def get_arsa(centerline_graph):
                     vessel_type_names_in_contact.append(centerline_graph[src][dst]["vessel_type_name"])
         # If AA is in contact of the RSA origin and the closest RSA node has a smaller hierarchy 
         # than the closest LSA node, ARSA is detected
-        if "AA" in vessel_type_names_in_contact and centerline_graph.nodes[closest_rsa_node]["hierarchy femoral"] < centerline_graph.nodes[closest_lsa_node]["hierarchy femoral"]:
+        if "AA" in vessel_type_names_in_contact and closest_lsa_node is not None and centerline_graph.nodes[closest_rsa_node]["hierarchy femoral"] < centerline_graph.nodes[closest_lsa_node]["hierarchy femoral"]:
             arsa = 1
         else:
             arsa = 0

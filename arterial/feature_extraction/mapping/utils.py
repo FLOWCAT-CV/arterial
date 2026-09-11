@@ -523,8 +523,11 @@ def build_supersegments(local_graph, predicted_configurations):
                 else:
                     supersegment.nodes[node]["is_supersegment"] = 0
                 supersegment.nodes[node]["hierarchy"] = supersegment.nodes[node][f"hierarchy {access}"]
-                supersegment.nodes[node]["features"] = supersegment.nodes[node][f"features {access}"]
-                supersegment.nodes[node]["features"]["is_supersegment"] = supersegment.nodes[node]["is_supersegment"]
+                # Copy the feature dict: Graph.copy() is shallow, so writing into the shared dict
+                # would leak is_supersegment into local_graph and every other supersegment.
+                features = dict(supersegment.nodes[node][f"features {access}"])
+                features["is_supersegment"] = supersegment.nodes[node]["is_supersegment"]
+                supersegment.nodes[node]["features"] = features
                 supersegment.nodes[node].pop("features femoral")
                 supersegment.nodes[node].pop("features radial")
                 supersegment.nodes[node].pop("hierarchy femoral")

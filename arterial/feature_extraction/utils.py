@@ -214,7 +214,8 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
             # Store the S coordinates of each subgraph's center of mass
             centers_of_mass_s.append(center_of_mass[2])
         # Reorder subgraphs according to the S coordinate of their center of mass in ascending order. Maintain subgraph at 0 position
-        subgraphs = list(np.array(subgraphs, dtype = object)[np.insert(np.argsort(centers_of_mass_s) + 1, 0, 0)])
+        order = np.insert(np.argsort(centers_of_mass_s) + 1, 0, 0)
+        subgraphs = [subgraphs[idx] for idx in order]  # never np.array() over graphs: equal-sized graphs become a 2-D array of nodes
 
     # We can get the cell_id for all segments that form the subgraph 
     subgraphs_cell_ids = []
