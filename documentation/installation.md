@@ -94,8 +94,7 @@ yourself. Run `source ~/.zshrc`, or open a new terminal, for it to take effect.
 
 Add `--site https://sandbox.zenodo.org` to pull from a sandbox record.
 
-There is no per-file caching, so re-running re-downloads the whole archive; `curl -C -` resumes an
-interrupted transfer where the server supports it.
+There is no per-file caching, so re-running re-downloads the whole archive.
 
 ### Installing the weights somewhere else
 

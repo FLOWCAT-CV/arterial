@@ -158,10 +158,10 @@ Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 #### Download
 
 ```bash
-bash scripts/download_models.sh --record 22694951
+bash scripts/download_models.sh
 ```
 
-That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
+The script defaults to record `22694951`; pass `--record <id>` for another version. That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
 one, extracts it, and verifies that every expected checkpoint — and the two Apache-2.0 files —
 arrived.
 
@@ -179,7 +179,6 @@ copy, and nothing else in the file is touched. Pass `--no-persist` to skip this 
 yourself. Run `source ~/.zshrc`, or open a new terminal, for it to take effect.
 
 Because it is a single archive there is no per-file caching: re-running re-downloads everything.
-`curl -C -` will resume an interrupted transfer if the server allows it.
 
 #### Installing the weights somewhere else
 
