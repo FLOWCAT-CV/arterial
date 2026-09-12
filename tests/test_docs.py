@@ -13,7 +13,7 @@ import re
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MARKDOWN = [os.path.join(REPO_ROOT, "README.md"), os.path.join(REPO_ROOT, "documentation", "installation.md"),
+MARKDOWN = [os.path.join(REPO_ROOT, "README.md"), os.path.join(REPO_ROOT, "docs", "installation.md"),
             os.path.join(REPO_ROOT, "tests", "README.md")] + glob.glob(os.path.join(REPO_ROOT, "arterial", "*", "README.md"))
 
 

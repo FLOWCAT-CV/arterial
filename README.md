@@ -21,7 +21,7 @@ Arterial is a comprehensive AI framework for fully automated vascular tortuosity
 The framework processes a single CTA image and outputs a complete vascular analysis including segmentation masks, labeled centerlines, geometric features, and procedural predictions—all without manual input.
 
 <p align="center">
-  <img src="documentation/figures/arterial_pipeline.png"
+  <img src="docs/figures/arterial_pipeline.png"
        alt="Arterial pipeline: head-and-neck basal CTA, vascular segmentation, centerline extraction, vessel labelling, and multi-scale feature extraction"
        width="100%">
 </p>
@@ -492,7 +492,7 @@ permitted regardless of funding source. Commercial use requires a separate licen
 under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): noncommercial use only, with
 attribution. **One exception:** `<models directory>/segmentation/totalsegmentator_mandible/` is
 redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the
-[Apache License 2.0](zenodo/segmentation/totalsegmentator_mandible/LICENSE), copyright the TotalSegmentator authors. Apache-2.0, not
+[Apache License 2.0](docs/zenodo/segmentation/totalsegmentator_mandible/LICENSE), copyright the TotalSegmentator authors. Apache-2.0, not
 CC BY-NC 4.0, governs that model — including commercial use of it — and its licence text and
 attribution notice ship inside that directory as `LICENSE` and `NOTICE`. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full statement.
