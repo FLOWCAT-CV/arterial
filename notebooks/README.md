@@ -11,15 +11,13 @@ case and writes into `notebooks/case/` (gitignored).
 - `05_access_prediction` — what ArterialGNet sees, predictions with their uncertainty, attention maps (GPU, seconds).
 - `06_landmark_detection` — the model grid, detection, the mirror correction on purpose, refinement, centerlines between landmarks (GPU, ~2 min).
 - `07_vessel_geometry` — cross-section radii, curvature and curve ids, the carotid bulb, entering the skull (~1 min).
-- `08_quality_control` — the checks the pipeline makes and the pictures that expose failures (seconds).
-- `09_batch_and_reporting` — parameters files, the cohort loop, one row per case (seconds).
 
 ## Running them
 
 ```bash
 conda activate arterial_env
 export arterial_dir=/path/to/arterial/arterial
-python tests/make_derived_fixtures.py     # once: products of the earlier stages, used by notebooks 3-9
+python tests/make_derived_fixtures.py     # once: products of the earlier stages, used by notebooks 3-7
 jupyter lab notebooks/
 ```
 
