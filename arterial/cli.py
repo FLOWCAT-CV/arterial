@@ -1,6 +1,13 @@
 #    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
- 
+
+"""
+Command-line entry point of the Arterial pipeline.
+
+Installed as the ``arterial`` command (see setup.py); ``python -m arterial.cli``
+works as well.
+"""
+
 import argparse
 
 from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES
@@ -16,7 +23,7 @@ def build_parser():
         Parser whose namespace is accepted by ArterialProcessor.
 
     """
-    parser = argparse.ArgumentParser(description="Arterial: automated vascular analysis of a head-and-neck CTA.")
+    parser = argparse.ArgumentParser(prog="arterial", description="Arterial: automated vascular analysis of a head-and-neck CTA.")
     parser.add_argument("-cd", "--case_dir", type=str, required=True,
         help="Path to directory containing the nifti image (assumes that the nifti file has the basename of the dir). Required.")
     parser.add_argument("-cnp", "--cta_nifti_path", type=str, required=False, default=None,

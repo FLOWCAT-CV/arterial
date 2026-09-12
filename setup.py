@@ -43,6 +43,7 @@ setup(
         "nnunetv2",
         # vmtk is conda-only (conda install -c conda-forge vmtk) and cannot be listed here.
     ],
+    entry_points={"console_scripts": ["arterial=arterial.cli:main"]},
     extras_require={
         "dicom": ["SimpleITK", "dicom2nifti"],   # arterial.io.dicom_and_nifti converters
         "registration": ["antspyx"],             # arterial.io.registration

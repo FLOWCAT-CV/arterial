@@ -29,7 +29,7 @@ class ArterialProcessor():
         Parameters
         ----------
         args : argparse.ArgumentParser object
-            Contains all parsed arguments from the perform_analysis.py call as attributes.
+            Contains the parsed command-line arguments (see arterial/cli.py) as attributes.
             These are:
             - case_dir : string or path-like object
                 Path to case directory. 

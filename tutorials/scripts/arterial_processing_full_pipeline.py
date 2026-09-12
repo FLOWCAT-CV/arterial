@@ -14,7 +14,7 @@ def load_args_from_params_json(params):
     """
     Builds the argument namespace expected by ArterialProcessor from a params dict.
 
-    Keys mirror the flags of perform_analysis.py; missing keys take the CLI defaults.
+    Keys mirror the flags of the arterial command line; missing keys take the CLI defaults.
 
     Parameters
     ----------

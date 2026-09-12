@@ -231,21 +231,23 @@ copy them anywhere — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ### Command-Line Usage
 
+`pip install -e .` installs the `arterial` command (`python -m arterial.cli` is equivalent).
+
 ```bash
 # Full analysis pipeline (extracranial vessels)
-python perform_analysis.py -cd /path/to/case_dir
+arterial -cd /path/to/case_dir
 
 # With explicit CTA path
-python perform_analysis.py -cd /path/to/case_dir -cnp /path/to/cta.nii.gz
+arterial -cd /path/to/case_dir -cnp /path/to/cta.nii.gz
 
 # Intracranial vessel analysis
-python perform_analysis.py -cd /path/to/case_dir -m intracranial_vessels
+arterial -cd /path/to/case_dir -m intracranial_vessels
 
 # Fast segmentation mode
-python perform_analysis.py -cd /path/to/case_dir -fast
+arterial -cd /path/to/case_dir -fast
 
 # Skip segmentation (if already computed)
-python perform_analysis.py -cd /path/to/case_dir -ss
+arterial -cd /path/to/case_dir -ss
 ```
 
 ### Python API

@@ -27,7 +27,7 @@ A failure on one vessel is logged but does not abort processing of the others;
 an end-of-run summary string reports per-vessel outcomes.
 
 The full pipeline is invoked through `ArterialProcessor` exactly as in
-`perform_analysis.py`; the geometry export is a post-processing step layered on top
+the `arterial` command; the geometry export is a post-processing step layered on top
 and does not modify the processor.
 """
 from __future__ import annotations
