@@ -126,30 +126,43 @@ def table(rows, columns=None, index=None):
     return pd.DataFrame(rows, columns=columns, index=index)
 
 
-def show_slices(volume, mask=None, indices=None, window=None, title=None, figsize=(15, 5)):
+def show_slices(volume, affine=None, mask=None, indices=None, window=None, title=None, figsize=(15, 5)):
     """
-    Shows the sagittal, coronal and axial middle slices of a volume, with an optional mask overlay.
+    Shows the sagittal, coronal and axial middle slices of a volume with the
+    voxel aspect ratio taken from the affine, and an optional mask overlay.
 
     """
     volume = np.asarray(volume)
+    spacing = np.abs(np.diag(affine)[:3]) if affine is not None else np.ones(3)
     if indices is None:
         indices = [s // 2 for s in volume.shape]
     if window is None:
         window = (np.percentile(volume, 1), np.percentile(volume, 99))
+    mask = None if mask is None else np.asarray(mask)
     fig, axes = plt.subplots(1, 3, figsize=figsize)
-    planes = [("sagittal", volume[indices[0], :, :], None if mask is None else np.asarray(mask)[indices[0], :, :]),
-              ("coronal", volume[:, indices[1], :], None if mask is None else np.asarray(mask)[:, indices[1], :]),
-              ("axial", volume[:, :, indices[2]], None if mask is None else np.asarray(mask)[:, :, indices[2]])]
-    for ax, (name, image, overlay) in zip(axes, planes):
-        ax.imshow(image.T, cmap="gray", origin="lower", vmin=window[0], vmax=window[1])
+    # each plane is drawn transposed: rows are the second listed axis, columns the first
+    planes = [("sagittal", volume[indices[0], :, :], None if mask is None else mask[indices[0], :, :], spacing[2] / spacing[1]),
+              ("coronal", volume[:, indices[1], :], None if mask is None else mask[:, indices[1], :], spacing[2] / spacing[0]),
+              ("axial", volume[:, :, indices[2]], None if mask is None else mask[:, :, indices[2]], spacing[1] / spacing[0])]
+    for ax, (name, image, overlay, aspect) in zip(axes, planes):
+        ax.imshow(image.T, cmap="gray", origin="lower", vmin=window[0], vmax=window[1], aspect=aspect)
         if overlay is not None:
-            ax.imshow(np.ma.masked_where(overlay.T == 0, overlay.T), cmap="autumn", origin="lower", alpha=0.6, interpolation="nearest")
+            ax.imshow(np.ma.masked_where(overlay.T == 0, overlay.T), cmap="autumn", origin="lower", alpha=0.6, interpolation="nearest", aspect=aspect)
         ax.set_title(name)
         ax.axis("off")
     if title:
         fig.suptitle(title)
     plt.tight_layout()
     return show(fig)
+
+
+def plane_aspect(affine, plane):
+    """
+    Returns the imshow aspect for a transposed slice: 'sagittal' (A vs S), 'coronal' (R vs S) or 'axial' (R vs A).
+
+    """
+    spacing = np.abs(np.diag(affine)[:3])
+    return {"sagittal": spacing[2] / spacing[1], "coronal": spacing[2] / spacing[0], "axial": spacing[1] / spacing[0]}[plane]
 
 
 def polydata_lines(polydata):
@@ -165,9 +178,27 @@ def polydata_lines(polydata):
     return lines
 
 
+def plot_surface(polydata, ax, color="lightgray", alpha=0.35, max_triangles=30000, label=None):
+    """
+    Draws a triangle surface as a mesh, decimated if it has more than max_triangles faces.
+
+    """
+    import vtk
+    triangles = vtk.vtkTriangleFilter(); triangles.SetInputData(polydata); triangles.Update()
+    surface = triangles.GetOutput()
+    if surface.GetNumberOfCells() > max_triangles:
+        decimate = vtk.vtkQuadricDecimation(); decimate.SetInputData(surface)
+        decimate.SetTargetReduction(1 - max_triangles / surface.GetNumberOfCells()); decimate.Update()
+        surface = decimate.GetOutput()
+    points = vtk_to_numpy(surface.GetPoints().GetData())
+    faces = vtk_to_numpy(surface.GetPolys().GetData()).reshape(-1, 4)[:, 1:]
+    ax.plot_trisurf(points[:, 0], points[:, 1], points[:, 2], triangles=faces, color=color, alpha=alpha, linewidth=0, antialiased=False, shade=True, label=label)
+    return ax
+
+
 def plot_polydata(polydatas, colors=None, labels=None, ax=None, surface_step=25, elev=10, azim=-60, title=None, linewidth=1.0):
     """
-    Draws centerline polydata as 3D lines (and surfaces as sparse point clouds).
+    Draws centerline polydata as 3D lines and surfaces as meshes.
 
     """
     if ax is None:
@@ -179,6 +210,8 @@ def plot_polydata(polydatas, colors=None, labels=None, ax=None, surface_step=25,
         if polydata.GetNumberOfLines() > 0:
             for idx, line in enumerate(polydata_lines(polydata)):
                 ax.plot(line[:, 0], line[:, 1], line[:, 2], color=color, linewidth=linewidth, label=label if idx == 0 else None)
+        elif polydata.GetNumberOfPolys() > 0:
+            plot_surface(polydata, ax, color=color)
         else:
             pts = vtk_to_numpy(polydata.GetPoints().GetData())[::surface_step]
             ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, color=color, alpha=0.15, label=label)
