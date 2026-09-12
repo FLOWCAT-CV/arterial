@@ -48,3 +48,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Working directory written by the notebooks
+notebooks/case/
