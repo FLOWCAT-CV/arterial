@@ -50,4 +50,4 @@ venv/
 .vscode/
 
 # Working directory written by the notebooks
-notebooks/case/
+tutorials/notebooks/case/

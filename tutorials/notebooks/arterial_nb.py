@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from vtk.util.numpy_support import vtk_to_numpy
 
 NOTEBOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(NOTEBOOKS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(NOTEBOOKS_DIR))   # tutorials/notebooks -> repo root
 FIXTURES_DIR = os.path.join(REPO_ROOT, "tests", "test_data", "input_test_data")
 DERIVED_DIR = os.path.join(FIXTURES_DIR, "derived", "extracranial_vessels")
 CASE_DIR = os.path.join(NOTEBOOKS_DIR, "case")   # everything the notebooks write goes here (gitignored)

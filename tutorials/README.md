@@ -1,5 +1,9 @@
 # Tutorials
 
+`scripts/` holds production-style example scripts; `notebooks/` holds visual, step-by-step walkthroughs of the pipeline stages.
+
+## Scripts
+
 Production-style example scripts. Each one is a complete, runnable entry point built on the
 public classes of the package; copy the one closest to your use case and adapt the paths at
 the top.
@@ -15,4 +19,4 @@ the top.
 
 All scripts expect `arterial_dir` to point at the package directory and the weights to be
 installed (see the main README, "Model Weights"). Step-by-step, visual walkthroughs of the
-same stages live in `../notebooks/`.
+same stages live in `notebooks/`.

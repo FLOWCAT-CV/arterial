@@ -1,8 +1,8 @@
 # Notebooks
 
 Visual, step-by-step walkthroughs of the pipeline, one per stage, complementing the
-production scripts in `../tutorials/`. Each notebook runs top to bottom on the test fixture
-case and writes into `notebooks/case/` (gitignored).
+production scripts in `../scripts/`. Each notebook runs top to bottom on the test fixture
+case and writes into `tutorials/notebooks/case/` (gitignored).
 
 - `01_vessel_segmentation` — fast and full nnU-Net modes, the head/neck split and its seam, intracranial mode (GPU, ~6 min).
 - `02_centerline_extraction` — islands, surface, endpoints, centerlines, branches, the segments array (~1 min).
@@ -18,7 +18,7 @@ case and writes into `notebooks/case/` (gitignored).
 conda activate arterial_env
 export arterial_dir=/path/to/arterial/arterial
 python tests/make_derived_fixtures.py     # once: products of the earlier stages, used by notebooks 3-7
-jupyter lab notebooks/
+jupyter lab tutorials/notebooks/
 ```
 
 Inputs come from `tests/test_data/input_test_data/` (see `tests/README.md` for how to obtain it).
