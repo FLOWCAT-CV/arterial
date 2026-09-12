@@ -333,23 +333,44 @@ print(f"Total analysis time: {timing['total_time']:.2f}s")
 
 ## Expected Outputs
 
-After running the full pipeline:
+After running the full pipeline in extracranial mode (`{mode}` is `extracranial_vessels`; intracranial mode writes the segmentation stage only, under `intracranial_vessels/`):
 
 ```
 case_dir/
-├── cta.nii.gz                              # Input
+├── cta.nii.gz                               # input
 └── extracranial_vessels/
-    ├── segmentation.nii.gz                  # Vessel mask
-    ├── centerlines/                         # Individual centerline models
-    ├── branch_model.vtk                     # Merged branch model
-    ├── centerline_segments_array.npy        # Centerline data
-    ├── landmarks.json                       # Detected landmarks (RAS mm)
-    ├── landmarks_slicer.json                # Same, as 3D Slicer markups
-    ├── segments_graph_pred.pickle           # Labeled vessel graph
-    ├── local_graph.pickle                   # Featurized graph
-    ├── supersegments/                       # Catheter pathways (8 configs)
-    └── access_prediction/                   # Accessibility predictions
+    │   # segmentation
+    ├── segmentation.nii.gz                  # binary vessel mask on the CTA grid
+    ├── segmentation_probabilities.nii.gz    # only with return_probabilities
+    │   # centerline extraction
+    ├── segmentation.vtk / segmentation.stl  # vessel surface mesh
+    ├── segmentations/                       # one surface per connected island
+    ├── networks/, endpoints/                # per island: VMTK network and endpoint markups (Slicer JSON)
+    ├── centerlines/                         # per island: centerline model with radii
+    ├── branch_models/, branch_model.vtk     # per island and merged: centerlines split into branches
+    ├── centerline_segments_array.npy        # one row per segment: coordinates and radii
+    │   # landmark detection
+    ├── landmarks.json                       # six bifurcation landmarks (RAS mm)
+    ├── landmarks_slicer.json                # same, as 3D Slicer markups
+    ├── landmarks_mask.nii.gz                # only with return_mask
+    ├── individual_centerlines/              # centerlines between landmark pairs (.vtk, .pickle, .png)
+    │   # vessel labelling
+    ├── segments_graph.pickle / .png         # one edge per segment
+    ├── segments_graph_pred.pickle / .png    # same, with the predicted vessel type
+    │   # feature extraction
+    ├── local_graph.pickle / .png            # dense resampled tree with every feature
+    ├── single_segments/, single_segments.png   # one graph per named vessel
+    ├── supersegments/, supersegments.png    # 8 catheter pathways (femoral/radial × left/right × anterior/posterior)
+    │   # access prediction
+    └── access_prediction/
+        └── femoral_left/, femoral_right/    # per pathway:
+            ├── global_features.json, segment_supersegment.pickle, dense_supersegment.pickle,
+            │   preprocessed_supersegment_dict.pickle, combined_plot.png      # model inputs
+            ├── access_prediction.json       # probability of difficult access and its spread
+            └── attention_map.pickle / .png / .vtk, attention_map_points.json
 ```
+
+The vessel geometry export (`tutorials/scripts/export_vessel_geometry.py`) adds one VTK file per named vessel and, when the intracranial transition is requested, `cranium_distance_transform.npy`.
 
 ---
 
