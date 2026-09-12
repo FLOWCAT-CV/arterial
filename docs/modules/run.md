@@ -138,19 +138,19 @@ The `ArterialProcessor` wraps all Arterial modules into a single orchestration c
 
 ```bash
 # Minimal command - full pipeline for extracranial vessels
-python perform_analysis.py -cd /path/to/case_dir
+arterial -cd /path/to/case_dir
 
 # Specify CTA path explicitly
-python perform_analysis.py -cd /path/to/case_dir -cnp /path/to/cta.nii.gz
+arterial -cd /path/to/case_dir -cnp /path/to/cta.nii.gz
 
 # Intracranial vessel analysis
-python perform_analysis.py -cd /path/to/case_dir -m intracranial_vessels
+arterial -cd /path/to/case_dir -m intracranial_vessels
 ```
 
 ### Full Options
 
 ```bash
-python perform_analysis.py \
+arterial \
     -cd /path/to/case_dir \           # Required: case directory
     -cnp /path/to/cta.nii.gz \        # Optional: CTA path (default: case_dir/cta.nii.gz)
     -m extracranial_vessels \         # Optional: mode (extracranial_vessels|intracranial_vessels)
@@ -175,35 +175,35 @@ python perform_analysis.py \
 
 ```bash
 # Full pipeline from CTA to access prediction
-python perform_analysis.py -cd /path/to/case
+arterial -cd /path/to/case
 ```
 
 #### Re-run After Segmentation
 
 ```bash
 # Skip segmentation if already computed
-python perform_analysis.py -cd /path/to/case -ss
+arterial -cd /path/to/case -ss
 ```
 
 #### Fast Processing
 
 ```bash
 # Use fast segmentation mode (single-resolution)
-python perform_analysis.py -cd /path/to/case -fast
+arterial -cd /path/to/case -fast
 ```
 
 #### Intracranial Analysis
 
 ```bash
 # Process intracranial vessels only
-python perform_analysis.py -cd /path/to/case -m intracranial_vessels -ns
+arterial -cd /path/to/case -m intracranial_vessels -ns
 ```
 
 #### Centerlines and Labelling Only
 
 ```bash
 # Skip segmentation, feature extraction, and access prediction
-python perform_analysis.py -cd /path/to/case -ss -sfe -sap
+arterial -cd /path/to/case -ss -sfe -sap
 ```
 
 ---
@@ -524,7 +524,7 @@ run/
 ├── __init__.py
 └── processor.py          # ArterialProcessor class
 
-perform_analysis.py       # Command-line entry point
+arterial/cli.py           # Command-line entry point (installed as the `arterial` command)
 ```
 
 ### ArterialProcessor Methods

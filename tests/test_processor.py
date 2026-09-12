@@ -10,11 +10,11 @@ import sys
 
 from helpers import ArterialTestCase
 from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES
+from arterial import cli
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 sys.path.insert(0, os.path.join(REPO_ROOT, "tutorials", "scripts"))
-import perform_analysis  # noqa: E402
 import arterial_processing_full_pipeline  # noqa: E402
 
 SKIP_FLAGS = ["skip_segmentation", "skip_centerline_extraction", "skip_branching", "skip_clipping", "skip_vessel_labelling",
@@ -66,10 +66,10 @@ class TestArterialProcessor(ArterialTestCase):
 
 
 class TestCommandLine(ArterialTestCase):
-    """perform_analysis.py and the README's option table."""
+    """The arterial command line and the README's option table."""
 
     def test_parser_defaults_match_processor_expectations(self):
-        args = perform_analysis.build_parser().parse_args(["-cd", self.case_dir])
+        args = cli.build_parser().parse_args(["-cd", self.case_dir])
         for flag in SKIP_FLAGS + ["fast_segmentation", "cl_dice_nnunet", "no_slicing", "set_threshold_099"]:
             self.assertFalse(getattr(args, flag), flag)
         self.assertEqual(args.mode, "extracranial_vessels")
@@ -77,23 +77,23 @@ class TestCommandLine(ArterialTestCase):
 
     def test_parser_rejects_unknown_mode(self):
         with self.assertRaises(SystemExit):
-            perform_analysis.build_parser().parse_args(["-cd", self.case_dir, "-m", "thrombus"])
+            cli.build_parser().parse_args(["-cd", self.case_dir, "-m", "thrombus"])
         for mode in SUPPORTED_MODES:
-            self.assertEqual(perform_analysis.build_parser().parse_args(["-cd", self.case_dir, "-m", mode]).mode, mode)
+            self.assertEqual(cli.build_parser().parse_args(["-cd", self.case_dir, "-m", mode]).mode, mode)
 
-    def test_help_runs_as_a_script(self):
-        result = subprocess.run([sys.executable, os.path.join(REPO_ROOT, "perform_analysis.py"), "--help"],
+    def test_help_runs_as_a_module(self):
+        result = subprocess.run([sys.executable, "-m", "arterial.cli", "--help"],
                                 capture_output=True, text=True, timeout=300)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--skip_segmentation", result.stdout)
 
     def test_main_with_everything_skipped(self):
         argv = ["-cd", self.case_dir, "-cnp", self.require_fixture("cta.nii.gz")] + ["--" + flag for flag in SKIP_FLAGS]
-        times = perform_analysis.main(argv)
+        times = cli.main(argv)
         self.assertIn("total_time", times)
 
     def test_readme_option_table_matches_parser(self):
-        parser = perform_analysis.build_parser()
+        parser = cli.build_parser()
         parser_flags = {opt for action in parser._actions for opt in action.option_strings if opt not in ("-h", "--help")}
         with open(os.path.join(REPO_ROOT, "README.md"), encoding="utf-8") as handle:
             readme = handle.read()
