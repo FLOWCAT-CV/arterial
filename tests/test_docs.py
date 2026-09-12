@@ -79,6 +79,7 @@ class TestLinks(unittest.TestCase):
             with open(path, encoding="utf-8") as handle:
                 text = handle.read()
             for target in re.findall(r"\]\(([^)#]+?)(?:#[^)]*)?\)", text):
+                target = target.strip().strip("<>")   # markdown allows <url> destinations
                 if target.startswith(("http://", "https://", "mailto:")):
                     continue
                 with self.subTest(file=os.path.relpath(path, REPO_ROOT), link=target):

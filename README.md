@@ -3,8 +3,8 @@
 **An AI framework for automated vascular analysis and endovascular intervention planning**
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![License: PolyForm NC 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
-[![Paper](https://img.shields.io/badge/paper-CMIG%202023-blue.svg)](https://doi.org/10.1016/j.compmedimag.2022.102170)
+[![License: PolyForm NC 1.0.0](<https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg>)](LICENSE)
+[![Paper](<https://img.shields.io/badge/paper-CMIG%202023-blue.svg>)](https://doi.org/10.1016/j.compmedimag.2022.102170)
 [![Weights](https://img.shields.io/badge/weights-Zenodo-blue.svg)](https://doi.org/10.5281/zenodo.22694951)
 
 ---
@@ -36,15 +36,15 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 ## Key Features
 
-| Feature | Description |
-|---------|-------------|
-| **Deep Learning Segmentation** | nnU-Net v2 models for extracranial and intracranial vessels |
-| **Automatic Centerlines** | VMTK-based centerline extraction with branch splitting |
-| **Landmark Detection** | Automatic identification of ICA and MCA bifurcations |
-| **Vessel Labelling** | GNN-based classification of 14 vessel types |
-| **Feature Extraction** | Local, segment, and global vascular features |
-| **Pathway Mapping** | 8 catheter configurations (femoral/radial × left/right × anterior/posterior) |
-| **End-to-End Pipeline** | Single command from CTA to complete analysis |
+| Feature                              | Description                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| **Deep Learning Segmentation** | nnU-Net v2 models for extracranial and intracranial vessels                    |
+| **Automatic Centerlines**      | VMTK-based centerline extraction with branch splitting                         |
+| **Landmark Detection**         | Automatic identification of ICA and MCA bifurcations                           |
+| **Vessel Labelling**           | GNN-based classification of 14 vessel types                                    |
+| **Feature Extraction**         | Local, segment, and global vascular features                                   |
+| **Pathway Mapping**            | 8 catheter configurations (femoral/radial × left/right × anterior/posterior) |
+| **End-to-End Pipeline**        | Single command from CTA to complete analysis                                   |
 
 ---
 
@@ -52,15 +52,15 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 Arterial is organized into specialized modules, each with detailed documentation:
 
-| Module | Description | Documentation |
-|--------|-------------|---------------|
-| **Segmentation** | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [docs](docs/modules/segmentation.md) |
-| **Centerline Extraction** | VMTK-based centerline computation and branching | [docs](docs/modules/centerline_extraction.md) |
-| **Landmark Detection** | Automatic anatomical landmark identification | [docs](docs/modules/landmark_detection.md) |
-| **Vessel Labelling** | GNN-based anatomical vessel classification | [docs](docs/modules/vessel_labelling.md) |
-| **Feature Extraction** | Multi-scale vascular feature computation | [docs](docs/modules/feature_extraction.md) |
-| **Access Prediction** | Catheter accessibility prediction with attention maps | [docs](docs/modules/access_prediction.md) |
-| **Run (Processor)** | Pipeline orchestration and CLI | [docs](docs/modules/run.md) |
+| Module                          | Description                                                | Documentation                                |
+| ------------------------------- | ---------------------------------------------------------- | -------------------------------------------- |
+| **Segmentation**          | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [docs](docs/modules/segmentation.md)          |
+| **Centerline Extraction** | VMTK-based centerline computation and branching            | [docs](docs/modules/centerline_extraction.md) |
+| **Landmark Detection**    | Automatic anatomical landmark identification               | [docs](docs/modules/landmark_detection.md)    |
+| **Vessel Labelling**      | GNN-based anatomical vessel classification                 | [docs](docs/modules/vessel_labelling.md)      |
+| **Feature Extraction**    | Multi-scale vascular feature computation                   | [docs](docs/modules/feature_extraction.md)    |
+| **Access Prediction**     | Catheter accessibility prediction with attention maps      | [docs](docs/modules/access_prediction.md)     |
+| **Run (Processor)**       | Pipeline orchestration and CLI                             | [docs](docs/modules/run.md)                   |
 
 ---
 
@@ -322,10 +322,10 @@ print(f"Total analysis time: {timing['total_time']:.2f}s")
 
 ## Expected Input
 
-| Requirement | Format | Description |
-|-------------|--------|-------------|
-| CTA Image | NIfTI (`.nii.gz`) | CT Angiography volume |
-| Case Directory | Folder | Working directory for outputs |
+| Requirement    | Format              | Description                   |
+| -------------- | ------------------- | ----------------------------- |
+| CTA Image      | NIfTI (`.nii.gz`) | CT Angiography volume         |
+| Case Directory | Folder              | Working directory for outputs |
 
 **Default naming convention**: `case_dir/cta.nii.gz`
 
@@ -355,33 +355,33 @@ case_dir/
 
 ## Analysis Modes
 
-| Mode | Vessels | Landmarks | Features |
-|------|---------|-----------|----------|
-| `extracranial_vessels` | Aortic arch through Circle of Willis | 6 (bilateral ICA, EICA, MCA) | Full pipeline |
-| `intracranial_vessels` | Circle of Willis and branches | 4 (bilateral TICA, MCA) | Individual centerlines |
+| Mode                     | Vessels                              | Landmarks                    | Features               |
+| ------------------------ | ------------------------------------ | ---------------------------- | ---------------------- |
+| `extracranial_vessels` | Aortic arch through Circle of Willis | 6 (bilateral ICA, EICA, MCA) | Full pipeline          |
+| `intracranial_vessels` | Circle of Willis and branches        | 4 (bilateral TICA, MCA)      | Individual centerlines |
 
 ---
 
 ## Command-Line Options
 
-| Flag | Description |
-|------|-------------|
-| `-cd`, `--case_dir` | Path to case directory (required) |
-| `-cnp`, `--cta_nifti_path` | Path to CTA NIfTI file |
-| `-m`, `--mode` | Analysis mode (`extracranial_vessels` or `intracranial_vessels`) |
-| `-sd`, `--sampling_distance_mm` | Centerline sampling distance (default: 2) |
-| `-fast`, `--fast_segmentation` | Use fast (single-resolution) segmentation |
-| `-ss`, `--skip_segmentation` | Skip segmentation step |
-| `-sce`, `--skip_centerline_extraction` | Skip centerline extraction |
-| `-sb`, `--skip_branching` | Skip branch model extraction |
-| `-svl`, `--skip_vessel_labelling` | Skip vessel labelling |
-| `-sfe`, `--skip_feature_extraction` | Skip feature extraction |
-| `-sap`, `--skip_access_prediction` | Skip access prediction |
-| `-sld`, `--skip_landmark_detection` | Skip landmark detection |
-| `-sc`, `--skip_clipping` | No effect; accepted for backwards compatibility |
-| `-clnn`, `--cl_dice_nnunet` | Use the nnU-Net trained with centerline Dice instead of the vanilla one |
-| `-ns`, `--no_slicing` | Segment the whole volume without the head/neck split (intracranial mode) |
-| `-s99`, `--set_threshold_099` | Binarise the segmentation at probability 0.99 |
+| Flag                                       | Description                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------ |
+| `-cd`, `--case_dir`                    | Path to case directory (required)                                        |
+| `-cnp`, `--cta_nifti_path`             | Path to CTA NIfTI file                                                   |
+| `-m`, `--mode`                         | Analysis mode (`extracranial_vessels` or `intracranial_vessels`)     |
+| `-sd`, `--sampling_distance_mm`        | Centerline sampling distance (default: 2)                                |
+| `-fast`, `--fast_segmentation`         | Use fast (single-resolution) segmentation                                |
+| `-ss`, `--skip_segmentation`           | Skip segmentation step                                                   |
+| `-sce`, `--skip_centerline_extraction` | Skip centerline extraction                                               |
+| `-sb`, `--skip_branching`              | Skip branch model extraction                                             |
+| `-svl`, `--skip_vessel_labelling`      | Skip vessel labelling                                                    |
+| `-sfe`, `--skip_feature_extraction`    | Skip feature extraction                                                  |
+| `-sap`, `--skip_access_prediction`     | Skip access prediction                                                   |
+| `-sld`, `--skip_landmark_detection`    | Skip landmark detection                                                  |
+| `-sc`, `--skip_clipping`               | No effect; accepted for backwards compatibility                          |
+| `-clnn`, `--cl_dice_nnunet`            | Use the nnU-Net trained with centerline Dice instead of the vanilla one  |
+| `-ns`, `--no_slicing`                  | Segment the whole volume without the head/neck split (intracranial mode) |
+| `-s99`, `--set_threshold_099`          | Binarise the segmentation at probability 0.99                            |
 
 ---
 
@@ -446,12 +446,12 @@ a head-and-neck CTA. Its authors ask that you cite the following alongside your 
 
 The following publications have utilized the Arterial framework for vascular analysis in stroke research:
 
-### Vascular Tortuosity Impact on Endovascular Treatment Outcomes in Patients with Distal Vessel Occlusion 
+### Vascular Tortuosity Impact on Endovascular Treatment Outcomes in Patients with Distal Vessel Occlusion
 
 Analysis of extracranial vascular tortuosity characteristics and their association with mechanical thrombectomy procedural outcomes.
 
 > Pere Canals, Alvaro García-Tornel, Giulio Maria Fiore, Marc Rodrigo-Gisbert, Blanca Sastre, Jordi Mayol, Jesús David González Riveros, and Marc Ribo. **Prognostic value of intracranial vascular tortuosity in thrombectomy for distal vessel occlusion.** *European Stroke Journal* 2025.
-> 
+>
 > 🔗 [https://journals.sagepub.com/doi/full/10.1177/23969873251350124](https://journals.sagepub.com/doi/full/10.1177/23969873251350124)
 
 ### AI-derived carotid elongation ratio analysis for estimating procedural delay and clinical utility in mechanical thrombectomy.
@@ -459,16 +459,15 @@ Analysis of extracranial vascular tortuosity characteristics and their associati
 Analysis of AI-derived carotid elongation ratio and its association with procedural delay in mechanical thrombectomy.
 
 > Julien Ognard, Pere Canals, Jiahui Li, et al. **AI-derived Carotid Elongation Ratio may predict procedural delay but offer limited prognostic utility in mechanical thrombectomy.** *American Journal of Neuroradiology* 2026.
-> 
+>
 > 🔗 [https://www.ajnr.org/content/early/2026/02/25/ajnr.A9262](https://www.ajnr.org/content/early/2026/02/25/ajnr.A9262)
-
 
 ### Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy
 
 Analysis of a model for difficult transfemoral access prediction derived from deep learning-based features compared with human expert assessment for identifying difficult transfemoral access in stroke thrombectomy procedures.
 
 > Pere Canals, Alvaro Garcia-Tornel, Manuel Requena, Magda Jabłońska, Jiahui Li, Simone Balocco, Oliver Díaz, Alejandro Tomasello, Marc Ribo. **Deep learning-based model for difficult transfemoral access prediction compared with human assessment in stroke thrombectomy.** *Journal of NeuroInterventional Surgery* 2024;17:653-659.
-> 
+>
 > 🔗 [https://jnis.bmj.com/content/17/6/653](https://jnis.bmj.com/content/17/6/653)
 
 ### ArterialGNet: Graph Neural Network for Access Prediction
@@ -476,7 +475,7 @@ Analysis of a model for difficult transfemoral access prediction derived from de
 A multi-scale graph neural network (ArterialGNet) designed to predict impossible femoral access in stroke mechanical thrombectomy using vascular centerline graph embeddings. Achieved AUROC of 0.89 on a dataset of 493 interventions.
 
 > Canals P, García-Tornel A, Ribo M. **ArterialGNet: Impossible Femoral Access Prediction in Stroke Mechanical Thrombectomy with Vascular Centerline Graph Embeddings.** In: *Image Analysis in Stroke Diagnosis and Interventions (ISLES/SWITCH 2024)*. Lecture Notes in Computer Science, vol 15408. Springer, 2025.
-> 
+>
 > 🔗 [https://link.springer.com/chapter/10.1007/978-3-031-81101-2_8](https://link.springer.com/chapter/10.1007/978-3-031-81101-2_8)
 
 ---
@@ -508,9 +507,10 @@ PyTorch Geometric under MIT), which you must comply with independently.
 
 ## Acknowledgments
 
-Arterial was developed at the Stroke Research group at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain, with the help of collaborators from the Computer Vision and Machine Learning group at the University of Barcelona (CVMLUB).
+Arterial was developed at the Stroke Research group at Vall d'Hebron Research Institute (VHIR) in Barcelona (Catalonia, Spain) with the help of collaborators from the Computer Vision and Machine Learning group at the University of Barcelona (CVMLUB).
 
 **Key dependencies:**
+
 - [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) - Deep learning segmentation
 - [VMTK](https://github.com/vmtk/vmtk) - Vascular Modeling Toolkit
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) - Graph Neural Networks
