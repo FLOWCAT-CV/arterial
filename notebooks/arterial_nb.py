@@ -204,11 +204,13 @@ def segments_to_ras(coordinates, affine, image_shape):
     return np.asarray(coordinates) + lpi_corner_coordinates(affine, image_shape)
 
 
-def plot_surface(polydata, ax, color="lightgray", alpha=0.35, max_triangles=30000, label=None):
+def plot_surface(polydata, ax, color="lightgray", alpha=0.12, max_triangles=30000, label=None):
     """
-    Draws a triangle surface as a mesh, decimated if it has more than max_triangles faces.
+    Draws a triangle surface as a translucent mesh, decimated if it has more than
+    max_triangles faces. Artists added afterwards (lines, points) are drawn on top.
 
     """
+    ax.computed_zorder = False   # draw in call order instead of by depth, so points are not hidden by the mesh
     import vtk
     triangles = vtk.vtkTriangleFilter(); triangles.SetInputData(polydata); triangles.Update()
     surface = triangles.GetOutput()
