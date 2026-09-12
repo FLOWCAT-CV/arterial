@@ -2,7 +2,7 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 """
-scripts/download_models.sh against a local HTTP server that mimics Zenodo's
+download_models.sh against a local HTTP server that mimics Zenodo's
 records/<id>/files/<name> layout with a tiny fake archive.
 """
 
@@ -19,7 +19,7 @@ import unittest
 from helpers import ArterialTestCase
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCRIPT = os.path.join(REPO_ROOT, "scripts", "download_models.sh")
+SCRIPT = os.path.join(REPO_ROOT, "download_models.sh")
 ARCHIVE = "arterial-models-v1.tar.gz"
 
 REQUIRED_FILES = [

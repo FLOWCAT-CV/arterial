@@ -13,7 +13,7 @@ from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
-sys.path.insert(0, os.path.join(REPO_ROOT, "example_scripts"))
+sys.path.insert(0, os.path.join(REPO_ROOT, "tutorials", "scripts"))
 import perform_analysis  # noqa: E402
 import arterial_processing_full_pipeline  # noqa: E402
 
@@ -106,7 +106,7 @@ class TestCommandLine(ArterialTestCase):
 class TestFullPipelineExample(ArterialTestCase):
 
     def test_params_file_maps_to_processor_namespace(self):
-        with open(os.path.join(REPO_ROOT, "example_scripts", "arterial_processing_params.json"), encoding="utf-8") as handle:
+        with open(os.path.join(REPO_ROOT, "tutorials", "scripts", "arterial_processing_params.json"), encoding="utf-8") as handle:
             params = json.load(handle)
         params["case_dir"] = self.case_dir
         params["cta_nifti_path"] = ""  # empty means case_dir/cta.nii.gz

@@ -17,7 +17,7 @@ Arterial model weights repository, and that licence is not replaced by Arterial'
 | Where | `<models directory>/segmentation/totalsegmentator_mandible/` (weights), and `arterial/segmentation/models/totalsegmentator_mandible/` in this source repository (upstream nnU-Net metadata and training logs; the checkpoint itself is gitignored) |
 | Upstream | [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) |
 | Copyright | The TotalSegmentator authors (J. Wasserthal et al., University Hospital Basel) |
-| Licence | Apache License 2.0 — [`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt) |
+| Licence | Apache License 2.0 — [`docs/zenodo/segmentation/totalsegmentator_mandible/LICENSE`](docs/zenodo/segmentation/totalsegmentator_mandible/LICENSE) |
 | Task | `craniofacial_structures` (nnU-Net `Dataset115_mandible`) |
 | Classes | 1 mandible, 2 teeth_lower, 3 skull, 4 head, 5 sinus_maxillary, 6 sinus_frontal, 7 teeth_upper |
 

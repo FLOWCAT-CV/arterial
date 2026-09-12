@@ -21,7 +21,7 @@ Arterial is a comprehensive AI framework for fully automated vascular tortuosity
 The framework processes a single CTA image and outputs a complete vascular analysis including segmentation masks, labeled centerlines, geometric features, and procedural predictions—all without manual input.
 
 <p align="center">
-  <img src="documentation/figures/arterial_pipeline.png"
+  <img src="docs/figures/arterial_pipeline.png"
        alt="Arterial pipeline: head-and-neck basal CTA, vascular segmentation, centerline extraction, vessel labelling, and multi-scale feature extraction"
        width="100%">
 </p>
@@ -52,13 +52,13 @@ Arterial is organized into specialized modules, each with detailed documentation
 
 | Module | Description | Documentation |
 |--------|-------------|---------------|
-| **Segmentation** | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [README](arterial/segmentation/README.md) |
-| **Centerline Extraction** | VMTK-based centerline computation and branching | [README](arterial/centerline_extraction/README.md) |
-| **Landmark Detection** | Automatic anatomical landmark identification | [README](arterial/landmark_detection/README.md) |
-| **Vessel Labelling** | GNN-based anatomical vessel classification | [README](arterial/vessel_labelling/README.md) |
-| **Feature Extraction** | Multi-scale vascular feature computation | [README](arterial/feature_extraction/README.md) |
-| **Access Prediction** | Catheter accessibility prediction with attention maps | [README](arterial/access_prediction/README.md) |
-| **Run (Processor)** | Pipeline orchestration and CLI | [README](arterial/run/README.md) |
+| **Segmentation** | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [docs](docs/modules/segmentation.md) |
+| **Centerline Extraction** | VMTK-based centerline computation and branching | [docs](docs/modules/centerline_extraction.md) |
+| **Landmark Detection** | Automatic anatomical landmark identification | [docs](docs/modules/landmark_detection.md) |
+| **Vessel Labelling** | GNN-based anatomical vessel classification | [docs](docs/modules/vessel_labelling.md) |
+| **Feature Extraction** | Multi-scale vascular feature computation | [docs](docs/modules/feature_extraction.md) |
+| **Access Prediction** | Catheter accessibility prediction with attention maps | [docs](docs/modules/access_prediction.md) |
+| **Run (Processor)** | Pipeline orchestration and CLI | [docs](docs/modules/run.md) |
 
 ---
 
@@ -158,7 +158,7 @@ Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 #### Download
 
 ```bash
-bash scripts/download_models.sh
+bash download_models.sh
 ```
 
 The script defaults to record `22694951`; pass `--record <id>` for another version. That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
@@ -188,7 +188,7 @@ before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
-bash scripts/download_models.sh --record 22694951
+bash download_models.sh --record 22694951
 ```
 
 `ARTERIAL_MODELS_DIR` always takes precedence over the default location.
@@ -492,7 +492,7 @@ permitted regardless of funding source. Commercial use requires a separate licen
 under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): noncommercial use only, with
 attribution. **One exception:** `<models directory>/segmentation/totalsegmentator_mandible/` is
 redistributed from [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) under the
-[Apache License 2.0](licenses/Apache-2.0.txt), copyright the TotalSegmentator authors. Apache-2.0, not
+[Apache License 2.0](docs/zenodo/segmentation/totalsegmentator_mandible/LICENSE), copyright the TotalSegmentator authors. Apache-2.0, not
 CC BY-NC 4.0, governs that model — including commercial use of it — and its licence text and
 attribution notice ship inside that directory as `LICENSE` and `NOTICE`. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full statement.

@@ -312,7 +312,7 @@ export ARTERIAL_MODELS_DIR="/data/arterial-models"
 
 ## See Also
 
-- [Landmark Detection Module](../landmark_detection/README.md) - Anatomical landmark detection
-- [Centerline Extraction Module](../centerline_extraction/README.md) - Vascular centerline extraction
-- [Feature Extraction Module](../feature_extraction/README.md) - Geometric feature analysis
+- [Landmark Detection Module](landmark_detection.md) - Anatomical landmark detection
+- [Centerline Extraction Module](centerline_extraction.md) - Vascular centerline extraction
+- [Feature Extraction Module](feature_extraction.md) - Geometric feature analysis
 

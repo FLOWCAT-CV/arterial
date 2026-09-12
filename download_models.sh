@@ -25,7 +25,7 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<USAGE
-Usage: bash scripts/download_models.sh [--record ID] [--site URL] [--no-persist] [--help]
+Usage: bash download_models.sh [--record ID] [--site URL] [--no-persist] [--help]
 
 Downloads the Arterial model weights from Zenodo.
 
@@ -200,7 +200,7 @@ persist_env() {
         "$rc" > "$tmp"
     {
         printf '# >>> arterial models >>>\n'
-        printf '# Written by scripts/download_models.sh. Safe to edit or remove.\n'
+        printf '# Written by download_models.sh. Safe to edit or remove.\n'
         printf 'export ARTERIAL_MODELS_DIR="%s"\n' "$dest"
         printf '# <<< arterial models <<<\n'
     } >> "$tmp"

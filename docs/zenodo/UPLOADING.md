@@ -20,7 +20,7 @@ files belong in the Zenodo archive and in any other copy of the weights you hand
 
 ## Zenodo
 
-`scripts/download_models.sh` reconstructs the weights from an archive built out of
+`download_models.sh` reconstructs the weights from an archive built out of
 `arterial/models/`, so the `LICENSE` and `NOTICE` are carried along automatically as long as they
 were downloaded with the weights in the first place. When building a new archive to deposit, confirm
 they are present before uploading:

@@ -437,7 +437,7 @@ Feature extraction:
 
 ## Model Files
 
-The weights are downloaded by `scripts/download_models.sh` (see the main README, "Model Weights")
+The weights are downloaded by `download_models.sh` (see the main README, "Model Weights")
 and live under `<models directory>/vessel_labelling/`:
 
 ```
@@ -491,8 +491,8 @@ export ARTERIAL_MODELS_DIR="/data/arterial-models"
 
 ## See Also
 
-- [Centerline Extraction Module](../centerline_extraction/README.md) - Provides input segments array
-- [Feature Extraction Module](../feature_extraction/README.md) - Uses labelled vessels for analysis
-- [Segmentation Module](../segmentation/README.md) - Upstream segmentation
+- [Centerline Extraction Module](centerline_extraction.md) - Provides input segments array
+- [Feature Extraction Module](feature_extraction.md) - Uses labelled vessels for analysis
+- [Segmentation Module](segmentation.md) - Upstream segmentation
 
 

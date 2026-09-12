@@ -417,7 +417,7 @@ feature_extraction/
 
 ## See Also
 
-- [Centerline Extraction Module](../centerline_extraction/README.md) - Generates input centerlines
-- [Vessel Labelling Module](../vessel_labelling/README.md) - Provides vessel type predictions
-- [Segmentation Module](../segmentation/README.md) - Generates initial vessel masks
+- [Centerline Extraction Module](centerline_extraction.md) - Generates input centerlines
+- [Vessel Labelling Module](vessel_labelling.md) - Provides vessel type predictions
+- [Segmentation Module](segmentation.md) - Generates initial vessel masks
 
