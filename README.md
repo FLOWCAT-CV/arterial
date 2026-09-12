@@ -508,7 +508,7 @@ PyTorch Geometric under MIT), which you must comply with independently.
 
 ## Acknowledgments
 
-Arterial was developed at the Stroke Research group at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain.
+Arterial was developed at the Stroke Research group at Vall d'Hebron Research Institute (VHIR), Barcelona, Spain, with the help of collaborators from the Computer Vision and Machine Learning group at the University of Barcelona (CVMLUB).
 
 **Key dependencies:**
 - [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) - Deep learning segmentation
