@@ -178,6 +178,32 @@ def polydata_lines(polydata):
     return lines
 
 
+ELEV, AZIM = 10, 120   # default view: looking at the patient from the front, S up
+
+
+def finish_3d(ax, elev=ELEV, azim=AZIM, title=None):
+    """
+    Equal axis scaling from the plotted data, the default view, and RAS labels.
+
+    """
+    ranges = [np.ptp(lim) for lim in (ax.get_xlim(), ax.get_ylim(), ax.get_zlim())]
+    ax.set_box_aspect([max(r, 1e-6) for r in ranges])
+    ax.set_xlabel("R"); ax.set_ylabel("A"); ax.set_zlabel("S")
+    ax.view_init(elev=elev, azim=azim)
+    if title:
+        ax.set_title(title)
+    return ax
+
+
+def segments_to_ras(coordinates, affine, image_shape):
+    """
+    Converts centerline-segment coordinates (relative to the LPI corner) back to RAS mm.
+
+    """
+    from arterial.feature_extraction.vtk_centerline_geometry.utils import lpi_corner_coordinates
+    return np.asarray(coordinates) + lpi_corner_coordinates(affine, image_shape)
+
+
 def plot_surface(polydata, ax, color="lightgray", alpha=0.35, max_triangles=30000, label=None):
     """
     Draws a triangle surface as a mesh, decimated if it has more than max_triangles faces.
@@ -196,7 +222,7 @@ def plot_surface(polydata, ax, color="lightgray", alpha=0.35, max_triangles=3000
     return ax
 
 
-def plot_polydata(polydatas, colors=None, labels=None, ax=None, surface_step=25, elev=10, azim=-60, title=None, linewidth=1.0):
+def plot_polydata(polydatas, colors=None, labels=None, ax=None, surface_step=25, elev=ELEV, azim=AZIM, title=None, linewidth=1.0):
     """
     Draws centerline polydata as 3D lines and surfaces as meshes.
 
@@ -215,16 +241,12 @@ def plot_polydata(polydatas, colors=None, labels=None, ax=None, surface_step=25,
         else:
             pts = vtk_to_numpy(polydata.GetPoints().GetData())[::surface_step]
             ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, color=color, alpha=0.15, label=label)
-    ax.set_xlabel("R"); ax.set_ylabel("A"); ax.set_zlabel("S")
-    ax.view_init(elev=elev, azim=azim)
     if any(labels):
         ax.legend(loc="upper left")
-    if title:
-        ax.set_title(title)
-    return ax
+    return finish_3d(ax, elev, azim, title)
 
 
-def plot_graph(graph, color_by=None, ax=None, cmap="tab20", node_size=6, elev=10, azim=-60, title=None):
+def plot_graph(graph, color_by=None, ax=None, cmap="tab20", node_size=6, elev=ELEV, azim=AZIM, title=None, value_cmap="jet"):
     """
     Draws a networkx graph whose nodes carry 'pos', coloured by a node attribute or a function.
 
@@ -248,12 +270,8 @@ def plot_graph(graph, color_by=None, ax=None, cmap="tab20", node_size=6, elev=10
         handles = [plt.Line2D([], [], marker="o", linestyle="", color=plt.get_cmap(cmap)(lookup[n] / max(1, len(names) - 1)), label=n) for n in names]
         ax.legend(handles=handles, loc="upper left", fontsize=7)
     elif values is not None:
-        scatter = ax.scatter(pos[:, 0], pos[:, 1], pos[:, 2], c=values, cmap="viridis", s=node_size)
+        scatter = ax.scatter(pos[:, 0], pos[:, 1], pos[:, 2], c=values, cmap=value_cmap, s=node_size)
         plt.colorbar(scatter, ax=ax, shrink=0.6, label=color_by if isinstance(color_by, str) else None)
     else:
         ax.scatter(pos[:, 0], pos[:, 1], pos[:, 2], s=node_size, color="C0")
-    ax.set_xlabel("R"); ax.set_ylabel("A"); ax.set_zlabel("S")
-    ax.view_init(elev=elev, azim=azim)
-    if title:
-        ax.set_title(title)
-    return ax
+    return finish_3d(ax, elev, azim, title)
