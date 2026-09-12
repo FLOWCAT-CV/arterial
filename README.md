@@ -4,6 +4,8 @@
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: PolyForm NC 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
+[![Paper](https://img.shields.io/badge/paper-CMIG%202023-blue.svg)](https://doi.org/10.1016/j.compmedimag.2022.102170)
+[![Weights on Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.22694951.svg)](https://doi.org/10.5281/zenodo.22694951)
 
 ---
 
