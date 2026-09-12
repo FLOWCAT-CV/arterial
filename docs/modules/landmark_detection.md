@@ -420,7 +420,7 @@ export ARTERIAL_MODELS_DIR="/data/arterial-models"
 
 ## See Also
 
-- [Segmentation Module](../segmentation/README.md) - Vascular segmentation (provides input for 2-channel model)
-- [Centerline Extraction Module](../centerline_extraction/README.md) - Uses landmarks for endpoint-to-endpoint extraction
+- [Segmentation Module](segmentation.md) - Vascular segmentation (provides input for 2-channel model)
+- [Centerline Extraction Module](centerline_extraction.md) - Uses landmarks for endpoint-to-endpoint extraction
 
 

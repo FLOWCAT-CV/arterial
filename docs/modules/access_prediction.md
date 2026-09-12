@@ -418,8 +418,8 @@ through `arterial.model_registry`: `ARTERIAL_MODELS_DIR` if set, otherwise `$art
 
 ## See Also
 
-- [Feature Extraction Module](../feature_extraction/README.md) - Generates supersegments input
-- [Vessel Labelling Module](../vessel_labelling/README.md) - Provides vessel type labels
-- [Run Module](../run/README.md) - Pipeline orchestration
+- [Feature Extraction Module](feature_extraction.md) - Generates supersegments input
+- [Vessel Labelling Module](vessel_labelling.md) - Provides vessel type labels
+- [Run Module](run.md) - Pipeline orchestration
 - [Arterial GNet repo](https://github.com/perecanals/arterial_gnet.git) - ArterialGNet model repository
 

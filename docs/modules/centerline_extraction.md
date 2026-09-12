@@ -427,8 +427,8 @@ The module includes robust error handling for common issues:
 
 ## See Also
 
-- [Segmentation Module](../segmentation/README.md) - Vascular segmentation
-- [Landmark Detection Module](../landmark_detection/README.md) - Anatomical landmark detection for endpoint specification
-- [Feature Extraction Module](../feature_extraction/README.md) - Geometric feature analysis from centerlines
+- [Segmentation Module](segmentation.md) - Vascular segmentation
+- [Landmark Detection Module](landmark_detection.md) - Anatomical landmark detection for endpoint specification
+- [Feature Extraction Module](feature_extraction.md) - Geometric feature analysis from centerlines
 
 

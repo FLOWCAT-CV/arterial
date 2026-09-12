@@ -559,10 +559,10 @@ The `perform_analysis()` method returns a dictionary with execution times:
 
 ## See Also
 
-- [Segmentation Module](../segmentation/README.md) - Vessel segmentation details
-- [Centerline Extraction Module](../centerline_extraction/README.md) - Centerline computation
-- [Landmark Detection Module](../landmark_detection/README.md) - Anatomical landmark detection
-- [Vessel Labelling Module](../vessel_labelling/README.md) - Vessel classification
-- [Feature Extraction Module](../feature_extraction/README.md) - Feature computation
+- [Segmentation Module](segmentation.md) - Vessel segmentation details
+- [Centerline Extraction Module](centerline_extraction.md) - Centerline computation
+- [Landmark Detection Module](landmark_detection.md) - Anatomical landmark detection
+- [Vessel Labelling Module](vessel_labelling.md) - Vessel classification
+- [Feature Extraction Module](feature_extraction.md) - Feature computation
 
 

@@ -491,8 +491,8 @@ export ARTERIAL_MODELS_DIR="/data/arterial-models"
 
 ## See Also
 
-- [Centerline Extraction Module](../centerline_extraction/README.md) - Provides input segments array
-- [Feature Extraction Module](../feature_extraction/README.md) - Uses labelled vessels for analysis
-- [Segmentation Module](../segmentation/README.md) - Upstream segmentation
+- [Centerline Extraction Module](centerline_extraction.md) - Provides input segments array
+- [Feature Extraction Module](feature_extraction.md) - Uses labelled vessels for analysis
+- [Segmentation Module](segmentation.md) - Upstream segmentation
 
 

@@ -52,13 +52,13 @@ Arterial is organized into specialized modules, each with detailed documentation
 
 | Module | Description | Documentation |
 |--------|-------------|---------------|
-| **Segmentation** | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [README](arterial/segmentation/README.md) |
-| **Centerline Extraction** | VMTK-based centerline computation and branching | [README](arterial/centerline_extraction/README.md) |
-| **Landmark Detection** | Automatic anatomical landmark identification | [README](arterial/landmark_detection/README.md) |
-| **Vessel Labelling** | GNN-based anatomical vessel classification | [README](arterial/vessel_labelling/README.md) |
-| **Feature Extraction** | Multi-scale vascular feature computation | [README](arterial/feature_extraction/README.md) |
-| **Access Prediction** | Catheter accessibility prediction with attention maps | [README](arterial/access_prediction/README.md) |
-| **Run (Processor)** | Pipeline orchestration and CLI | [README](arterial/run/README.md) |
+| **Segmentation** | nnU-Net v2 vessel segmentation (extracranial/intracranial) | [docs](docs/modules/segmentation.md) |
+| **Centerline Extraction** | VMTK-based centerline computation and branching | [docs](docs/modules/centerline_extraction.md) |
+| **Landmark Detection** | Automatic anatomical landmark identification | [docs](docs/modules/landmark_detection.md) |
+| **Vessel Labelling** | GNN-based anatomical vessel classification | [docs](docs/modules/vessel_labelling.md) |
+| **Feature Extraction** | Multi-scale vascular feature computation | [docs](docs/modules/feature_extraction.md) |
+| **Access Prediction** | Catheter accessibility prediction with attention maps | [docs](docs/modules/access_prediction.md) |
+| **Run (Processor)** | Pipeline orchestration and CLI | [docs](docs/modules/run.md) |
 
 ---
 
