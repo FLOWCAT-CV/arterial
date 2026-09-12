@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------- Arterial
 
 # Model weights are downloaded from Zenodo into arterial/models/ by
-# scripts/download_models.sh. They are never committed. The per-module
+# download_models.sh. They are never committed. The per-module
 # checkpoints are covered by *.pth below.
 arterial/models/
 *.pth

@@ -8,7 +8,7 @@ def models_dir():
     """
     Resolves the directory holding the trained model weights.
 
-    Mirrors the resolution order of scripts/download_models.sh: the
+    Mirrors the resolution order of download_models.sh: the
     ARTERIAL_MODELS_DIR environment variable takes precedence; otherwise the
     weights are expected under $arterial_dir/models, where the download
     script extracts them by default.
@@ -27,7 +27,7 @@ def models_dir():
         return os.path.join(os.path.abspath(os.path.expanduser(arterial_dir)), "models")
     raise EnvironmentError(
         "Cannot locate the Arterial model weights: neither ARTERIAL_MODELS_DIR nor "
-        "arterial_dir is set. Run scripts/download_models.sh, or export "
+        "arterial_dir is set. Run download_models.sh, or export "
         "ARTERIAL_MODELS_DIR=/path/to/models (see README, 'Model Weights')."
     )
 

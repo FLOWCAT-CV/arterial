@@ -391,7 +391,7 @@ Preprocessing, postprocessing, and refinement utilities:
 
 ## Model Files
 
-The weights are downloaded by `scripts/download_models.sh` (see the main README, "Model Weights")
+The weights are downloaded by `download_models.sh` (see the main README, "Model Weights")
 and live under `<models directory>/landmark_detection/`:
 
 | File | Input Channels | Description |

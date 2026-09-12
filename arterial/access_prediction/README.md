@@ -384,7 +384,7 @@ access_prediction/
 └── (weights are not in the package; see below)
 ```
 
-Weights are downloaded by `scripts/download_models.sh` to `<models directory>/access_prediction/`
+Weights are downloaded by `download_models.sh` to `<models directory>/access_prediction/`
 (`dataset.json` with the normalisation statistics and `fold_{0..4}/model_weights.pth`), resolved
 through `arterial.model_registry`: `ARTERIAL_MODELS_DIR` if set, otherwise `$arterial_dir/models`.
 

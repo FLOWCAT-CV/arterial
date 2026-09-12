@@ -158,7 +158,7 @@ Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 #### Download
 
 ```bash
-bash scripts/download_models.sh
+bash download_models.sh
 ```
 
 The script defaults to record `22694951`; pass `--record <id>` for another version. That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
@@ -188,7 +188,7 @@ before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
-bash scripts/download_models.sh --record 22694951
+bash download_models.sh --record 22694951
 ```
 
 `ARTERIAL_MODELS_DIR` always takes precedence over the default location.

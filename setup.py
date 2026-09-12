@@ -23,7 +23,7 @@ setup(
     ],
     packages=find_packages(exclude=["tests", "tests.*"]),
     # Trained weights are not packaged: they are downloaded to arterial/models/
-    # by scripts/download_models.sh and resolved through arterial.model_registry.
+    # by download_models.sh and resolved through arterial.model_registry.
     install_requires=[
         "nibabel",
         "networkx",

@@ -75,7 +75,7 @@ downloaded by a bundled script. No account, no token and no licence gate.
 ### Download
 
 ```bash
-bash scripts/download_models.sh --record 22694951
+bash download_models.sh --record 22694951
 ```
 
 This downloads about 1.1 GB into `$arterial_dir/models`, verifies the published SHA256, extracts it,
@@ -104,7 +104,7 @@ before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
-bash scripts/download_models.sh --record 22694951
+bash download_models.sh --record 22694951
 ```
 
 `ARTERIAL_MODELS_DIR` always takes precedence over the default location.

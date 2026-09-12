@@ -36,7 +36,7 @@ it downloads the archive, verifies its SHA256 against the published one, extract
 expects, and checks the result:
 
 ```bash
-bash scripts/download_models.sh --record 22694951
+bash download_models.sh --record 22694951
 ```
 
 Otherwise, download `arterial-models-v1.tar.gz` and `arterial-models-v1.tar.gz.sha256` from this
