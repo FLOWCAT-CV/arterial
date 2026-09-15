@@ -505,9 +505,10 @@ A multi-scale graph neural network (ArterialGNet) designed to predict impossible
 
 The [`workflows/`](workflows/) directory collects complete, self-contained pipelines that apply
 Arterial to specific research tasks, each with its own README. The first one,
-[`arterial_intracranial_tortuosity`](workflows/arterial_intracranial_tortuosity/), goes from
-per-case CTA images to a table of vessel-anatomy features (tortuosity, length, diameters) of the
-access route to a distal intracranial occlusion.
+[`arterial_intracranial_tortuosity`](workflows/arterial_intracranial_tortuosity/), goes
+semi-automatically from per-case CTA images to a table of vessel-anatomy features (tortuosity,
+length, diameters) of the access route to a distal intracranial occlusion, with a per-case
+quality review and manual correction step in 3D Slicer.
 
 ---
 

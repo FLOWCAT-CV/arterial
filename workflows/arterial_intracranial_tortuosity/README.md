@@ -4,6 +4,13 @@ Three sequential scripts that go from a per-case CTA NIfTI to a features table o
 CTA-derived vessel-anatomy measurements (tortuosity, length, diameters, ...) of the
 access route to a distal intracranial occlusion.
 
+The workflow is **semi-automatic**: the scripts run unattended in batch, but each case
+is expected to pass a human quality review. Automatic segmentations and landmarks that
+break or misplace a centerline are corrected manually in 3D Slicer and the affected
+stage re-run — see [Manual revision](#manual-revision--error-contingency). Plan for
+this review pass when budgeting a cohort; the features table is only as reliable as
+the per-case QC behind it.
+
 ```
 1_segmentation_and_landmarks.py   GPU  nnU-Net vessel segmentation + landmark detection
 2_centerlines_and_features.py     CPU  centerline extraction + per-centerline features
