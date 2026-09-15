@@ -1,0 +1,24 @@
+paths:
+    # Directory with one subdirectory per case, named by case id, each containing the
+    # input CTA (cta.nii.gz / cta.nii, or cta_intracranial.nii.gz for head-only scans).
+    input_dir: "/path/to/data"
+    # Where results are written (one subdirectory per case). May equal input_dir.
+    output_dir: "/path/to/output"
+    # Batch-level logs and JSON error logs.
+    logs_dir: "/path/to/logs"
+    # Cohort definition for stage 3 (.xlsx or .csv): one row per case,
+    # columns case_id + occlusion_side (see 3_collect_features.py).
+    cases_table_path: "path/to/cases_table.csv"
+    # Output features table for stage 3 (.xlsx or .csv).
+    features_table_path: "/path/to/features.csv"
+
+params:
+    # "auto" detects extracranial_vessels vs intracranial_vessels per case;
+    # set explicitly to force one mode for every case.
+    mode: "auto"
+    # Minimum superior-inferior scan coverage (mm) for a CTA to be considered
+    # cervico-cerebral (extracranial mode). Head-only CTAs cover ~120-200 mm,
+    # arch-to-vertex CTAs ~300-450 mm.
+    extracranial_min_si_coverage_mm: 250
+    # Resampling distance along centerlines during feature extraction.
+    sampling_distance_mm: 0.5
