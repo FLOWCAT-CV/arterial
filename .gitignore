@@ -18,6 +18,7 @@ dev/
 # Figure sources and archives.
 *.key
 *.zip
+arterial-zenodo
 
 # ------------------------------------------------------------------ Python
 
