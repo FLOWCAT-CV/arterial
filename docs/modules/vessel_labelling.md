@@ -80,6 +80,33 @@ Nodes = Vessel segments (with features)
 Edges = Connectivity between adjacent vessels
 ```
 
+### Edge Construction
+
+`node_transform` connects two segments when they share a bifurcation (topological edges). Before
+inference, `get_edge_transforms` (in `arterial/vessel_labelling/utils.py`) builds the final `edge_index`
+according to the edge mode the model was trained with:
+
+| Edge mode | Edges used by the model |
+|-----------|-------------------------|
+| `radius_only` | `RadiusGraph(r=0.5)` replaces the topological edges. Node positions are in mm and segments are almost never within 0.5 mm, so nearly every node is isolated and the model classifies each segment from its own features. This is how the original (v1) weights were trained. |
+| `topological` | Topological edges, made undirected. |
+| `topological+radius` | Undirected topological edges plus `RadiusGraph` edges within `radius_mm` (deduplicated). |
+
+Each checkpoint (`model_weights.pth`) records how it was trained, and `load_vessel_labelling_model`
+(in `arterial/vessel_labelling/inference.py`) reads it, so training and inference cannot drift apart:
+
+| Key | Values | Default when missing |
+|-----|--------|----------------------|
+| `model_class` | `GAT` (GATv2), `ResGAT` (GATv2 with a residual connection per layer), `GraphSAGE` | `GAT` |
+| `edge_mode` | `radius_only`, `topological`, `topological+radius` | `radius_only` |
+| `radius_mm` | radius for `topological+radius` | `25.0` |
+
+The defaults reproduce the v1 weights exactly. All five folds of an ensemble must share the same edge
+construction. A residual or root connection (`ResGAT`, `GraphSAGE`) matters once real edges are used:
+segments meeting at one bifurcation form a clique in the node-form graph, so sibling vessels (e.g. ICA and
+ECA) share their neighbourhood, and plain GAT, which has no separate path for a node's own features,
+cannot tell them apart.
+
 ### Model Architecture
 
 ```
@@ -88,13 +115,13 @@ Input Graph (Node Form)
         ▼
 ┌───────────────────┐
 │  GATv2 Layer 1    │  ─── Attention-based message passing
-│  (hidden: 128)    │
+│  (hidden: 64)     │
 └─────────┬─────────┘
           │
           ▼
 ┌───────────────────┐
 │  GATv2 Layer 2    │
-│  (hidden: 128)    │
+│  (hidden: 64)     │
 └─────────┬─────────┘
           │
           ▼

@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from torch_geometric.data import Data, InMemoryDataset
+from torch_geometric.transforms import BaseTransform, RadiusGraph, ToUndirected
 
 from arterial import model_registry
 from arterial.io.load_and_save_operations import load_json
@@ -202,6 +203,90 @@ def node_transform(graph):
         transformed_graph.add_edge(edge[0], edge[1])
 
     return transformed_graph
+
+EDGE_MODES = ["radius_only", "topological", "topological+radius"]
+
+class AddRadiusEdges(BaseTransform):
+    """
+    Adds RadiusGraph edges to the existing edge_index instead of overwriting it.
+
+    The stock RadiusGraph transform replaces data.edge_index. Here, the original edges are
+    concatenated with the radius edges and duplicates are removed with torch.unique, as in
+    DenseRadiusGraph (arterial/access_prediction/utils.py).
+
+    Parameters
+    ----------
+    r : float
+        Radius in the units of data.pos (mm).
+    max_num_neighbors : int, optional
+        Maximum number of neighbours per node returned by the radius search. The default is 10.
+
+    """
+    def __init__(self, r, max_num_neighbors = 10):
+        """
+        Initializes the radius search.
+
+        """
+        self.radius_graph = RadiusGraph(r = r, loop = False, max_num_neighbors = max_num_neighbors)
+
+    def forward(self, data):
+        """
+        Combines the original edges with the radius edges, without duplicates.
+
+        Parameters
+        ----------
+        data : torch_geometric.data.Data
+            Graph with pos and edge_index.
+
+        Returns
+        -------
+        data : torch_geometric.data.Data
+            Graph with the combined edge_index.
+
+        """
+        radius_edge_index = self.radius_graph(data.clone()).edge_index
+        combined_edge_index = torch.cat([data.edge_index, radius_edge_index], dim = 1)
+        data.edge_index = torch.unique(combined_edge_index.T, dim = 0).T
+        return data
+
+def get_edge_transforms(edge_mode = "radius_only", radius_mm = 25.0, max_num_neighbors = 10):
+    """
+    Returns the transforms that build the edge_index of a node-form graph.
+
+    Node-form graphs come out of node_transform with topological edges (segments sharing a
+    bifurcation), stored in one direction only. The edge mode must match the one the model
+    was trained with.
+
+    Parameters
+    ----------
+    edge_mode : string, optional
+        One of:
+            - "radius_only": RadiusGraph(r=0.5) replaces the topological edges. Since node
+              positions are in mm and segments are rarely closer than 0.5 mm, almost no edges
+              remain. Behaviour of the original (v1) weights, kept for backward compatibility.
+            - "topological": topological edges made undirected.
+            - "topological+radius": undirected topological edges plus radius edges of
+              `radius_mm`, without duplicates.
+        The default is "radius_only".
+    radius_mm : float, optional
+        Radius in mm for "topological+radius". The default is 25.0.
+    max_num_neighbors : int, optional
+        Maximum number of radius neighbours per node. The default is 10.
+
+    Returns
+    -------
+    edge_transforms : list
+        List of torch_geometric transforms.
+
+    """
+    if edge_mode == "radius_only":
+        return [RadiusGraph(r = 0.5, max_num_neighbors = 10)]
+    elif edge_mode == "topological":
+        return [ToUndirected()]
+    elif edge_mode == "topological+radius":
+        return [ToUndirected(), AddRadiusEdges(r = radius_mm, max_num_neighbors = max_num_neighbors)]
+    else:
+        raise ValueError(f"Unknown edge_mode {edge_mode}. Choose one of {EDGE_MODES}.")
 
 def make_graph_plot(graph, label=None, subplot=None, show=False, output_path=None):
     """
