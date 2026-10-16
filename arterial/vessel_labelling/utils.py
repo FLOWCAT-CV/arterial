@@ -80,7 +80,8 @@ class EVCDatasetInference(InMemoryDataset):
                 edge_index.append(np.array([n0, n1]))
             data.pos = torch.tensor(np.array(pos), dtype=torch.float32)
             data.x = self.normalize_edge_features(torch.tensor(np.array(x), dtype=torch.float32))
-            data.edge_index = torch.transpose(torch.tensor(np.array(edge_index), dtype=torch.int64), 1, 0)
+            # reshape keeps graphs without topological edges (a single segment) as an empty (2, 0) edge_index
+            data.edge_index = torch.transpose(torch.tensor(np.array(edge_index, dtype=np.int64).reshape(-1, 2), dtype=torch.int64), 1, 0)
             data.num_nodes = len(graph_nx.nodes)
             data.num_edges = len(graph_nx.edges)
             data.cell_ids = torch.tensor(np.array(cell_ids), dtype=torch.int64)

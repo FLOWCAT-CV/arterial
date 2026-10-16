@@ -54,6 +54,22 @@ class TestEdgeTransforms(unittest.TestCase):
             get_edge_transforms("radius")
 
 
+class TestSingleSegmentGraph(unittest.TestCase):
+
+    def test_graph_without_topological_edges_gets_an_empty_edge_index(self):
+        import networkx as nx
+        import numpy as np
+        from arterial import model_registry
+        from arterial.vessel_labelling.utils import EVCDatasetInference
+        if not os.path.exists(model_registry.model_path("vessel_labelling", "extracranial_vessels", "dataset.json")):
+            self.skipTest("vessel labelling dataset.json missing (download the model weights)")
+        graph = nx.Graph()
+        graph.add_edge(0, 1, cell_id=7, pos=np.zeros(3), features=np.ones(24))
+        data = EVCDatasetInference(raw_graph=graph, pre_transform=Compose(get_edge_transforms("topological"))).data_list[0]
+        self.assertEqual(tuple(data.edge_index.shape), (2, 0))
+        self.assertEqual(data.num_nodes, 1)
+
+
 class TestLoadVesselLabellingModel(unittest.TestCase):
 
     def save(self, checkpoint):
