@@ -36,7 +36,7 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 ## Updates
 
-- **2026-10-18:** Segmentation is 1.6× faster by default (GPU resampling), with near-identical masks (median Dice 0.998). Several cases can now run in parallel on one GPU with `--workers`. See the [report](docs/reports/segmentation_speedup.md).
+- **2026-10-18:** Segmentation is 1.6× faster, with near-identical masks (median Dice 0.998). nnU-Net's resampling now runs on the GPU by default (`--resampling torch`). Without a CUDA GPU it falls back to the previous CPU resampling, which `--resampling scipy` also selects. Several cases can run in parallel on one GPU with `--workers`. See the [report](docs/reports/segmentation_speedup.md).
 
 ---
 
