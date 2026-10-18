@@ -95,7 +95,7 @@ class TestCommandLine(ArterialTestCase):
         self.assertIn("total_time", times)
         with open(os.path.join(self.mode_dir, "arterial_run.json"), encoding="utf-8") as handle:
             record = json.load(handle)
-        self.assertEqual(record["resampling"], "scipy")
+        self.assertEqual(record["resampling"], "torch")
         self.assertTrue(all(record["skip_flags"].values()))
 
     def test_cta_path_needs_a_single_case(self):
@@ -156,11 +156,11 @@ class TestMultipleCases(ArterialTestCase):
     def test_workers_are_limited_by_cases_gpu_memory_and_ram(self):
         self.assertEqual(processor_module.get_max_workers(4, 2), 2)
         with mock.patch.object(processor_module.torch.cuda, "is_available", return_value=True), \
-             mock.patch.object(processor_module.torch.cuda, "mem_get_info", return_value=(11 * 1024 ** 3, 24 * 1024 ** 3)), \
-             mock.patch.object(processor_module, "get_available_ram_gb", return_value=100):
-            self.assertEqual(processor_module.get_max_workers(4, 10), 11 // processor_module.GPU_MEMORY_PER_WORKER_GB)
-        with mock.patch.object(processor_module, "get_available_ram_gb", return_value=13):
-            self.assertEqual(processor_module.get_max_workers(4, 10), 13 // processor_module.RAM_PER_WORKER_GB)
+             mock.patch.object(processor_module.torch.cuda, "mem_get_info", return_value=(2.5 * processor_module.GPU_MEMORY_PER_WORKER_GB * 1024 ** 3, 0)), \
+             mock.patch.object(processor_module, "get_available_ram_gb", return_value=1000):
+            self.assertEqual(processor_module.get_max_workers(4, 10), 2)
+        with mock.patch.object(processor_module, "get_available_ram_gb", return_value=2.5 * processor_module.RAM_PER_WORKER_GB):
+            self.assertEqual(processor_module.get_max_workers(4, 10), 2)
         with mock.patch.object(processor_module, "get_available_ram_gb", return_value=1):
             self.assertEqual(processor_module.get_max_workers(4, 10), 1)
 

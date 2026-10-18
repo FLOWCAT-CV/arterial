@@ -25,9 +25,10 @@ SUPPORTED_MODES = ("extracranial_vessels", "intracranial_vessels")
 RUN_RECORD_FILENAME = "arterial_run.json"
 SKIP_FLAGS = ("skip_segmentation", "skip_centerline_extraction", "skip_branching", "skip_vessel_labelling",
               "skip_feature_extraction", "skip_access_prediction", "skip_landmark_detection")
-# Peak memory of one case at default settings, used to limit the number of parallel workers
-GPU_MEMORY_PER_WORKER_GB = 5
-RAM_PER_WORKER_GB = 6
+# Peak memory of one case at default settings (head-and-neck CTA, 512 x 512 x ~850), used to limit the number of
+# parallel workers: 8 GB reserved by torch plus the CUDA context, and 16 GB of RAM
+GPU_MEMORY_PER_WORKER_GB = 8.5
+RAM_PER_WORKER_GB = 16
 
 
 class ArterialProcessor():
@@ -63,7 +64,7 @@ class ArterialProcessor():
                 If True, it it will skip vessel labelling. False by default.
             - skip_feature_extraction : bool, default = False
                 If True, it it will skip feature extraction. False by default.
-            - resampling : string, default = "scipy"
+            - resampling : string, default = "torch"
                 Resampling used by nnunet in the segmentation: "scipy" (CPU) or "torch" (GPU).
             - num_threads : int, default = None
                 Number of CPU threads. If None, ARTERIAL_NUM_THREADS or the usable cores capped at 8.
@@ -93,7 +94,7 @@ class ArterialProcessor():
         self.use_vanilla_nnunet = not getattr(args, "cl_dice_nnunet", False)
         self.no_slicing = getattr(args, "no_slicing", False)
         self.set_threshold_099 = getattr(args, "set_threshold_099", False)
-        self.resampling = getattr(args, "resampling", "scipy")
+        self.resampling = getattr(args, "resampling", "torch")
         self.num_threads = getattr(args, "num_threads", None)
 
         # Initialize module classes

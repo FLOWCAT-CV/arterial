@@ -103,7 +103,7 @@ def set_nnunet_resampling(predictor, resampling="scipy", device=torch.device("cp
     ConfigurationManager.resampling_fn_seg.fget.cache_clear()
     ConfigurationManager.resampling_fn_probabilities.fget.cache_clear()
 
-def run_nnunet_prediction(predictor, img, props, save_or_return_probabilities=False, resampling="scipy", num_threads=None):
+def run_nnunet_prediction(predictor, img, props, save_or_return_probabilities=False, resampling="torch", num_threads=None):
     """
     Runs predictor.predict_single_npy_array with the requested resampling. Torch resampling is only used on a
     CUDA device; if it runs out of GPU memory, the prediction is repeated with the scipy resampling.
@@ -144,7 +144,7 @@ def run_nnunet_prediction(predictor, img, props, save_or_return_probabilities=Fa
         set_nnunet_resampling(predictor, "scipy")
         return predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities)
 
-def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False, resampling="scipy", num_threads=None):
+def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False, resampling="torch", num_threads=None):
     """
     Performs inference of the CTA in img_array with a trained nnunet models. The combination of
     mode and nnunet_mode should be consistent with the trained model that is going to be used. 

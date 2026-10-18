@@ -407,7 +407,7 @@ The vessel geometry export (`tutorials/scripts/export_vessel_geometry.py`) adds 
 | `-clnn`, `--cl_dice_nnunet`            | Use the nnU-Net trained with centerline Dice instead of the vanilla one  |
 | `-ns`, `--no_slicing`                  | Segment the whole volume without the head/neck split (intracranial mode) |
 | `-s99`, `--set_threshold_099`          | Binarise the segmentation at probability 0.99                            |
-| `-rs`, `--resampling`                  | nnU-Net resampling: `scipy` (CPU, default) or `torch` (GPU)               |
+| `-rs`, `--resampling`                  | nnU-Net resampling: `torch` (GPU, default) or `scipy` (CPU, as in the model plans) |
 | `-nt`, `--num_threads`                 | CPU threads (default: `ARTERIAL_NUM_THREADS`, else usable cores up to 8)  |
 | `-w`, `--workers`                      | Cases processed in parallel on one GPU when several are given (default: 1) |
 

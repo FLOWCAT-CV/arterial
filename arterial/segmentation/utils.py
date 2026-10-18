@@ -139,7 +139,7 @@ def get_largest_connected_component(segmentation):
 
     return largest_connected_component  
 
-def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine, resampling="scipy", num_threads=None):
+def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine, resampling="torch", num_threads=None):
     """
     Runs TotalSegmentator for cranium segmentation. If the scan is long (axial length > 240 mm),
     it only considers the upper half of the scan for speed. Otherwise, it considers the whole scan.
@@ -216,7 +216,7 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine, resampling=
 
     return cranium_mask
 
-def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_bounding_box=False, resampling="scipy", num_threads=None):
+def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_bounding_box=False, resampling="torch", num_threads=None):
     """
     This funciton enables slicing of head and neck parts of the CTA ({case_id}.nii.gz)
     by using a Laplacian of Gaussian filter (scipy) to perform a segmentation

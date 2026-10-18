@@ -61,9 +61,9 @@ def build_parser():
         "Not required, default = False.")
     parser.add_argument("-s99", "--set_threshold_099", action="store_true",
         help="Boolean argument to determine if the segmentation logit threshold should be set to 0.99 or not. Not required, default = False.")
-    parser.add_argument("-rs", "--resampling", type=str, required=False, default="scipy", choices=["scipy", "torch"],
+    parser.add_argument("-rs", "--resampling", type=str, required=False, default="torch", choices=["scipy", "torch"],
         help="Resampling used by nnunet before and after the network: scipy (CPU) or torch (GPU, falls back to scipy without a GPU). "
-        "Not required, default = scipy.")
+        "Not required, default = torch.")
     parser.add_argument("-nt", "--num_threads", type=int, required=False, default=None,
         help="Number of CPU threads (divided between workers). Not required, default = ARTERIAL_NUM_THREADS if set, "
         "otherwise the usable cores capped at 8.")

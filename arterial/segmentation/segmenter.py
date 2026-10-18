@@ -35,7 +35,7 @@ class VesselSegmenter():
                  use_vanilla_nnunet = True,
                  no_slicing = False,
                  set_threshold_099 = False,
-                 resampling = "scipy",
+                 resampling = "torch",
                  num_threads = None
                  ):
         """
@@ -57,9 +57,9 @@ class VesselSegmenter():
         use_vanilla_nnunet : bool, default = True
             Boolean variable to determine whether the vanilla nnunet model is used. If False, the nnunet model
             trained with the nnunetClDiceLossTrainer is used.
-        resampling : string, default = "scipy"
-            Resampling used by nnunet before and after the network. "scipy" runs on the CPU as defined in the
-            model plans; "torch" runs on the GPU and falls back to "scipy" when no CUDA device is available.
+        resampling : string, default = "torch"
+            Resampling used by nnunet before and after the network. "torch" runs on the GPU and falls back to
+            "scipy" when no CUDA device is available; "scipy" runs on the CPU as defined in the model plans.
         num_threads : int, default = None
             Number of CPU threads. If None, the ARTERIAL_NUM_THREADS environment variable is used or, if it is not
             set, the number of usable cores capped at 8.
