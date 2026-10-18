@@ -8,13 +8,143 @@ import numpy as np
 import nibabel as nib
 
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+from nnunetv2.utilities.plans_handling.plans_handler import ConfigurationManager
 import warnings
 warnings.filterwarnings("ignore") # There is a warning that is wrong with nnunet 
                                   # (something about the version of trained model)
 
 from arterial import model_registry
-    
-def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False):
+
+# nnUNetPredictor objects already loaded in this process, keyed by (model folder, folds, device)
+_PREDICTORS = {}
+
+def get_nnunet_predictor(model_folder, use_folds, device):
+    """
+    Returns the nnUNetPredictor for a trained model folder, building it and loading its checkpoint
+    only the first time it is requested in this process.
+
+    Parameters
+    ----------
+    model_folder : string or path-like object
+        Path to the trained nnunet model folder (the one containing plans.json and the fold directories).
+    use_folds : tuple
+        Folds of the model to be used, e.g. ("all",) or ("0",).
+    device : torch.device
+        Device where inference is run.
+
+    Returns
+    -------
+    predictor : nnunetv2.inference.predict_from_raw_data.nnUNetPredictor
+        Initialized predictor, shared by every caller with the same model folder, folds and device.
+
+    """
+    key = (str(model_folder), tuple(use_folds), str(device))
+    if key not in _PREDICTORS:
+        # Instantiate the nnUNetPredictor
+        predictor = nnUNetPredictor(
+            tile_step_size=0.75,
+            use_gaussian=True,
+            use_mirroring=True,
+            perform_everything_on_device=True,
+            device=device,
+            verbose=True,
+            verbose_preprocessing=False,
+            allow_tqdm=True
+        )
+        # Initializes the network architecture, loads the checkpoint
+        predictor.initialize_from_trained_model_folder(
+            model_folder,
+            use_folds=use_folds,
+            checkpoint_name='checkpoint_final.pth',
+        )
+        _PREDICTORS[key] = predictor
+
+    return _PREDICTORS[key]
+
+def set_nnunet_resampling(predictor, resampling="scipy", device=torch.device("cpu"), num_threads=None):
+    """
+    Sets the resampling functions used by the predictor before and after the network. "scipy" restores the
+    ones in the model plans (scipy/skimage, CPU). "torch" uses the nnunetv2 torch resampler on the given device.
+    The model plans file is not modified.
+
+    Parameters
+    ----------
+    predictor : nnunetv2.inference.predict_from_raw_data.nnUNetPredictor
+        Initialized predictor.
+    resampling : string
+        Either "scipy" or "torch".
+    device : torch.device
+        Device used by the torch resampler.
+    num_threads : int, optional
+        CPU threads used by the torch resampler. If None, the current torch setting is used.
+
+    """
+    assert resampling in ["scipy", "torch"], "resampling should be either 'scipy' or 'torch'."
+
+    configuration = predictor.configuration_manager.configuration
+    # Keep the resampling defined in the plans, to be able to switch back to it
+    if not hasattr(predictor, "plans_resampling"):
+        predictor.plans_resampling = {key: configuration[key] for key in configuration if key.startswith("resampling_fn_")}
+
+    configuration.update(predictor.plans_resampling)
+
+    if resampling == "torch":
+        for fn in ["resampling_fn_data", "resampling_fn_seg", "resampling_fn_probabilities"]:
+            configuration[fn] = "resample_torch_fornnunet"
+            configuration[f"{fn}_kwargs"] = {
+                "is_seg": fn == "resampling_fn_seg",
+                "num_threads": num_threads if num_threads is not None else torch.get_num_threads(),
+                "device": device,
+                "force_separate_z": predictor.plans_resampling[f"{fn}_kwargs"].get("force_separate_z")
+            }
+
+    # nnunetv2 caches the resampling functions at class level, so they have to be rebuilt from the configuration
+    ConfigurationManager.resampling_fn_data.fget.cache_clear()
+    ConfigurationManager.resampling_fn_seg.fget.cache_clear()
+    ConfigurationManager.resampling_fn_probabilities.fget.cache_clear()
+
+def run_nnunet_prediction(predictor, img, props, save_or_return_probabilities=False, resampling="scipy", num_threads=None):
+    """
+    Runs predictor.predict_single_npy_array with the requested resampling. Torch resampling is only used on a
+    CUDA device; if it runs out of GPU memory, the prediction is repeated with the scipy resampling.
+
+    Parameters
+    ----------
+    predictor : nnunetv2.inference.predict_from_raw_data.nnUNetPredictor
+        Initialized predictor.
+    img : numpy array
+        4D numpy array (channel, z, y, x) with the image, in the nnunet axis order.
+    props : dict
+        Image properties, with the "spacing" key in the nnunet axis order.
+    save_or_return_probabilities : bool
+        Whether to also return the class probabilities.
+    resampling : string
+        Either "scipy" or "torch".
+    num_threads : int, optional
+        CPU threads used by the torch resampler.
+
+    Returns
+    -------
+    prediction : numpy array or tuple
+        Output of predictor.predict_single_npy_array.
+
+    """
+    if resampling == "torch" and predictor.device.type != "cuda":
+        print("Torch resampling needs a CUDA device, using scipy resampling instead")
+        resampling = "scipy"
+
+    set_nnunet_resampling(predictor, resampling, predictor.device, num_threads)
+    try:
+        return predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities)
+    except torch.cuda.OutOfMemoryError:
+        if resampling != "torch":
+            raise
+        print("Not enough GPU memory for torch resampling, repeating the prediction with scipy resampling")
+        torch.cuda.empty_cache()
+        set_nnunet_resampling(predictor, "scipy")
+        return predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities)
+
+def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False, resampling="scipy", num_threads=None):
     """
     Performs inference of the CTA in img_array with a trained nnunet models. The combination of
     mode and nnunet_mode should be consistent with the trained model that is going to be used. 
@@ -29,6 +159,11 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
         Mode of the segmentation. It can be either "extracranial_vessels" or "intracranial_vessels".
     nnunet_mode : string
         Mode of the nnunet model. It can be either "3d_lowres" or "3d_fullres".
+    resampling : string
+        Resampling used by nnunet before and after the network: "scipy" (CPU, as in the model plans)
+        or "torch" (GPU). Torch resampling falls back to scipy without a CUDA device.
+    num_threads : int, optional
+        CPU threads used by the torch resampler. If None, the current torch setting is used.
 
     Returns
     -------
@@ -53,30 +188,19 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
 
     print(f"Using device: {device}")
 
-    # Instantiate the nnUNetPredictor
-    predictor = nnUNetPredictor(
-        tile_step_size=0.75,
-        use_gaussian=True,
-        use_mirroring=True,
-        perform_everything_on_device=True,
-        device=device,
-        verbose=True,
-        verbose_preprocessing=False,
-        allow_tqdm=True
-    )
-    # Initializes the network architecture, loads the checkpoint
+    # Get the nnUNetPredictor (built and loaded only once per process)
     print("Using vanilla nnunet:", use_vanilla_nnunet)
-    predictor.initialize_from_trained_model_folder(
+    predictor = get_nnunet_predictor(
         model_registry.model_path("segmentation", mode, f"nnUNetTrainer__nnUNetPlans__{nnunet_mode}"),
         use_folds=("all" if use_vanilla_nnunet else "0",), # Models set by use_vanilla_nnunet. "0" is model trained with nnUNetClDiceLossTrainer, "all" is trained with vanilla nnUNetTrainer
         # use_folds=("0",), # Models trained with nnUNetClDiceLossTrainer (these have an error on inference, sometimes return tensors with nan values)
         # use_folds=("all",), # Models trained with vanilla nnUNetTrainer
-        checkpoint_name='checkpoint_final.pth',
+        device=device,
     )
 
     # Perform inference
     if return_probabilities or set_threshold_099:
-        segmentation_array, probabilities_array = predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities=True)
+        segmentation_array, probabilities_array = run_nnunet_prediction(predictor, img, props, True, resampling, num_threads)
         # Reverse axis order to match nibabel
         segmentation_array = segmentation_array.transpose([2, 1, 0])
         segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)
@@ -94,7 +218,7 @@ def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_ve
         else:
             return segmentation_nifti, segmentation_array, probabilities_nifti
     else:
-        segmentation_array = predictor.predict_single_npy_array(img, props, None, None, False)
+        segmentation_array = run_nnunet_prediction(predictor, img, props, False, resampling, num_threads)
         # Reverse axis order to match nibabel
         segmentation_array = segmentation_array.transpose([2, 1, 0])
         segmentation_nifti = nib.Nifti1Image(segmentation_array, img_affine)

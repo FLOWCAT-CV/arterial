@@ -2,16 +2,86 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+import math
 import torch
 
+import cc3d
 import numpy as np
 import nibabel as nib
 from time import time
 from scipy.ndimage import gaussian_laplace
-from skimage.measure import label
-from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
 from arterial import model_registry
+from arterial.segmentation.inference import get_nnunet_predictor, run_nnunet_prediction
+
+# Default upper limit for the number of CPU threads used per process
+MAX_NUM_THREADS = 8
+CGROUP_CPU_MAX_PATH = "/sys/fs/cgroup/cpu.max"
+CGROUP_V1_CPU_DIR = "/sys/fs/cgroup/cpu"
+
+def get_usable_cores():
+    """
+    Returns the number of CPU cores this process may use. It respects the CPU affinity (taskset, SLURM)
+    and the cgroup CPU quota (containers), falling back to os.cpu_count() where affinity is not available.
+
+    Returns
+    -------
+    usable_cores : int
+        Number of usable CPU cores (at least 1).
+
+    """
+    try:
+        usable_cores = len(os.sched_getaffinity(0))
+    except AttributeError:  # macOS / Windows
+        usable_cores = os.cpu_count() or 1
+
+    # cgroup v2 ("max 100000" when unlimited) or cgroup v1 (quota -1 when unlimited)
+    quota, period = None, None
+    try:
+        with open(CGROUP_CPU_MAX_PATH) as f:
+            quota, period = f.read().split()[:2]
+    except (OSError, ValueError):
+        try:
+            with open(os.path.join(CGROUP_V1_CPU_DIR, "cpu.cfs_quota_us")) as f:
+                quota = f.read().strip()
+            with open(os.path.join(CGROUP_V1_CPU_DIR, "cpu.cfs_period_us")) as f:
+                period = f.read().strip()
+        except OSError:
+            pass
+    if quota not in [None, "max", "-1"] and period is not None and float(period) > 0:
+        usable_cores = min(usable_cores, max(1, math.ceil(float(quota) / float(period))))
+
+    return max(1, usable_cores)
+
+def get_num_threads(num_threads=None):
+    """
+    Resolves the number of CPU threads to use. The order of precedence is the num_threads argument, the
+    ARTERIAL_NUM_THREADS environment variable and, by default, the usable cores capped at MAX_NUM_THREADS.
+
+    Parameters
+    ----------
+    num_threads : int, optional
+        Number of threads requested explicitly.
+
+    Returns
+    -------
+    num_threads : int
+        Number of CPU threads to use (at least 1).
+    usable_cores : int
+        Number of usable CPU cores, as given by get_usable_cores.
+    source : string
+        Where num_threads comes from: "argument", "ARTERIAL_NUM_THREADS" or "default".
+
+    """
+    usable_cores = get_usable_cores()
+    if num_threads is not None:
+        source = "argument"
+    elif os.environ.get("ARTERIAL_NUM_THREADS"):
+        num_threads, source = int(os.environ["ARTERIAL_NUM_THREADS"]), "ARTERIAL_NUM_THREADS"
+    else:
+        num_threads, source = min(usable_cores, MAX_NUM_THREADS), "default"
+
+    return max(1, int(num_threads)), usable_cores, source
 
 def compute_cranium_mask(cta_array):
     """
@@ -62,17 +132,14 @@ def get_largest_connected_component(segmentation):
         Numpy array with a binary mask of the largest component.
 
     """
-    # Converts the segmentation to different labels in case there 
-    # is more than one connected component
-    labels = label(segmentation)
     # Assert there is at least one connected component
-    assert(labels.max() != 0) 
-    # Get largest component
-    largest_connected_component = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
+    assert(np.any(segmentation))
+    # Get largest component (26-connectivity, as skimage.measure.label for 3D volumes)
+    largest_connected_component = cc3d.largest_k(np.asarray(segmentation) != 0, k=1, connectivity=26) > 0
 
     return largest_connected_component  
 
-def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
+def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine, resampling="scipy", num_threads=None):
     """
     Runs TotalSegmentator for cranium segmentation. If the scan is long (axial length > 240 mm),
     it only considers the upper half of the scan for speed. Otherwise, it considers the whole scan.
@@ -86,6 +153,10 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
         Numpy array with the CTA image.
     cta_affine : numpy.ndarray
         Affine matrix of the CTA.
+    resampling : string
+        Resampling used by nnunet: "scipy" (CPU) or "torch" (GPU).
+    num_threads : int, optional
+        CPU threads used by the torch resampler.
 
     Returns
     -------
@@ -118,26 +189,15 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
 
     print(f"Using device: {device}")
 
-    # Instantiate the nnUNetPredictor
-    predictor = nnUNetPredictor(
-        tile_step_size=0.75,
-        use_gaussian=True,
-        use_mirroring=True,
-        perform_everything_on_device=True,
-        device=device,
-        verbose=True,
-        verbose_preprocessing=False,
-        allow_tqdm=True
-    )
-    # Initializes the network architecture, loads the checkpoint
-    predictor.initialize_from_trained_model_folder(
+    # Get the nnUNetPredictor (built and loaded only once per process)
+    predictor = get_nnunet_predictor(
         model_registry.model_path("segmentation", "totalsegmentator_mandible", "nnUNetTrainer_DASegOrd0_NoMirroring__nnUNetPlans__3d_fullres"),
         use_folds=("0",),
-        checkpoint_name='checkpoint_final.pth',
+        device=device,
     )
 
     # Perform inference
-    segmentation_array = predictor.predict_single_npy_array(img, props, None, None, False)
+    segmentation_array = run_nnunet_prediction(predictor, img, props, False, resampling, num_threads)
     # Reverse axis order to match nibabel
     segmentation_array = segmentation_array.transpose([2, 1, 0])
 
@@ -156,7 +216,7 @@ def run_cranium_segmentation_totalsegmentator(cta_array, cta_affine):
 
     return cranium_mask
 
-def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_bounding_box=False):
+def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_bounding_box=False, resampling="scipy", num_threads=None):
     """
     This funciton enables slicing of head and neck parts of the CTA ({case_id}.nii.gz)
     by using a Laplacian of Gaussian filter (scipy) to perform a segmentation
@@ -175,6 +235,10 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_b
     return_bounding_box : bool, optional
         Whether to return the bounding box of the head and neck parts of the CTA.
         Default is False.
+    resampling : string
+        Resampling used by nnunet for the cranium segmentation: "scipy" (CPU) or "torch" (GPU).
+    num_threads : int, optional
+        CPU threads used by the torch resampler.
 
     Returns
     -------
@@ -204,7 +268,7 @@ def slice_cta_head_and_neck(cta_array, cta_affine, use_laplacian=False, return_b
     else:
         # Run TotalSegmentator directly, getting all head structures
         try:
-            cranium_mask = run_cranium_segmentation_totalsegmentator(cta_array, cta_affine)
+            cranium_mask = run_cranium_segmentation_totalsegmentator(cta_array, cta_affine, resampling, num_threads)
         except Exception as e:
             print(f"Error running TotalSegmentator: {e}")
             print("TotalSegmentator failed, using laplacian-gaussian filter instead...")
