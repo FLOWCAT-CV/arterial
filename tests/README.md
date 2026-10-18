@@ -46,7 +46,7 @@ checkout. Contents:
 
 | File | Produced by | Used by |
 |---|---|---|
-| `cta.nii.gz` | anonymised head-and-neck CTA, 512×512×782 at ~0.5 mm | segmenter, landmark detector, feature extractor, access predictor |
+| `cta.nii.gz` | anonymised head-and-neck CTA, 512×512×826 at 0.43 × 0.43 × 0.4 mm | segmenter, landmark detector, feature extractor, access predictor |
 | `segmentation.nii.gz` | `VesselSegmenter` on the CTA, extracranial mode | centerline extractor, landmark detector (2-channel model) |
 | `centerline_segments_array.npy` | `CenterlineExtractor.perform_centerline_postprocessing` | vessel labeller, feature extractor |
 | `branch_model.vtk` | `CenterlineExtractor.perform_branch_model_extraction` | centerline extractor (loader), feature extractor |
@@ -60,7 +60,11 @@ are gitignored, ~15 MB) with the weights installed:
 
 ```bash
 python tests/make_derived_fixtures.py        # writes input_test_data/derived/extracranial_vessels/
+python tests/make_derived_fixtures.py --force   # regenerates them after the input fixtures change
 ```
+
+`test_products` checks that the derived products lie inside the input CTA and fails with a
+"regenerate" message otherwise, so stale products cannot make its tests pass on misplaced anatomy.
 
 The model weights must be installed (see the main README, "Model Weights") for
 the slow tier; the fast tier only touches the fixtures.

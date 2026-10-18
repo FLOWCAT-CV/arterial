@@ -102,9 +102,11 @@ class TestAttentionMap(unittest.TestCase):
         graph = ap_utils.build_final_attention_map(edge_index, weights, batch, np.array([100.0, 200.0, 300.0]))
         self.assertEqual(graph.number_of_nodes(), 12)
         self.assertEqual(graph.number_of_edges(), 11)
+        corner = np.array([100.0, 200.0, 300.0])
         for node, data in graph.nodes(data=True):
-            self.assertGreaterEqual(data["pos"][0], 100.0)
+            np.testing.assert_allclose(data["pos"], batch.dense_data.pos[node].numpy() + corner, rtol=1e-6)
         polydata = ap_utils.nx_graph_to_vtk_polydata(graph)
         self.assertEqual(polydata.GetNumberOfPoints(), 12)
         points = ap_utils.nx_graph_to_point_dict(graph)
-        self.assertEqual(len(points["attention_weight"]) if "attention_weight" in points else len(next(iter(points.values()))), 12)
+        self.assertEqual(len(points["points"]), 12)
+        self.assertEqual(len(points["attention_weight"]), 12)
