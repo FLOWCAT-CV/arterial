@@ -1,8 +1,12 @@
 #    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+import os
+from unittest import mock
+
 import numpy as np
 import nibabel as nib
+from skimage.measure import label
 
 from helpers import ArterialTestCase, slow
 from arterial.segmentation import utils as seg_utils
@@ -22,6 +26,68 @@ class TestConnectedComponents(ArterialTestCase):
     def test_empty_volume_is_rejected(self):
         with self.assertRaises(AssertionError):
             seg_utils.get_largest_connected_component(np.zeros((4, 4, 4), dtype=np.uint8))
+
+    def test_same_component_as_skimage_label(self):
+        # Blobs that only touch diagonally are one component with 26-connectivity
+        volume = np.random.default_rng(0).random((40, 40, 40)) > 0.75
+        labels = label(volume)
+        expected = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
+        np.testing.assert_array_equal(seg_utils.get_largest_connected_component(volume), expected)
+
+
+class TestNumThreads(ArterialTestCase):
+
+    def setUp(self):
+        super().setUp()
+        # No cgroup quota unless a test writes one
+        patcher = mock.patch.multiple(seg_utils, CGROUP_CPU_MAX_PATH=os.path.join(self.case_dir, "cpu.max"),
+                                      CGROUP_V1_CPU_DIR=os.path.join(self.case_dir, "cpu"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("ARTERIAL_NUM_THREADS", None)
+
+    def test_default_is_usable_cores_capped(self):
+        with mock.patch("os.sched_getaffinity", return_value=set(range(28)), create=True):
+            self.assertEqual(seg_utils.get_num_threads(), (seg_utils.MAX_NUM_THREADS, 28, "default"))
+        with mock.patch("os.sched_getaffinity", return_value={0, 1, 2}, create=True):
+            self.assertEqual(seg_utils.get_num_threads(), (3, 3, "default"))
+
+    def test_cgroup_v2_quota_limits_usable_cores(self):
+        with open(seg_utils.CGROUP_CPU_MAX_PATH, "w") as f:
+            f.write("250000 100000\n")
+        with mock.patch("os.sched_getaffinity", return_value=set(range(28)), create=True):
+            self.assertEqual(seg_utils.get_usable_cores(), 3)
+        with open(seg_utils.CGROUP_CPU_MAX_PATH, "w") as f:
+            f.write("max 100000\n")
+        with mock.patch("os.sched_getaffinity", return_value=set(range(28)), create=True):
+            self.assertEqual(seg_utils.get_usable_cores(), 28)
+
+    def test_cgroup_v1_quota_limits_usable_cores(self):
+        os.makedirs(seg_utils.CGROUP_V1_CPU_DIR)
+        with open(os.path.join(seg_utils.CGROUP_V1_CPU_DIR, "cpu.cfs_quota_us"), "w") as f:
+            f.write("200000\n")
+        with open(os.path.join(seg_utils.CGROUP_V1_CPU_DIR, "cpu.cfs_period_us"), "w") as f:
+            f.write("100000\n")
+        with mock.patch("os.sched_getaffinity", return_value=set(range(28)), create=True):
+            self.assertEqual(seg_utils.get_usable_cores(), 2)
+
+    def test_without_affinity_cpu_count_is_used(self):
+        with mock.patch("os.sched_getaffinity", side_effect=AttributeError, create=True), mock.patch("os.cpu_count", return_value=6):
+            self.assertEqual(seg_utils.get_usable_cores(), 6)
+
+    def test_argument_and_environment_variable_take_precedence(self):
+        os.environ["ARTERIAL_NUM_THREADS"] = "12"
+        self.assertEqual(seg_utils.get_num_threads()[::2], (12, "ARTERIAL_NUM_THREADS"))
+        self.assertEqual(seg_utils.get_num_threads(2)[::2], (2, "argument"))
+        self.assertEqual(seg_utils.get_num_threads(0)[0], 1)
+
+    def test_invalid_environment_variable_is_ignored(self):
+        os.environ["ARTERIAL_NUM_THREADS"] = "auto"
+        with mock.patch("os.sched_getaffinity", return_value={0, 1, 2}, create=True):
+            self.assertEqual(seg_utils.get_num_threads(), (3, 3, "default"))
 
 
 class TestCraniumMask(ArterialTestCase):

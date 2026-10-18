@@ -221,6 +221,8 @@ When `return_probabilities=True`, the output contains continuous values [0, 1] r
 | `use_vanilla_nnunet` | bool | `True` | Use standard nnU-Net trainer (`all` folds) vs clDice trainer (`fold_0`) |
 | `no_slicing` | bool | `False` | Skip head/neck slicing, use full volume |
 | `set_threshold_099` | bool | `False` | Apply 0.99 probability threshold for high-confidence segmentation |
+| `resampling` | str | `"torch"` | nnU-Net resampling before and after the network: `"torch"` (GPU; falls back to `"scipy"` without one) or `"scipy"` (CPU, as in the model plans) |
+| `num_threads` | int | `None` | CPU threads. If `None`, `ARTERIAL_NUM_THREADS`, otherwise the usable cores (CPU affinity and container quota) up to 8 |
 
 ### segment_vessels_from_cta() Parameters
 
@@ -259,9 +261,14 @@ perform_single_inference_nnunet(
     mode,                # "extracranial_vessels" or "intracranial_vessels"
     nnunet_mode,         # "3d_lowres" or "3d_fullres"
     use_vanilla_nnunet,  # Use standard or clDice trainer
-    return_probabilities # Return probability maps
+    return_probabilities, # Return probability maps
+    set_threshold_099,   # Binarise at probability 0.99
+    resampling,          # "scipy" (CPU) or "torch" (GPU)
+    num_threads          # CPU threads for the torch resampler
 )
 ```
+
+Each nnU-Net model is loaded once per process and reused by later calls (`get_nnunet_predictor`).
 
 **Returns:**
 - `segmentation_nifti`: NIfTI image object
@@ -278,6 +285,7 @@ Utility functions for image processing:
 | `join_head_and_neck_segmentations()` | Merges separate segmentations at optimal boundary |
 | `get_largest_connected_component()` | Filters small components, retaining largest structure |
 | `run_cranium_segmentation_totalsegmentator()` | Detects cranium using TotalSegmentator model |
+| `get_num_threads()` | Resolves the number of CPU threads (argument, `ARTERIAL_NUM_THREADS` or default) |
 
 ---
 
@@ -297,6 +305,12 @@ export ARTERIAL_MODELS_DIR="/data/arterial-models"
 - **GPU**: CUDA-compatible GPU strongly recommended
 - **Memory**: Minimum 8GB VRAM for 3d_fullres models
 - **CPU**: Fallback option available but significantly slower
+
+### Performance
+
+`resampling="torch"` moves nnU-Net's resampling to the GPU, and several cases can share one GPU from the command line
+(`arterial -cd case_1 case_2 ... -w N`). Timings, accuracy checks and per-worker memory are in the
+[segmentation speed report](../reports/segmentation_speedup.md).
 
 ---
 

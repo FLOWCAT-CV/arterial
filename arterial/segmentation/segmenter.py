@@ -2,9 +2,10 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+import torch
 import nibabel as nib
 from arterial.segmentation.inference import perform_single_inference_nnunet
-from arterial.segmentation.utils import slice_cta_head_and_neck, join_head_and_neck_segmentations
+from arterial.segmentation.utils import slice_cta_head_and_neck, join_head_and_neck_segmentations, get_num_threads, MAX_NUM_THREADS
 from arterial.io.load_and_save_operations import *
 
 class VesselSegmenter():
@@ -33,7 +34,9 @@ class VesselSegmenter():
                  fast_segmentation = False,
                  use_vanilla_nnunet = True,
                  no_slicing = False,
-                 set_threshold_099 = False
+                 set_threshold_099 = False,
+                 resampling = "torch",
+                 num_threads = None
                  ):
         """
         Initializes object of the Segmenter class.
@@ -54,10 +57,17 @@ class VesselSegmenter():
         use_vanilla_nnunet : bool, default = True
             Boolean variable to determine whether the vanilla nnunet model is used. If False, the nnunet model
             trained with the nnunetClDiceLossTrainer is used.
+        resampling : string, default = "torch"
+            Resampling used by nnunet before and after the network. "torch" runs on the GPU and falls back to
+            "scipy" when no CUDA device is available; "scipy" runs on the CPU as defined in the model plans.
+        num_threads : int, default = None
+            Number of CPU threads. If None, the ARTERIAL_NUM_THREADS environment variable is used or, if it is not
+            set, the number of usable cores capped at 8.
         
         """
         assert case_dir is not None, "case_dir should be provided as the directory where all results will be saved."
         assert mode in ["extracranial_vessels", "intracranial_vessels"], "mode should be either 'extracranial_vessels' or 'intracranial_vessels'."
+        assert resampling in ["scipy", "torch"], "resampling should be either 'scipy' or 'torch'."
 
         self.case_dir = case_dir
         self.mode = mode
@@ -87,6 +97,8 @@ class VesselSegmenter():
         self.use_vanilla_nnunet = use_vanilla_nnunet
         self.no_slicing = no_slicing
         self.set_threshold_099 = set_threshold_099
+        self.resampling = resampling
+        self.num_threads, self.usable_cores, self.num_threads_source = get_num_threads(num_threads)
 
     def segment_vessels_from_cta(self, return_probabilities=False, save=True):
         """
@@ -122,25 +134,28 @@ class VesselSegmenter():
         if save: os.makedirs(os.path.join(self.case_dir, self.mode), exist_ok=True)
         if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti_from_file()
 
+        print(f"Using {self.num_threads} CPU threads (usable cores {self.usable_cores}, cap {MAX_NUM_THREADS}, source: {self.num_threads_source}), {self.resampling} resampling")
+        torch.set_num_threads(self.num_threads)
+
         if self.mode == "extracranial_vessels":
             if self.fast_segmentation:
                 print("Performing fast segmentation...")
-                self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099)
+                self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099, resampling=self.resampling, num_threads=self.num_threads)
             else:
                 if not self.no_slicing:
                     print("Slicing CTA into head and neck...")
                     self.slice_cta()
                     print("Performing segmentation (head)...")
-                    _, self.segmentation_head_array, probabilities_head_nifti =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099)
+                    _, self.segmentation_head_array, probabilities_head_nifti =  perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099, resampling=self.resampling, num_threads=self.num_threads)
                     print("Performing segmentation (neck)...")
-                    _, self.segmentation_neck_array, probabilities_neck_nifti =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099)
+                    _, self.segmentation_neck_array, probabilities_neck_nifti =  perform_single_inference_nnunet(self.cta_neck_array, self.cta_affine, self.mode, "3d_lowres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099, resampling=self.resampling, num_threads=self.num_threads)
                     print("Joining segmentations...")
                     self.segmentation_nifti, self.segmentation_array = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, self.segmentation_head_array, self.segmentation_neck_array, self.cta_head_affine)
                     if return_probabilities:
                         self.probabilities_nifti, _ = join_head_and_neck_segmentations(self.cta_array, self.cta_affine, probabilities_head_nifti.get_fdata(), probabilities_neck_nifti.get_fdata(), self.cta_head_affine, is_probabilities=True)
                 else:
                     print("No slicing is True. Using the whole CTA volume for extracranial vessels segmentation (nnunet trained at full resolution).")
-                    self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099)
+                    self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_array, self.cta_affine, "intracranial_vessels", "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099, resampling=self.resampling, num_threads=self.num_threads)
             
         elif self.mode == "intracranial_vessels":   
             if not self.no_slicing:
@@ -152,8 +167,11 @@ class VesselSegmenter():
                 self.cta_head_array = self.cta_array
                 self.cta_head_affine = self.cta_affine
             print("Performing segmentation...")
-            self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099)
+            self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099, resampling=self.resampling, num_threads=self.num_threads)
         
+        # The models stay loaded for the next case; release the rest of the GPU memory for the next stages
+        if torch.cuda.is_available(): torch.cuda.empty_cache()
+
         if save:
             print(f"Saving segmentation to {self.segmentation_nifti_path}")
             save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)
@@ -182,7 +200,7 @@ class VesselSegmenter():
         if self.cta_array is None or self.cta_affine is None:
             self._load_cta_nifti_from_file()
 
-        self.cta_head_array, self.cta_neck_array, self.cta_head_affine, bounding_box = slice_cta_head_and_neck(self.cta_array, self.cta_affine, return_bounding_box=return_bounding_box)
+        self.cta_head_array, self.cta_neck_array, self.cta_head_affine, bounding_box = slice_cta_head_and_neck(self.cta_array, self.cta_affine, return_bounding_box=return_bounding_box, resampling=self.resampling, num_threads=self.num_threads)
         if return_bounding_box:
             return bounding_box
 

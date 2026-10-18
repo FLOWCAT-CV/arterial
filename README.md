@@ -34,6 +34,12 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 ---
 
+## Updates
+
+- **2026-10-18:** Segmentation is 1.6× faster, with near-identical masks (median Dice 0.998). nnU-Net's resampling now runs on the GPU by default (`--resampling torch`). Without a CUDA GPU it falls back to the previous CPU resampling, which `--resampling scipy` also selects. Several cases can run in parallel on one GPU with `--workers`. See the [report](docs/reports/segmentation_speedup.md).
+
+---
+
 ## Key Features
 
 | Feature                              | Description                                                                    |
@@ -250,6 +256,9 @@ arterial -cd /path/to/case_dir -fast
 
 # Skip segmentation (if already computed)
 arterial -cd /path/to/case_dir -ss
+
+# Several cases, two at a time on one GPU (cases completed with the same settings are skipped on a rerun)
+arterial -cd /path/to/cases/* -w 2
 ```
 
 ### Python API
@@ -342,6 +351,7 @@ case_dir/
     │   # segmentation
     ├── segmentation.nii.gz                  # binary vessel mask on the CTA grid
     ├── segmentation_probabilities.nii.gz    # only with return_probabilities
+    ├── arterial_run.json                    # command line only, once all stages wrote their outputs: stage times and settings
     │   # centerline extraction
     ├── segmentation.vtk / segmentation.stl  # vessel surface mesh
     ├── segmentations/                       # one surface per connected island
@@ -387,7 +397,7 @@ The vessel geometry export (`tutorials/scripts/export_vessel_geometry.py`) adds 
 
 | Flag                                       | Description                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------ |
-| `-cd`, `--case_dir`                    | Path to case directory (required)                                        |
+| `-cd`, `--case_dir`                    | Path to case directory (required); several directories process several cases |
 | `-cnp`, `--cta_nifti_path`             | Path to CTA NIfTI file                                                   |
 | `-m`, `--mode`                         | Analysis mode (`extracranial_vessels` or `intracranial_vessels`)     |
 | `-sd`, `--sampling_distance_mm`        | Centerline sampling distance (default: 2)                                |
@@ -403,6 +413,9 @@ The vessel geometry export (`tutorials/scripts/export_vessel_geometry.py`) adds 
 | `-clnn`, `--cl_dice_nnunet`            | Use the nnU-Net trained with centerline Dice instead of the vanilla one  |
 | `-ns`, `--no_slicing`                  | Segment the whole volume without the head/neck split (intracranial mode) |
 | `-s99`, `--set_threshold_099`          | Binarise the segmentation at probability 0.99                            |
+| `-rs`, `--resampling`                  | nnU-Net resampling: `torch` (GPU, default) or `scipy` (CPU, as in the model plans) |
+| `-nt`, `--num_threads`                 | CPU threads (default: `ARTERIAL_NUM_THREADS`, else usable cores up to 8)  |
+| `-w`, `--workers`                      | Cases processed in parallel on one GPU when several are given (default: 1) |
 
 ---
 
