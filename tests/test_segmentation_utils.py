@@ -84,6 +84,11 @@ class TestNumThreads(ArterialTestCase):
         self.assertEqual(seg_utils.get_num_threads(2)[::2], (2, "argument"))
         self.assertEqual(seg_utils.get_num_threads(0)[0], 1)
 
+    def test_invalid_environment_variable_is_ignored(self):
+        os.environ["ARTERIAL_NUM_THREADS"] = "auto"
+        with mock.patch("os.sched_getaffinity", return_value={0, 1, 2}, create=True):
+            self.assertEqual(seg_utils.get_num_threads(), (3, 3, "default"))
+
 
 class TestCraniumMask(ArterialTestCase):
 

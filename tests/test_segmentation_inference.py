@@ -49,18 +49,22 @@ class TestResamplingSwitch(ArterialTestCase):
 
     def test_switch_between_torch_and_plans_resampling(self):
         predictor = fake_predictor()
-        configuration_manager = predictor.configuration_manager
-        self.assertIs(configuration_manager.resampling_fn_data.func, resample_data_or_seg_to_shape)
+        plans_configuration_manager = predictor.configuration_manager
+        self.assertIs(plans_configuration_manager.resampling_fn_data.func, resample_data_or_seg_to_shape)
 
         inference.set_nnunet_resampling(predictor, "torch", torch.device("cpu"), num_threads=2)
+        configuration_manager = predictor.configuration_manager
+        self.assertIsInstance(configuration_manager, inference.ResamplingConfigurationManager)
         for fn in [configuration_manager.resampling_fn_data, configuration_manager.resampling_fn_seg, configuration_manager.resampling_fn_probabilities]:
-            self.assertIs(fn.func, resample_torch_fornnunet)
-            self.assertEqual(fn.keywords["num_threads"], 2)
-        self.assertTrue(configuration_manager.resampling_fn_seg.keywords["is_seg"])
+            torch_fn, plans_fn = fn.args
+            self.assertIs(torch_fn.func, resample_torch_fornnunet)
+            self.assertIs(plans_fn.func, resample_data_or_seg_to_shape)
+            self.assertEqual(torch_fn.keywords["num_threads"], 2)
+        self.assertTrue(configuration_manager.resampling_fn_seg.args[0].keywords["is_seg"])
+        self.assertEqual(configuration_manager.configuration, plans_configuration())
 
         inference.set_nnunet_resampling(predictor, "scipy")
-        self.assertIs(configuration_manager.resampling_fn_data.func, resample_data_or_seg_to_shape)
-        self.assertEqual(configuration_manager.configuration, plans_configuration())
+        self.assertIs(predictor.configuration_manager, plans_configuration_manager)
 
     def test_both_resamplings_return_the_target_grid(self):
         data = np.random.default_rng(0).random((1, 10, 12, 14)).astype(np.float32)
@@ -83,15 +87,9 @@ class TestRunPrediction(ArterialTestCase):
         self.assertEqual(inference.run_nnunet_prediction(predictor, None, {}, False, "torch"), "segmentation")
         self.assertIs(predictor.configuration_manager.resampling_fn_data.func, resample_data_or_seg_to_shape)
 
-    def test_out_of_memory_falls_back_to_scipy(self):
-        predictor = fake_predictor("cuda")
-        used_resampling = []
-        def predict(*args):
-            used_resampling.append(predictor.configuration_manager.resampling_fn_data.func)
-            if len(used_resampling) == 1:
-                raise torch.cuda.OutOfMemoryError("out of memory")
-            return "segmentation"
-        predictor.predict_single_npy_array = predict
+    def test_out_of_memory_falls_back_to_scipy_for_that_step_only(self):
+        def torch_fn(data):
+            raise torch.cuda.OutOfMemoryError("out of memory")
         with mock.patch.object(torch.cuda, "empty_cache"):
-            self.assertEqual(inference.run_nnunet_prediction(predictor, None, {}, False, "torch", 1), "segmentation")
-        self.assertEqual(used_resampling, [resample_torch_fornnunet, resample_data_or_seg_to_shape])
+            self.assertEqual(inference.resample_with_fallback(torch_fn, lambda data: "resampled on the CPU", "data"), "resampled on the CPU")
+        self.assertEqual(inference.resample_with_fallback(lambda data: "resampled on the GPU", None, "data"), "resampled on the GPU")

@@ -2,6 +2,7 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+from functools import partial
 
 import torch
 import numpy as np
@@ -9,6 +10,7 @@ import nibabel as nib
 
 from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 from nnunetv2.utilities.plans_handling.plans_handler import ConfigurationManager
+from nnunetv2.preprocessing.resampling.resample_torch import resample_torch_fornnunet
 import warnings
 warnings.filterwarnings("ignore") # There is a warning that is wrong with nnunet 
                                   # (something about the version of trained model)
@@ -61,11 +63,71 @@ def get_nnunet_predictor(model_folder, use_folds, device):
 
     return _PREDICTORS[key]
 
+class ResamplingConfigurationManager(ConfigurationManager):
+    """
+    ConfigurationManager of a trained model with the resampling functions given directly, instead of read from the
+    model plans. Everything else is shared with the original ConfigurationManager.
+
+    """
+    def __init__(self, configuration_manager, resampling_fns):
+        """
+        Initializes object of the ResamplingConfigurationManager class.
+
+        Parameters
+        ----------
+        configuration_manager : nnunetv2.utilities.plans_handling.plans_handler.ConfigurationManager
+            ConfigurationManager built from the model plans.
+        resampling_fns : dict
+            Resampling functions with the keys "data", "seg" and "probabilities".
+
+        """
+        self.__dict__.update(configuration_manager.__dict__)
+        self.resampling_fns = resampling_fns
+
+    @property
+    def resampling_fn_data(self):
+        return self.resampling_fns["data"]
+
+    @property
+    def resampling_fn_seg(self):
+        return self.resampling_fns["seg"]
+
+    @property
+    def resampling_fn_probabilities(self):
+        return self.resampling_fns["probabilities"]
+
+def resample_with_fallback(torch_fn, plans_fn, *args, **kwargs):
+    """
+    Resamples with torch_fn and, if the GPU runs out of memory, repeats only this resampling with plans_fn.
+
+    Parameters
+    ----------
+    torch_fn : callable
+        nnunetv2 torch resampling function.
+    plans_fn : callable
+        Resampling function of the model plans (scipy/skimage, CPU).
+    *args, **kwargs
+        Arguments of the resampling function (data, new_shape, current_spacing, new_spacing).
+
+    Returns
+    -------
+    resampled : numpy array or torch.Tensor
+        Resampled data.
+
+    """
+    try:
+        return torch_fn(*args, **kwargs)
+    except torch.cuda.OutOfMemoryError:
+        print("Not enough GPU memory for torch resampling, using scipy resampling for this step")
+        torch.cuda.empty_cache()
+        return plans_fn(*args, **kwargs)
+
 def set_nnunet_resampling(predictor, resampling="scipy", device=torch.device("cpu"), num_threads=None):
     """
     Sets the resampling functions used by the predictor before and after the network. "scipy" restores the
-    ones in the model plans (scipy/skimage, CPU). "torch" uses the nnunetv2 torch resampler on the given device.
-    The model plans file is not modified.
+    ones in the model plans (scipy/skimage, CPU). "torch" uses the nnunetv2 torch resampler on the given device,
+    falling back to the plans resampling for any step that runs out of GPU memory. The model plans file is not
+    modified.
 
     Parameters
     ----------
@@ -81,32 +143,29 @@ def set_nnunet_resampling(predictor, resampling="scipy", device=torch.device("cp
     """
     assert resampling in ["scipy", "torch"], "resampling should be either 'scipy' or 'torch'."
 
-    configuration = predictor.configuration_manager.configuration
-    # Keep the resampling defined in the plans, to be able to switch back to it
-    if not hasattr(predictor, "plans_resampling"):
-        predictor.plans_resampling = {key: configuration[key] for key in configuration if key.startswith("resampling_fn_")}
+    # Keep the ConfigurationManager built from the plans, to be able to switch back to it
+    if not hasattr(predictor, "plans_configuration_manager"):
+        predictor.plans_configuration_manager = predictor.configuration_manager
+    plans_configuration_manager = predictor.plans_configuration_manager
 
-    configuration.update(predictor.plans_resampling)
-
-    if resampling == "torch":
-        for fn in ["resampling_fn_data", "resampling_fn_seg", "resampling_fn_probabilities"]:
-            configuration[fn] = "resample_torch_fornnunet"
-            configuration[f"{fn}_kwargs"] = {
-                "is_seg": fn == "resampling_fn_seg",
-                "num_threads": num_threads if num_threads is not None else torch.get_num_threads(),
-                "device": device,
-                "force_separate_z": predictor.plans_resampling[f"{fn}_kwargs"].get("force_separate_z")
-            }
-
-    # nnunetv2 caches the resampling functions at class level, so they have to be rebuilt from the configuration
-    ConfigurationManager.resampling_fn_data.fget.cache_clear()
-    ConfigurationManager.resampling_fn_seg.fget.cache_clear()
-    ConfigurationManager.resampling_fn_probabilities.fget.cache_clear()
+    if resampling == "scipy":
+        predictor.configuration_manager = plans_configuration_manager
+    else:
+        resampling_fns = {}
+        for name in ["data", "seg", "probabilities"]:
+            plans_fn = getattr(plans_configuration_manager, f"resampling_fn_{name}")
+            torch_fn = partial(resample_torch_fornnunet,
+                               is_seg=name == "seg",
+                               num_threads=num_threads if num_threads is not None else torch.get_num_threads(),
+                               device=device,
+                               force_separate_z=plans_configuration_manager.configuration[f"resampling_fn_{name}_kwargs"].get("force_separate_z"))
+            resampling_fns[name] = partial(resample_with_fallback, torch_fn, plans_fn)
+        predictor.configuration_manager = ResamplingConfigurationManager(plans_configuration_manager, resampling_fns)
 
 def run_nnunet_prediction(predictor, img, props, save_or_return_probabilities=False, resampling="torch", num_threads=None):
     """
     Runs predictor.predict_single_npy_array with the requested resampling. Torch resampling is only used on a
-    CUDA device; if it runs out of GPU memory, the prediction is repeated with the scipy resampling.
+    CUDA device.
 
     Parameters
     ----------
@@ -134,15 +193,7 @@ def run_nnunet_prediction(predictor, img, props, save_or_return_probabilities=Fa
         resampling = "scipy"
 
     set_nnunet_resampling(predictor, resampling, predictor.device, num_threads)
-    try:
-        return predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities)
-    except torch.cuda.OutOfMemoryError:
-        if resampling != "torch":
-            raise
-        print("Not enough GPU memory for torch resampling, repeating the prediction with scipy resampling")
-        torch.cuda.empty_cache()
-        set_nnunet_resampling(predictor, "scipy")
-        return predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities)
+    return predictor.predict_single_npy_array(img, props, None, None, save_or_return_probabilities)
 
 def perform_single_inference_nnunet(img_array, img_affine, mode="extracranial_vessels", nnunet_mode="3d_lowres", use_vanilla_nnunet=True, return_probabilities=False, set_threshold_099=False, resampling="torch", num_threads=None):
     """

@@ -169,6 +169,9 @@ class VesselSegmenter():
             print("Performing segmentation...")
             self.segmentation_nifti, self.segmentation_array, self.probabilities_nifti = perform_single_inference_nnunet(self.cta_head_array, self.cta_head_affine, self.mode, "3d_fullres", self.use_vanilla_nnunet, return_probabilities=return_probabilities, set_threshold_099=self.set_threshold_099, resampling=self.resampling, num_threads=self.num_threads)
         
+        # The models stay loaded for the next case; release the rest of the GPU memory for the next stages
+        if torch.cuda.is_available(): torch.cuda.empty_cache()
+
         if save:
             print(f"Saving segmentation to {self.segmentation_nifti_path}")
             save_nifti(self.segmentation_nifti,  self.segmentation_nifti_path)

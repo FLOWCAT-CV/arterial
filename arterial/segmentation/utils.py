@@ -76,9 +76,11 @@ def get_num_threads(num_threads=None):
     usable_cores = get_usable_cores()
     if num_threads is not None:
         source = "argument"
-    elif os.environ.get("ARTERIAL_NUM_THREADS"):
+    elif os.environ.get("ARTERIAL_NUM_THREADS", "").strip().isdigit():
         num_threads, source = int(os.environ["ARTERIAL_NUM_THREADS"]), "ARTERIAL_NUM_THREADS"
     else:
+        if os.environ.get("ARTERIAL_NUM_THREADS"):
+            print(f"Warning: ignoring ARTERIAL_NUM_THREADS={os.environ['ARTERIAL_NUM_THREADS']!r}, it should be a positive integer")
         num_threads, source = min(usable_cores, MAX_NUM_THREADS), "default"
 
     return max(1, int(num_threads)), usable_cores, source
