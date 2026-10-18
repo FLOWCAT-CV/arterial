@@ -95,8 +95,8 @@ class TestCommandLine(ArterialTestCase):
         self.assertIn("total_time", times)
         with open(os.path.join(self.mode_dir, "arterial_run.json"), encoding="utf-8") as handle:
             record = json.load(handle)
-        self.assertEqual(record["resampling"], "torch")
-        self.assertTrue(all(record["skip_flags"].values()))
+        self.assertEqual(record["settings"]["resampling"], "torch")
+        self.assertTrue(all(record["settings"][flag] for flag in processor_module.SKIP_FLAGS))
 
     def test_cta_path_needs_a_single_case(self):
         with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
@@ -127,25 +127,64 @@ class TestMultipleCases(ArterialTestCase):
     def args(self, **kwargs):
         return cli.build_parser().parse_args(["-cd"] + self.case_dirs + ["--" + flag for flag in SKIP_FLAGS[:2]] + sum(([f"--{k}", str(v)] for k, v in kwargs.items()), []))
 
-    def write_run_record(self, case_dir, skip_flags):
+    def write_run_record(self, case_dir, args):
         os.makedirs(os.path.join(case_dir, "extracranial_vessels"))
         with open(os.path.join(case_dir, "extracranial_vessels", "arterial_run.json"), "w", encoding="utf-8") as handle:
-            json.dump({"skip_flags": skip_flags}, handle)
+            json.dump({"settings": processor_module.get_run_settings(args)}, handle)
 
     def test_completed_cases_are_skipped(self):
         args = self.args(num_threads=4)
-        self.write_run_record(self.case_dirs[0], {flag: flag in SKIP_FLAGS[:2] for flag in processor_module.SKIP_FLAGS})
+        self.write_run_record(self.case_dirs[0], args)
         with mock.patch.object(processor_module, "_process_single_case", return_value={"total_time": 0}) as process:
             results = processor_module.process_cases(args)
         self.assertEqual(list(results), [self.case_dirs[1]])
         self.assertEqual(process.call_args[0][0].case_dir, self.case_dirs[1])
         self.assertEqual(process.call_args[0][0].num_threads, 4)
 
-    def test_case_completed_with_other_skip_flags_is_processed_again(self):
-        self.write_run_record(self.case_dirs[0], {flag: True for flag in processor_module.SKIP_FLAGS})
+    def test_case_completed_with_other_settings_is_processed_again(self):
+        self.write_run_record(self.case_dirs[0], self.args(resampling="scipy"))
         with mock.patch.object(processor_module, "_process_single_case", return_value={"total_time": 0}):
             results = processor_module.process_cases(self.args())
         self.assertEqual(sorted(results), self.case_dirs)
+
+    def test_duplicate_case_directories_are_processed_once(self):
+        args = self.args()
+        args.case_dir = [self.case_dirs[0], self.case_dirs[0] + os.sep, self.case_dirs[1]]
+        with mock.patch.object(processor_module, "_process_single_case", return_value={"total_time": 0}) as process:
+            results = processor_module.process_cases(args)
+        self.assertEqual(process.call_count, 2)
+        self.assertEqual(list(results), self.case_dirs)
+
+    def test_incomplete_case_is_not_marked_as_done(self):
+        args = argparse.Namespace(**{**vars(all_skip_namespace(self.case_dirs[0], None)), "skip_vessel_labelling": False, "num_threads": None})
+        with mock.patch.object(ArterialProcessor, "perform_analysis", return_value={"total_time": 0}):
+            with self.assertRaisesRegex(RuntimeError, "segments_graph_pred.pickle"):
+                processor_module._process_single_case(args)
+        self.assertFalse(processor_module.is_case_processed(args))
+
+    def test_cases_are_retried_when_a_worker_dies(self):
+        calls = []
+        class FakeExecutor:
+            # The first pool breaks for every case, as when one worker process is killed
+            def __init__(self, *args, **kwargs):
+                self.broken = not calls
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def submit(self, fn, case_args, workers):
+                calls.append(case_args.case_dir)
+                future = mock.MagicMock()
+                future.result.side_effect = processor_module.BrokenProcessPool("worker died") if self.broken else None
+                future.result.return_value = {"total_time": 0}
+                return future
+        with mock.patch.object(processor_module, "get_max_workers", return_value=2), \
+             mock.patch.object(processor_module, "ProcessPoolExecutor", FakeExecutor), \
+             mock.patch.object(processor_module, "as_completed", side_effect=lambda futures: list(futures)), \
+             mock.patch.dict(os.environ):
+            results = processor_module.process_cases(self.args())
+        self.assertEqual(results, {case_dir: {"total_time": 0} for case_dir in self.case_dirs})
+        self.assertEqual(len(calls), 4)
 
     def test_failed_case_does_not_stop_the_run(self):
         with mock.patch.object(processor_module, "_process_single_case", side_effect=[RuntimeError("broken"), {"total_time": 0}]):
