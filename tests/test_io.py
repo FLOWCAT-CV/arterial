@@ -2,6 +2,8 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+import sys
+from unittest import mock
 
 import numpy as np
 import networkx as nx
@@ -10,6 +12,7 @@ import vtk
 
 from helpers import ArterialTestCase
 from arterial.io import load_and_save_operations as io_ops
+from arterial.io import dicom_and_nifti, registration
 
 
 def polyline(points, array_name="Radius"):
@@ -58,6 +61,14 @@ class TestPickleJsonNumpy(ArterialTestCase):
         with self.assertRaises(TypeError):
             io_ops.save_json({"graph": nx.Graph()}, os.path.join(self.case_dir, "bad.json"))
 
+    def test_failed_json_write_keeps_the_previous_file_and_no_temporary_file(self):
+        path = os.path.join(self.case_dir, "features.json")
+        io_ops.save_json({"version": 1}, path)
+        with self.assertRaises(TypeError):
+            io_ops.save_json({"version": 2, "graph": nx.Graph()}, path)
+        self.assertEqual(io_ops.load_json(path), {"version": 1})
+        self.assertEqual(os.listdir(self.case_dir), ["features.json"])
+
     def test_numpy_roundtrip_including_object_arrays(self):
         path = os.path.join(self.case_dir, "segments.npy")
         array = np.empty((2, 2), dtype=object)
@@ -88,6 +99,23 @@ class TestNifti(ArterialTestCase):
         np.testing.assert_allclose(loaded.affine, affine, rtol=1e-6)  # NIfTI stores the affine as float32
         self.assertEqual(loaded.get_data_dtype(), np.int16)
         np.testing.assert_array_equal(np.asarray(loaded.dataobj), np.asarray(image.dataobj))
+
+    def test_failed_nifti_write_keeps_the_previous_file_and_no_temporary_file(self):
+        path = os.path.join(self.case_dir, "img.nii.gz")
+        io_ops.save_nifti(nib.Nifti1Image(np.zeros((2, 2, 2), np.int16), np.eye(4)), path)
+        def failing_save(image, filename):
+            open(filename, "wb").close()  # a partial file, then the failure
+            raise OSError("disk full")
+        with mock.patch.object(io_ops.nib, "save", side_effect=failing_save), self.assertRaises(OSError):
+            io_ops.save_nifti(nib.Nifti1Image(np.ones((2, 2, 2), np.int16), np.eye(4)), path)
+        self.assertEqual(os.listdir(self.case_dir), ["img.nii.gz"])
+        np.testing.assert_array_equal(np.asarray(io_ops.load_nifti(path).dataobj), 0)
+
+    def test_two_file_formats_are_saved_whole(self):
+        path = os.path.join(self.case_dir, "img.img")
+        io_ops.save_nifti(nib.Nifti1Pair(np.arange(8, dtype=np.int16).reshape(2, 2, 2), np.eye(4)), path)
+        self.assertEqual(sorted(os.listdir(self.case_dir)), ["img.hdr", "img.img"])
+        np.testing.assert_array_equal(np.asarray(nib.load(path).dataobj), np.arange(8).reshape(2, 2, 2))
 
     def test_load_fixture_cta_header(self):
         cta = io_ops.load_nifti(self.require_fixture("cta.nii.gz"))
@@ -153,3 +181,67 @@ class TestVtk(ArterialTestCase):
         path = os.path.join(self.case_dir, "copy.vtk")
         io_ops.save_vtkpolydata(model, path)
         self.assertEqual(io_ops.load_vtkpolydata(path).GetNumberOfPoints(), model.GetNumberOfPoints())
+
+
+def oriented_image(axcodes, marker=(1, 2, 3)):
+    """
+    Builds a 4x5x6 image with one marked voxel, stored in the given orientation.
+
+    """
+    data = np.zeros((4, 5, 6), dtype=np.int16)
+    data[marker] = 7
+    affine = np.diag([0.5, 0.6, 0.7, 1.0]); affine[:3, 3] = [-10, 20, 30]
+    image = nib.Nifti1Image(data, affine)
+    return image.as_reoriented(nib.orientations.ornt_transform(nib.orientations.io_orientation(affine), nib.orientations.axcodes2ornt(axcodes)))
+
+
+def marker_world_position(image):
+    voxel = np.argwhere(np.asarray(image.dataobj) == 7)[0]
+    return nib.affines.apply_affine(image.affine, voxel)
+
+
+class TestOrientation(ArterialTestCase):
+
+    def test_reorientation_keeps_the_anatomy_in_place(self):
+        expected = marker_world_position(oriented_image("RAS"))
+        for source in ["RAS", "LAS", "LPS", "RPI"]:
+            image = oriented_image(source)
+            affine_before = image.affine.copy()
+            path = os.path.join(self.case_dir, f"{source}.nii.gz")
+            nib.save(image, path)
+            for target, converted in [("RAS", registration.convert_to_orientation(image, ("R", "A", "S"))),
+                                      ("LPS", registration.convert_to_orientation(image, ("L", "P", "S"))),
+                                      ("LAS", dicom_and_nifti.convert_to_las(path)),
+                                      ("LPS", dicom_and_nifti.convert_to_lps(path))]:
+                with self.subTest(source=source, target=target):
+                    self.assertEqual("".join(nib.aff2axcodes(converted.affine)), target)
+                    np.testing.assert_allclose(marker_world_position(converted), expected, atol=1e-5)
+            np.testing.assert_array_equal(image.affine, affine_before, "the input image must not be modified")
+
+
+class TestDicomToNifti(ArterialTestCase):
+
+    def fake_dicom2nifti(self, convert_directory):
+        module = mock.MagicMock(convert_directory=mock.MagicMock(side_effect=convert_directory))
+        return mock.patch.dict(sys.modules, {"dicom2nifti": module, "dicom2nifti.settings": module.settings})
+
+    def test_conversion_errors_are_raised_and_the_temporary_directory_removed(self):
+        def broken(input_path, output_dir):
+            raise RuntimeError("not a DICOM series")
+        output_path = os.path.join(self.case_dir, "cta.nii.gz")
+        with self.fake_dicom2nifti(broken), self.assertRaises(RuntimeError):
+            dicom_and_nifti.convert_dicom_to_nifti_d2n(self.case_dir, output_path)
+        self.assertFalse(os.path.exists(output_path))
+        self.assertFalse(os.path.exists(os.path.join(self.case_dir, "temporary_dir_dicom2nifti")))
+
+    def test_a_nifti_left_by_an_earlier_run_is_not_used(self):
+        temporary_dir = os.path.join(self.case_dir, "temporary_dir_dicom2nifti")
+        os.makedirs(temporary_dir)
+        nib.save(nib.Nifti1Image(np.zeros((2, 2, 2), np.int16), np.eye(4)), os.path.join(temporary_dir, "000_stale.nii.gz"))
+        def convert(input_path, output_dir):
+            nib.save(nib.Nifti1Image(np.ones((2, 2, 2), np.int16), np.eye(4)), os.path.join(output_dir, "series.nii.gz"))
+        output_path = os.path.join(self.case_dir, "cta.nii.gz")
+        with self.fake_dicom2nifti(convert):
+            dicom_and_nifti.convert_dicom_to_nifti_d2n(self.case_dir, output_path)
+        np.testing.assert_array_equal(np.asarray(nib.load(output_path).dataobj), 1)
+        self.assertFalse(os.path.exists(temporary_dir))

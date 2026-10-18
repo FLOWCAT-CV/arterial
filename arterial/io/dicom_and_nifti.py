@@ -55,74 +55,54 @@ def convert_dicom_to_nifti_d2n(input_path, output_path):
     # Create a new dummy directry for temporary storage of the output nifti file
     output_dir = os.path.dirname(output_path)
     dummy_output_dir = os.path.join(output_dir, "temporary_dir_dicom2nifti")
-    os.makedirs(dummy_output_dir, exist_ok=True)
+    # Start from an empty directory, so that a nifti left by an earlier run cannot be picked up
+    shutil.rmtree(dummy_output_dir, ignore_errors=True)
+    os.makedirs(dummy_output_dir)
     # Make conversion, it will create a nifti file in the dummy directory
     try:
         dicom2nifti.convert_directory(input_path, dummy_output_dir)
+        converted = glob.glob(os.path.join(dummy_output_dir, "*.nii.gz"))
+        if len(converted) != 1:
+            raise RuntimeError(f"dicom2nifti produced {len(converted)} nifti files from {input_path}, expected 1")
         # Move the new nifti to its output path with a proper, chosen name
-        shutil.move(glob.glob(os.path.join(dummy_output_dir, "*.nii.gz"))[0], output_path)
-        # Remove the final directory
-        shutil.rmtree(dummy_output_dir)
-    except Exception as e:
-        print(e)
-        print("Conversion failed.")
-        shutil.rmtree(dummy_output_dir)
+        shutil.move(converted[0], output_path)
+    finally:
+        # Remove the temporary directory, also when the conversion fails (the error is raised to the caller)
+        shutil.rmtree(dummy_output_dir, ignore_errors=True)
 
 def convert_to_las(nifti_file):
-    # Load the NIfTI file
-    img = nib.load(nifti_file)
-    # Get the header affine matrix
-    affine = img.affine
-    # Get orientation
-    orientation = nib.aff2axcodes(affine)
-    
-    if orientation == ("L", "A", "S"):
-        # img.set_data_dtype(dtype)
-        return img
-    elif orientation == ("L", "P", "S"):
-        # Change the sign of the first and second columns to flip the Anterior-Posterior axis
-        affine[:, 1] = -affine[:, 1]
+    """
+    Loads a NIfTI file and reorients it to LAS.
 
-        # Also need to flip the data in the x and y axes
-        data = img.get_fdata()
-        data = data[:, ::-1, :]
+    Parameters
+    ----------
+    nifti_file : string or path-like object
+        Path to the NIfTI file.
 
-        # Update the translation part of the affine matrix to compensate for the flipping of the data
-        affine[1, 3] = affine[1, 3] - data.shape[1] * affine[1, 1]
+    Returns
+    -------
+    img : nibabel.Nifti1Image
+        Image reoriented to LAS, from any source orientation.
 
-        # Create a new NIfTI image with the new affine matrix and data
-        img_las = nib.Nifti1Image(data, affine)
-        
-        # Return the new image
-        return img_las
-    
+    """
+    return convert_orientation(nib.load(nifti_file), "LAS")
+
 def convert_to_lps(nifti_file):
-    # Load the NIfTI file
-    img = nib.load(nifti_file)
-    # Get the header affine matrix
-    affine = img.affine
-    # Get orientation
-    orientation = nib.aff2axcodes(affine)
-    
-    if orientation == ("L", "P", "S"):
-        # img.set_data_dtype(dtype)
-        return img
-    elif orientation == ("L", "A", "S"):
-        # Change the sign of the first and second columns to flip the Anterior-Posterior axis
-        affine[:, 1] = -affine[:, 1]
+    """
+    Loads a NIfTI file and reorients it to LPS.
 
-        # Also need to flip the data in the x and y axes
-        data = img.get_fdata()
-        data = data[:, ::-1, :]
+    Parameters
+    ----------
+    nifti_file : string or path-like object
+        Path to the NIfTI file.
 
-        # Update the translation part of the affine matrix to compensate for the flipping of the data
-        affine[1, 3] = affine[1, 3] - data.shape[1] * affine[1, 1]
+    Returns
+    -------
+    img : nibabel.Nifti1Image
+        Image reoriented to LPS, from any source orientation.
 
-        # Create a new NIfTI image with the new affine matrix and data
-        img_lps = nib.Nifti1Image(data, affine)
-        
-        # Return the new image
-        return img_lps
+    """
+    return convert_orientation(nib.load(nifti_file), "LPS")
 
 def convert_orientation(nifti_input, target_orientation="RAS"):
     """
