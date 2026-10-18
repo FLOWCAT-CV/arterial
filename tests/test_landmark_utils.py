@@ -1,6 +1,8 @@
 #    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+import io
+import contextlib
 import unittest
 
 import numpy as np
@@ -70,6 +72,14 @@ class TestPostprocessPreds(unittest.TestCase):
         self.assertTrue(set(np.unique(mask).tolist()) <= set(range(7)))
         self.assertEqual(int(mask[4, 4, 4]), 1)
         self.assertEqual(int(mask[20, 21, 4]), 5)
+
+    def test_missing_landmark_class_is_reported(self):
+        preds = torch.full((1, 7, 8, 8, 8), -5.0)
+        preds[0, 1:6, 3:5, 3:5, 3:5] = 5.0  # class 6 is never predicted
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            lm_utils.postprocess_preds(preds, np.eye(4))
+        self.assertIn("landmark class 6 was not detected", output.getvalue())
 
     def test_no_mask_when_not_requested(self):
         preds = torch.full((1, 7, 8, 8, 8), -5.0)

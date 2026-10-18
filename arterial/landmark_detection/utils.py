@@ -243,6 +243,8 @@ def postprocess_preds(preds, affine, return_mask=False):
             # Convert from (z, y, x) to (x, y, z) order to match original
             centroids_ijk[label - 1] = [centroid[1], centroid[2], centroid[0]]
         else:
+            # No voxel of this class was predicted: the [0, 0, 0] placeholder is not a real detection
+            print(f"Warning: landmark class {label} was not detected; it gets a placeholder at the volume corner unless a later correction replaces it")
             centroids_ijk[label - 1] = [0, 0, 0]
 
     # Convert to mm coordinates with affine from preprocessed volume
