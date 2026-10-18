@@ -2,8 +2,15 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+import argparse
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+import torch
 
 from arterial.segmentation.segmenter import VesselSegmenter
+from arterial.segmentation.utils import get_num_threads
+from arterial.io.load_and_save_operations import save_json, load_json
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
 from arterial.vessel_labelling.vessel_labeller import VesselLabeller
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
@@ -13,6 +20,14 @@ from arterial.landmark_detection.landmark_detector import LandmarkDetector
 from time import time
 
 SUPPORTED_MODES = ("extracranial_vessels", "intracranial_vessels")
+
+# Written to case_dir/{mode}/ when the analysis of a case finishes; multi-case runs skip cases that have it
+RUN_RECORD_FILENAME = "arterial_run.json"
+SKIP_FLAGS = ("skip_segmentation", "skip_centerline_extraction", "skip_branching", "skip_vessel_labelling",
+              "skip_feature_extraction", "skip_access_prediction", "skip_landmark_detection")
+# Peak memory of one case at default settings, used to limit the number of parallel workers
+GPU_MEMORY_PER_WORKER_GB = 5
+RAM_PER_WORKER_GB = 6
 
 
 class ArterialProcessor():
@@ -48,6 +63,10 @@ class ArterialProcessor():
                 If True, it it will skip vessel labelling. False by default.
             - skip_feature_extraction : bool, default = False
                 If True, it it will skip feature extraction. False by default.
+            - resampling : string, default = "scipy"
+                Resampling used by nnunet in the segmentation: "scipy" (CPU) or "torch" (GPU).
+            - num_threads : int, default = None
+                Number of CPU threads. If None, ARTERIAL_NUM_THREADS or the usable cores capped at 8.
 
         Returns
         -------
@@ -74,6 +93,8 @@ class ArterialProcessor():
         self.use_vanilla_nnunet = not getattr(args, "cl_dice_nnunet", False)
         self.no_slicing = getattr(args, "no_slicing", False)
         self.set_threshold_099 = getattr(args, "set_threshold_099", False)
+        self.resampling = getattr(args, "resampling", "scipy")
+        self.num_threads = getattr(args, "num_threads", None)
 
         # Initialize module classes
         self.vessel_segmenter = VesselSegmenter(self.case_dir,
@@ -82,7 +103,9 @@ class ArterialProcessor():
                                                 self.fast_segmentation,
                                                 self.use_vanilla_nnunet,
                                                 self.no_slicing,
-                                                self.set_threshold_099)
+                                                self.set_threshold_099,
+                                                resampling=self.resampling,
+                                                num_threads=self.num_threads)
         self.centerline_extractor = CenterlineExtractor(self.case_dir, 
                                                         self.mode, 
                                                         None, 
@@ -377,3 +400,174 @@ class ArterialProcessor():
                             continue
         else:
             print("Skipping landmark detection \n")
+
+
+def save_run_record(processor, times, workers=1):
+    """
+    Saves the run record of a case (stage times, skip flags and run settings) to case_dir/{mode}/arterial_run.json.
+
+    Parameters
+    ----------
+    processor : ArterialProcessor
+        Processor that ran the analysis of the case.
+    times : dict
+        Stage times, as returned by ArterialProcessor.perform_analysis.
+    workers : int, default = 1
+        Number of cases processed in parallel.
+
+    """
+    record = {
+        "times": times,
+        "skip_flags": {flag: getattr(processor, flag) for flag in SKIP_FLAGS},
+        "resampling": processor.resampling,
+        "num_threads": processor.vessel_segmenter.num_threads,
+        "workers": workers,
+    }
+    os.makedirs(os.path.join(processor.case_dir, processor.mode), exist_ok=True)
+    save_json(record, os.path.join(processor.case_dir, processor.mode, RUN_RECORD_FILENAME))
+
+def is_case_processed(args):
+    """
+    Checks whether a previous run already completed the same analysis of a case, i.e. whether
+    case_dir/{mode}/arterial_run.json exists and was written with the same skip flags.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments, with a single case_dir.
+
+    Returns
+    -------
+    processed : bool
+        True if the case can be skipped.
+
+    """
+    run_record_path = os.path.join(args.case_dir, getattr(args, "mode", "extracranial_vessels"), RUN_RECORD_FILENAME)
+    if not os.path.isfile(run_record_path):
+        return False
+    skip_flags = load_json(run_record_path).get("skip_flags", {})
+    return all(skip_flags.get(flag) == getattr(args, flag, False) for flag in SKIP_FLAGS)
+
+def get_available_ram_gb():
+    """
+    Reads the available RAM from /proc/meminfo.
+
+    Returns
+    -------
+    available_ram_gb : float or None
+        Available RAM in GB, or None if /proc/meminfo cannot be read (not Linux).
+
+    """
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 1024 ** 2
+    except OSError:
+        pass
+    return None
+
+def get_max_workers(workers, n_cases):
+    """
+    Limits the number of parallel workers to the number of cases, the free GPU memory and the available RAM.
+
+    Parameters
+    ----------
+    workers : int
+        Number of workers requested.
+    n_cases : int
+        Number of cases to process.
+
+    Returns
+    -------
+    workers : int
+        Number of workers to use (at least 1).
+
+    """
+    workers = max(1, min(workers, n_cases))
+    if torch.cuda.is_available():
+        free_gpu_gb = torch.cuda.mem_get_info()[0] / 1024 ** 3
+        if workers * GPU_MEMORY_PER_WORKER_GB > free_gpu_gb:
+            fitting = max(1, int(free_gpu_gb // GPU_MEMORY_PER_WORKER_GB))
+            print(f"Warning: {free_gpu_gb:.1f} GB of free GPU memory fit {fitting} worker(s) of ~{GPU_MEMORY_PER_WORKER_GB} GB, using {fitting} instead of {workers}")
+            workers = fitting
+    available_ram_gb = get_available_ram_gb()
+    if available_ram_gb is not None and workers * RAM_PER_WORKER_GB > available_ram_gb:
+        fitting = max(1, int(available_ram_gb // RAM_PER_WORKER_GB))
+        print(f"Warning: {available_ram_gb:.1f} GB of available RAM fit {fitting} worker(s) of ~{RAM_PER_WORKER_GB} GB, using {fitting} instead of {workers}")
+        workers = fitting
+    return workers
+
+def _process_single_case(args, workers=1):
+    """
+    Runs the analysis of one case and saves its run record. Top-level function so that worker processes can run it.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments, with a single case_dir.
+    workers : int, default = 1
+        Number of cases processed in parallel, stored in the run record.
+
+    Returns
+    -------
+    times : dict
+        Stage times, as returned by ArterialProcessor.perform_analysis.
+
+    """
+    processor = ArterialProcessor(args)
+    times = processor.perform_analysis()
+    save_run_record(processor, times, workers)
+    return times
+
+def process_cases(args):
+    """
+    Runs the analysis of several cases (args.case_dir is a list), args.workers of them in parallel on the same GPU.
+    Cases that a previous run already completed with the same skip flags are skipped, so an interrupted run can be
+    resumed. The CPU threads (args.num_threads) are divided between the workers.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments, with a list of case directories as case_dir.
+
+    Returns
+    -------
+    results : dict
+        Stage times of every case that finished in this run, and the error message of every case that failed, by case_dir.
+
+    """
+    case_args = [argparse.Namespace(**{**vars(args), "case_dir": case_dir}) for case_dir in args.case_dir]
+    case_args = [single_case_args for single_case_args in case_args if not is_case_processed(single_case_args)]
+    print(f"{len(args.case_dir)} cases, {len(args.case_dir) - len(case_args)} already processed, {len(case_args)} to process")
+    if not case_args:
+        return {}
+
+    workers = get_max_workers(getattr(args, "workers", 1), len(case_args))
+    total_threads, usable_cores, source = get_num_threads(getattr(args, "num_threads", None))
+    threads_per_worker = max(1, total_threads // workers)
+    print(f"Using {workers} worker(s) with {threads_per_worker} CPU thread(s) each (usable cores {usable_cores}, source: {source})")
+    for single_case_args in case_args:
+        single_case_args.num_threads = threads_per_worker
+    results = {}
+    if workers == 1:
+        for single_case_args in case_args:
+            try:
+                results[single_case_args.case_dir] = _process_single_case(single_case_args)
+            except Exception as e:
+                print(f"Error processing {single_case_args.case_dir}: {e}")
+                results[single_case_args.case_dir] = f"error: {e}"
+    else:
+        # "spawn" so that every worker initializes CUDA on its own
+        with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as executor:
+            futures = {executor.submit(_process_single_case, single_case_args, workers): single_case_args.case_dir for single_case_args in case_args}
+            for future in as_completed(futures):
+                try:
+                    results[futures[future]] = future.result()
+                except Exception as e:
+                    print(f"Error processing {futures[future]}: {e}")
+                    results[futures[future]] = f"error: {e}"
+
+    n_failed = sum(isinstance(result, str) for result in results.values())
+    print(f"Finished {len(results) - n_failed} of {len(results)} cases ({n_failed} failed)")
+    return results

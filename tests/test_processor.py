@@ -7,8 +7,10 @@ import os
 import re
 import subprocess
 import sys
+from unittest import mock
 
 from helpers import ArterialTestCase
+from arterial.run import processor as processor_module
 from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES
 from arterial import cli
 
@@ -91,6 +93,14 @@ class TestCommandLine(ArterialTestCase):
         argv = ["-cd", self.case_dir, "-cnp", self.require_fixture("cta.nii.gz")] + ["--" + flag for flag in SKIP_FLAGS]
         times = cli.main(argv)
         self.assertIn("total_time", times)
+        with open(os.path.join(self.mode_dir, "arterial_run.json"), encoding="utf-8") as handle:
+            record = json.load(handle)
+        self.assertEqual(record["resampling"], "scipy")
+        self.assertTrue(all(record["skip_flags"].values()))
+
+    def test_cta_path_needs_a_single_case(self):
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            cli.main(["-cd", self.case_dir, os.path.join(self.case_dir, "other"), "-cnp", "cta.nii.gz"])
 
     def test_readme_option_table_matches_parser(self):
         parser = cli.build_parser()
@@ -101,6 +111,58 @@ class TestCommandLine(ArterialTestCase):
         documented = set(re.findall(r"`(-{1,2}[A-Za-z0-9_]+)`", table))
         self.assertEqual(parser_flags - documented, set(), "flags missing from the README table")
         self.assertEqual(documented - parser_flags, set(), "README documents flags the parser does not have")
+
+
+class TestMultipleCases(ArterialTestCase):
+    """Several case directories in one run, without running any stage."""
+
+    def setUp(self):
+        super().setUp()
+        self.case_dirs = [os.path.join(self.case_dir, name) for name in ["case_a", "case_b"]]
+        # Never query a GPU from the fast tier
+        patcher = mock.patch.object(processor_module.torch.cuda, "is_available", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def args(self, **kwargs):
+        return cli.build_parser().parse_args(["-cd"] + self.case_dirs + ["--" + flag for flag in SKIP_FLAGS[:2]] + sum(([f"--{k}", str(v)] for k, v in kwargs.items()), []))
+
+    def write_run_record(self, case_dir, skip_flags):
+        os.makedirs(os.path.join(case_dir, "extracranial_vessels"))
+        with open(os.path.join(case_dir, "extracranial_vessels", "arterial_run.json"), "w", encoding="utf-8") as handle:
+            json.dump({"skip_flags": skip_flags}, handle)
+
+    def test_completed_cases_are_skipped(self):
+        args = self.args(num_threads=4)
+        self.write_run_record(self.case_dirs[0], {flag: flag in SKIP_FLAGS[:2] for flag in processor_module.SKIP_FLAGS})
+        with mock.patch.object(processor_module, "_process_single_case", return_value={"total_time": 0}) as process:
+            results = processor_module.process_cases(args)
+        self.assertEqual(list(results), [self.case_dirs[1]])
+        self.assertEqual(process.call_args[0][0].case_dir, self.case_dirs[1])
+        self.assertEqual(process.call_args[0][0].num_threads, 4)
+
+    def test_case_completed_with_other_skip_flags_is_processed_again(self):
+        self.write_run_record(self.case_dirs[0], {flag: True for flag in processor_module.SKIP_FLAGS})
+        with mock.patch.object(processor_module, "_process_single_case", return_value={"total_time": 0}):
+            results = processor_module.process_cases(self.args())
+        self.assertEqual(sorted(results), self.case_dirs)
+
+    def test_failed_case_does_not_stop_the_run(self):
+        with mock.patch.object(processor_module, "_process_single_case", side_effect=[RuntimeError("broken"), {"total_time": 0}]):
+            results = processor_module.process_cases(self.args())
+        self.assertEqual(results[self.case_dirs[0]], "error: broken")
+        self.assertEqual(results[self.case_dirs[1]], {"total_time": 0})
+
+    def test_workers_are_limited_by_cases_gpu_memory_and_ram(self):
+        self.assertEqual(processor_module.get_max_workers(4, 2), 2)
+        with mock.patch.object(processor_module.torch.cuda, "is_available", return_value=True), \
+             mock.patch.object(processor_module.torch.cuda, "mem_get_info", return_value=(11 * 1024 ** 3, 24 * 1024 ** 3)), \
+             mock.patch.object(processor_module, "get_available_ram_gb", return_value=100):
+            self.assertEqual(processor_module.get_max_workers(4, 10), 11 // processor_module.GPU_MEMORY_PER_WORKER_GB)
+        with mock.patch.object(processor_module, "get_available_ram_gb", return_value=13):
+            self.assertEqual(processor_module.get_max_workers(4, 10), 13 // processor_module.RAM_PER_WORKER_GB)
+        with mock.patch.object(processor_module, "get_available_ram_gb", return_value=1):
+            self.assertEqual(processor_module.get_max_workers(4, 10), 1)
 
 
 class TestFullPipelineExample(ArterialTestCase):

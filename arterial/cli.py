@@ -10,7 +10,7 @@ works as well.
 
 import argparse
 
-from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES
+from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES, save_run_record, process_cases
 
 
 def build_parser():
@@ -24,8 +24,9 @@ def build_parser():
 
     """
     parser = argparse.ArgumentParser(prog="arterial", description="Arterial: automated vascular analysis of a head-and-neck CTA.")
-    parser.add_argument("-cd", "--case_dir", type=str, required=True,
-        help="Path to directory containing the nifti image (assumes that the nifti file has the basename of the dir). Required.")
+    parser.add_argument("-cd", "--case_dir", type=str, nargs="+", required=True,
+        help="Path to directory containing the nifti image (assumes that the nifti file has the basename of the dir). Required. "
+        "Several directories can be given to process several cases; cases that already have {mode}/arterial_run.json are skipped.")
     parser.add_argument("-cnp", "--cta_nifti_path", type=str, required=False, default=None,
         help="Path to the nifti image. Not required (assumes is case_dir/cta.nii.gz).")
     parser.add_argument('-m', '--mode', type=str, required=False, default='extracranial_vessels', choices=SUPPORTED_MODES,
@@ -60,6 +61,15 @@ def build_parser():
         "Not required, default = False.")
     parser.add_argument("-s99", "--set_threshold_099", action="store_true",
         help="Boolean argument to determine if the segmentation logit threshold should be set to 0.99 or not. Not required, default = False.")
+    parser.add_argument("-rs", "--resampling", type=str, required=False, default="scipy", choices=["scipy", "torch"],
+        help="Resampling used by nnunet before and after the network: scipy (CPU) or torch (GPU, falls back to scipy without a GPU). "
+        "Not required, default = scipy.")
+    parser.add_argument("-nt", "--num_threads", type=int, required=False, default=None,
+        help="Number of CPU threads (divided between workers). Not required, default = ARTERIAL_NUM_THREADS if set, "
+        "otherwise the usable cores capped at 8.")
+    parser.add_argument("-w", "--workers", type=int, required=False, default=1,
+        help="Number of cases processed in parallel on the same GPU when several case directories are given. "
+        "Reduced if there is not enough free GPU memory or RAM. Not required, default = 1.")
     return parser
 
 
@@ -75,12 +85,22 @@ def main(argv=None):
     Returns
     -------
     times : dict
-        Wall-clock time of every stage, as returned by ArterialProcessor.perform_analysis.
+        Wall-clock time of every stage, as returned by ArterialProcessor.perform_analysis. With several
+        case directories, the times (or error message) of every case processed, by case directory.
 
     """
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if len(args.case_dir) > 1:
+        if args.cta_nifti_path is not None:
+            parser.error("-cnp/--cta_nifti_path can only be used with a single case directory")
+        return process_cases(args)
+
+    args.case_dir = args.case_dir[0]
     processor = ArterialProcessor(args)
-    return processor.perform_analysis()
+    times = processor.perform_analysis()
+    save_run_record(processor, times)
+    return times
 
 if __name__ == "__main__":
     main()
