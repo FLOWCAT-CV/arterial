@@ -13,6 +13,7 @@ import numpy as np
 import networkx as nx
 
 from arterial.feature_extraction import utils as fe_utils
+from arterial.feature_extraction import graph_builder
 from arterial.feature_extraction.local_features import utils as local_utils
 from arterial.feature_extraction.segment_features import utils as segment_utils
 
@@ -183,3 +184,11 @@ class TestSegmentFeatures(unittest.TestCase):
         self.assertLess(partial.number_of_nodes(), 12)
         self.assertAlmostEqual(segment_utils.curvature_energy(graph), 12 * 0.25)
         self.assertAlmostEqual(segment_utils.cumulative_curvature(graph, 0), 11 * 0.5)
+
+
+class TestSmallSubgraphs(unittest.TestCase):
+
+    def test_adjacent_small_subgraphs_are_all_removed(self):
+        large, small_a, small_b = nx.path_graph(6), nx.path_graph(2), nx.path_graph(3)
+        kept = graph_builder.remove_small_subgraphs([large, small_a, small_b, nx.path_graph(5)])
+        self.assertEqual([len(subgraph) for subgraph in kept], [6, 5])

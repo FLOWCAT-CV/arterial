@@ -2,6 +2,7 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+import numpy as np
 from arterial.feature_extraction.graph_builder import build_local_graph, build_individual_centerline_graph_from_vtkpolydata
 from arterial.feature_extraction.utils import resample_centerline_segments_array, make_graph_plot, centerline_sanity_check
 from arterial.feature_extraction.local_features.feature_extraction import perform_local_feature_extraction, perform_local_feature_extraction_individual_centerline
@@ -539,15 +540,16 @@ class FeatureExtractor():
             ``side`` is also None. Explicit values override the side-based
             mapping.
         bif_mask_width_mm : float, optional
-            Total arclength width (mm) of the bifurcation mask, centred on
-            the bifurcation node. The default is 40.0 (4 cm: 2 cm proximal +
-            2 cm distal).
+            Total arclength width (mm) of the bifurcation mask, split 1/4
+            proximal and 3/4 distal of the bifurcation node. The default is
+            25.0 (6.25 mm proximal + 18.75 mm distal).
         bulb_threshold_mm : float, optional
             A centerline node is threshold-positive when
             ``|raw - interp| > bulb_threshold_mm``. The bulb is the closed
             interval between the first and last threshold-positive node
             (interior dips below threshold are kept as bulb). The default
-            is 0.3.
+            is 0.3, applied on both sides; this differs from the
+            ``(0.5, 0.2)`` default of ``perform_carotid_analysis``.
         bulb_expand_nodes : int, optional
             Symmetric expansion of the bulb span, in nodes per side. The
             default is 1.
@@ -688,14 +690,16 @@ class FeatureExtractor():
         ``self._cranium_distance_transform_path``; (3) compute fresh, store
         in memory, and persist to disk. The caller is responsible for ensuring
         ``self.cta_array`` is loaded.
-        """
-        if self._cranium_distance_transform is not None:
-            return self._cranium_distance_transform
 
-        if os.path.isfile(self._cranium_distance_transform_path):
+        A cached transform clipped at some value serves any ``dt_clip_mm`` up to that value (clipping it again
+        is exact); a larger ``dt_clip_mm`` is computed again.
+        """
+        if self._cranium_distance_transform is None and os.path.isfile(self._cranium_distance_transform_path):
             print(f"Loading cranium distance transform from {self._cranium_distance_transform_path}")
             self._cranium_distance_transform = load_numpy(self._cranium_distance_transform_path)
-            return self._cranium_distance_transform
+
+        if self._cranium_distance_transform is not None and dt_clip_mm <= np.max(self._cranium_distance_transform):
+            return np.clip(self._cranium_distance_transform, 0, dt_clip_mm)
 
         print("Computing cranium distance transform (this can take a while)...")
         from arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis import (

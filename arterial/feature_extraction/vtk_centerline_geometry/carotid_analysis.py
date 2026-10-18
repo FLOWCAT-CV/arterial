@@ -44,9 +44,9 @@ def perform_carotid_analysis(
        whose ``VesselTypeName`` contains ``"ICA"`` (matches both ``LICA`` and
        ``RICA``).
     3. **Interpolate the radius across the bifurcation.** Masks all nodes
-       within an asymmetric arclength window around the centre: ``2/5``
-       of ``bif_mask_width_mm`` proximal of the centre and ``3/5`` distal
-       (so the 25 mm default spans 10 mm proximal + 15 mm distal toward
+       within an asymmetric arclength window around the centre: ``1/4``
+       of ``bif_mask_width_mm`` proximal of the centre and ``3/4`` distal
+       (so the 25 mm default spans 6.25 mm proximal + 18.75 mm distal toward
        the ICA — the bulb sits distal to the transition, so the ICA side
        gets the longer arm). A PCHIP curve is then fit through the
        surviving non-masked points and evaluated at every centerline
@@ -55,7 +55,7 @@ def perform_carotid_analysis(
        ``|raw_radius - r_interp|`` exceeds a side-dependent threshold:
        proximal of the bifurcation centre, the proximal value of
        ``bulb_threshold_mm`` (or the scalar, if uniform); distal of the
-       centre, the distal value. The default ``(0.4, 0.2)`` is stricter on
+       centre, the distal value. The default ``(0.5, 0.2)`` is stricter on
        the CCA / BT side (rejects mild radius wiggles where the bulb
        cannot be) and more permissive on the ICA side (catches the bulb's
        gentle distal taper). The bulb is then defined as the full span
@@ -101,9 +101,9 @@ def perform_carotid_analysis(
         proximal end.
     bif_mask_width_mm : float, optional
         Total arclength width (mm) of the bifurcation mask, split
-        asymmetrically as 2/5 proximal + 3/5 distal of the bifurcation
+        asymmetrically as 1/4 proximal + 3/4 distal of the bifurcation
         centre (favouring the ICA side where the bulb sits). The default
-        is 25.0 (10 mm proximal + 15 mm distal).
+        is 25.0 (6.25 mm proximal + 18.75 mm distal).
     bulb_threshold_mm : float or (float, float), optional
         Threshold for ``|raw - interp|``. As a scalar, applies uniformly
         across the centerline. As a 2-tuple ``(proximal, distal)``, the
@@ -111,7 +111,7 @@ def perform_carotid_analysis(
         (CCA / BT side) and the second for nodes distal of it (ICA side,
         where the bulb sits). The bulb itself is the closed interval
         between the first and last threshold-positive node. The default
-        is ``(0.4, 0.2)``.
+        is ``(0.5, 0.2)``.
     bulb_expand_nodes : int, optional
         Symmetric expansion of the bulb span, in nodes per side. The
         default is 1.
@@ -175,8 +175,8 @@ def perform_carotid_analysis(
     else:
         center_idx = _find_cca_ica_transition(vt_name)
 
-    # Asymmetric window: 2/5 of the total width proximal of the bifurcation
-    # centre, 3/5 distal (toward the ICA). The bulb sits distal to the
+    # Asymmetric window: 1/4 of the total width proximal of the bifurcation
+    # centre, 3/4 distal (toward the ICA). The bulb sits distal to the
     # CCA→ICA transition, so giving the ICA side more room keeps it inside
     # the PCHIP-hide zone.
     proximal_extent = float(bif_mask_width_mm) * 1.0 / 4.0

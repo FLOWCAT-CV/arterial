@@ -568,13 +568,13 @@ def unify_subgraphs(centerline_segments_array, local_graph, subgraphs):
     # Check if any of the nodes in remove_nodes is in the nodes_in_subgraph_union_edges
     for node in all_remove_nodes:
         if node in nodes_in_subgraph_union_edges:
-            # We remove the edge in the subgraph_union_edges
-            for edge in subgraphs_union_edges:
+            # We remove the edge in the subgraph_union_edges (iterating over a copy, as edges are removed)
+            for edge in list(subgraphs_union_edges):
                 if node in edge:
                     subgraphs_union_edges.remove(edge)
 
     # Check if any of the nodes in the subgraphs_union_edges has degree 1. If it has, remove the edge from the graph and from subgraphs_union_edges
-    for edge in subgraphs_union_edges:
+    for edge in list(subgraphs_union_edges):
         if local_graph.degree(edge[0]) == 1 or local_graph.degree(edge[1]) == 1:
             local_graph.remove_edge(edge[0], edge[1])
             subgraphs_union_edges.remove(edge)

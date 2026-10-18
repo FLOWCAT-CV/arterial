@@ -6,6 +6,31 @@ import networkx as nx
 
 from arterial.feature_extraction.utils import resample_centerline_segments_array, get_predicted_vessels_dict, get_hierarchical_order, unify_subgraphs, sanity_check_for_random_islands, build_segments_array_for_individual_centerline_graph
 
+
+def remove_small_subgraphs(subgraphs, min_nodes=5):
+    """
+    Removes the subgraphs with fewer than min_nodes nodes, which add little information and can corrupt
+    feature extraction.
+
+    Parameters
+    ----------
+    subgraphs : list of networkx.Graph
+        Connected components of the dense centerline graph.
+    min_nodes : int, optional
+        Minimum number of nodes of a kept subgraph. Default is 5.
+
+    Returns
+    -------
+    subgraphs : list of networkx.Graph
+        Subgraphs with at least min_nodes nodes, in the original order.
+
+    """
+    for idx, subgraph in enumerate(subgraphs):
+        if len(subgraph) < min_nodes:
+            print("Removing subgraph {} with length {}".format(idx, len(subgraph)))
+    # Filter into a new list: removing items while iterating over the list would skip the next one
+    return [subgraph for subgraph in subgraphs if len(subgraph) >= min_nodes]
+
 def build_local_graph(centerline_segments_array, segments_graph_pred, sampling_distance_mm=2):
     """
     Builds dense centerline graph from case_dir/centerline_segments_array.npy and 
@@ -182,12 +207,7 @@ def build_local_graph(centerline_segments_array, segments_graph_pred, sampling_d
         subgraphs = [local_graph.subgraph(components) for components in nx.connected_components(local_graph)]
         # Remove short (less than 5 nodes) subgraphs (do not introduce much information and can easily corrupt feature extraction)
         if len(subgraphs) > 1:
-            delete_subgraphs = []
-            for idx, subgraph in enumerate(subgraphs):
-                if len(subgraph) < 5:
-                    print("Removing subgraph {} with length {}".format(idx, len(subgraphs)))
-                    delete_subgraphs.append(idx)
-                    subgraphs.remove(subgraph)
+            subgraphs = remove_small_subgraphs(subgraphs)
             # Performs sanity check in case there are multiple significant subgraphs
             sanity_check, skip_cell_ids = sanity_check_for_random_islands(subgraphs, skip_cell_ids)
         else:
