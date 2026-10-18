@@ -9,9 +9,10 @@ works as well.
 """
 
 import os
+import sys
 import argparse
 
-from arterial.run.processor import ArterialProcessor, SUPPORTED_MODES, save_run_record, process_cases, get_missing_outputs
+from arterial.run.processor import SUPPORTED_MODES, IncompleteAnalysisError, process_cases, process_single_case
 
 
 def build_parser():
@@ -75,9 +76,9 @@ def build_parser():
     return parser
 
 
-def main(argv=None):
+def run(argv=None):
     """
-    Runs the pipeline from the command line.
+    Runs the pipeline from command-line arguments.
 
     Parameters
     ----------
@@ -99,14 +100,31 @@ def main(argv=None):
         return process_cases(args)
 
     args.case_dir = args.case_dir[0]
-    processor = ArterialProcessor(args)
-    times = processor.perform_analysis()
-    missing_outputs = get_missing_outputs(processor)
-    if missing_outputs:
-        print(f"Warning: the analysis is incomplete, missing {', '.join(missing_outputs)}")
-    else:
-        save_run_record(args, processor, times)
-    return times
+    return process_single_case(args)
+
+
+def main(argv=None):
+    """
+    Entry point of the ``arterial`` command.
+
+    Parameters
+    ----------
+    argv : list of str, optional
+        Arguments to parse instead of sys.argv[1:].
+
+    Returns
+    -------
+    exit_status : int
+        0 if every case was analysed completely, 1 otherwise.
+
+    """
+    try:
+        results = run(argv)
+    except IncompleteAnalysisError as e:
+        print(f"Error: {e}")
+        return 1
+    # With several cases, failed cases are reported as an error message instead of their stage times
+    return 1 if any(isinstance(result, str) for result in results.values()) else 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
