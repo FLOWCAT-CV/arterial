@@ -34,6 +34,12 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 ---
 
+## Updates
+
+- **2026-10-18:** Segmentation is 1.6× faster by default (GPU resampling), with near-identical masks (median Dice 0.998). Several cases can now run in parallel on one GPU with `--workers`. See the [report](docs/reports/segmentation_speedup.md).
+
+---
+
 ## Key Features
 
 | Feature                              | Description                                                                    |
