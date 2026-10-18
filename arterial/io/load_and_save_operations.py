@@ -67,7 +67,8 @@ def load_json(path):
 
 def save_json(json_object, path):
     """
-    Saves json to path.
+    Saves json to path. The file is written to a temporary path first and then moved into place,
+    so an interrupted run does not leave a truncated file behind.
 
     Parameters
     ----------
@@ -81,8 +82,10 @@ def save_json(json_object, path):
     None.
 
     """
-    with open(path, "w") as f:
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w") as f:
         json.dump(json_object, f, indent=4, default=_json_default)
+    os.replace(tmp_path, path)
 
 
 def _json_default(value):
@@ -239,7 +242,8 @@ def load_numpy(path):
 
 def save_nifti(nifti, path):
     """
-    Saves a nibabel image to a file in .nii or .nii.gz format.
+    Saves a nibabel image to a file in .nii or .nii.gz format. The file is written to a temporary path
+    first and then moved into place, so an interrupted run does not leave a truncated file behind.
 
     Parameters
     ----------
@@ -249,7 +253,12 @@ def save_nifti(nifti, path):
         Path to the file where the image will be saved.
 
     """
-    nib.save(nifti, path)
+    # Keep the extension, nibabel uses it to choose the format
+    path = os.fspath(path)
+    root, extension = (path[:-len(".nii.gz")], ".nii.gz") if path.endswith(".nii.gz") else os.path.splitext(path)
+    tmp_path = f"{root}.tmp{extension}"
+    nib.save(nifti, tmp_path)
+    os.replace(tmp_path, path)
 
 def load_nifti(path):
     """
