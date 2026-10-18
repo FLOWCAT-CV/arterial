@@ -257,8 +257,8 @@ arterial -cd /path/to/case_dir -fast
 # Skip segmentation (if already computed)
 arterial -cd /path/to/case_dir -ss
 
-# Several cases, three at a time on one GPU (completed cases are skipped on a rerun)
-arterial -cd /path/to/cases/* -w 3
+# Several cases, two at a time on one GPU (cases completed with the same settings are skipped on a rerun)
+arterial -cd /path/to/cases/* -w 2
 ```
 
 ### Python API
@@ -351,7 +351,7 @@ case_dir/
     │   # segmentation
     ├── segmentation.nii.gz                  # binary vessel mask on the CTA grid
     ├── segmentation_probabilities.nii.gz    # only with return_probabilities
-    ├── arterial_run.json                    # command line only: stage times and run settings
+    ├── arterial_run.json                    # command line only, once all stages wrote their outputs: stage times and settings
     │   # centerline extraction
     ├── segmentation.vtk / segmentation.stl  # vessel surface mesh
     ├── segmentations/                       # one surface per connected island

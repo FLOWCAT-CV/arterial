@@ -51,11 +51,11 @@ arterial -cd /path/to/case_dir
 # Previous resampling
 arterial -cd /path/to/case_dir --resampling scipy
 
-# Several cases, two at a time on one GPU, 4 CPU threads each; rerunning skips completed cases
+# Several cases, two at a time on one GPU, 4 CPU threads each; a rerun skips cases completed with the same settings
 arterial -cd /path/to/cases/* --workers 2 --num_threads 8
 ```
 
-- **No GPU:** without a CUDA GPU, `torch` falls back to `scipy`. If the GPU runs out of memory, the prediction is repeated with `scipy`.
+- **No GPU:** without a CUDA GPU, `torch` falls back to `scipy`. If the GPU runs out of memory during a resampling step, that step is repeated with `scipy`.
 - **`--workers N`:**
   - processes N cases at a time;
   - each case needs about 8.5 GB of GPU memory and 16 GB of RAM at its peak, and N is reduced if they don't fit;
