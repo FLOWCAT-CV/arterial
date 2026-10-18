@@ -76,7 +76,7 @@ def get_num_threads(num_threads=None):
     usable_cores = get_usable_cores()
     if num_threads is not None:
         source = "argument"
-    elif os.environ.get("ARTERIAL_NUM_THREADS", "").strip().isdigit():
+    elif os.environ.get("ARTERIAL_NUM_THREADS", "").strip().isdigit() and int(os.environ["ARTERIAL_NUM_THREADS"]) > 0:
         num_threads, source = int(os.environ["ARTERIAL_NUM_THREADS"]), "ARTERIAL_NUM_THREADS"
     else:
         if os.environ.get("ARTERIAL_NUM_THREADS"):
@@ -392,9 +392,10 @@ def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_ar
     
     r_voxel_size, a_voxel_size, s_voxel_size = head_affine[0, 0], head_affine[1, 1], head_affine[2, 2]
     
-    head_origin_i = int((head_affine[0, -1] - cta_affine[0, -1]) / r_voxel_size)
-    head_origin_j = int((head_affine[1, -1] - cta_affine[1, -1]) / a_voxel_size)
-    head_origin_k = int((head_affine[2, -1] - cta_affine[2, -1]) / s_voxel_size)
+    # Round, not truncate: floating-point error can put the quotient just below the integer offset
+    head_origin_i = int(round((head_affine[0, -1] - cta_affine[0, -1]) / r_voxel_size))
+    head_origin_j = int(round((head_affine[1, -1] - cta_affine[1, -1]) / a_voxel_size))
+    head_origin_k = int(round((head_affine[2, -1] - cta_affine[2, -1]) / s_voxel_size))
     
     # Set head_segmentation_array_reduced into original shape
     segmentation_head_array_ = np.zeros([cta_shape[0], cta_shape[1], cta_shape[2] - head_origin_k])

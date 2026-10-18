@@ -85,9 +85,11 @@ class TestNumThreads(ArterialTestCase):
         self.assertEqual(seg_utils.get_num_threads(0)[0], 1)
 
     def test_invalid_environment_variable_is_ignored(self):
-        os.environ["ARTERIAL_NUM_THREADS"] = "auto"
-        with mock.patch("os.sched_getaffinity", return_value={0, 1, 2}, create=True):
-            self.assertEqual(seg_utils.get_num_threads(), (3, 3, "default"))
+        for value in ["auto", "0", "-2"]:
+            with self.subTest(value=value):
+                os.environ["ARTERIAL_NUM_THREADS"] = value
+                with mock.patch("os.sched_getaffinity", return_value={0, 1, 2}, create=True):
+                    self.assertEqual(seg_utils.get_num_threads(), (3, 3, "default"))
 
 
 class TestCraniumMask(ArterialTestCase):
@@ -127,6 +129,22 @@ class TestJoinHeadAndNeck(ArterialTestCase):
         self.assertTrue(np.all(joined[3:5, 3:5, 40] == 1), "head structure must land above the seam")
         self.assertTrue(np.all(joined[3:5, 3:5, 5] == 1), "neck structure must land below the seam")
         self.assertEqual(int(joined.sum()), 4 * 3 + 4 + 4)
+
+    def test_head_offset_is_recovered_exactly_from_a_non_integer_affine(self):
+        # With this spacing and origin, (origin + k * spacing - origin) / spacing comes out just below k
+        spacing, origin, k = 0.429688, 1231.89, 588
+        self.assertLess((origin + k * spacing - origin) / spacing, k)
+        cta = np.zeros((8, 8, 700), dtype=np.int16)
+        cta_affine = np.diag([1.0, 1.0, spacing, 1.0]); cta_affine[2, 3] = origin
+        head_affine = cta_affine.copy(); head_affine[2, 3] += k * spacing
+        head = np.zeros((8, 8, 100), dtype=np.uint8)
+        neck = np.zeros((8, 8, int(1.1 * k)), dtype=np.uint8)
+        head[3:5, 3:5, :] = 1          # a vessel through the whole overlap, seen by both slabs
+        neck[3:5, 3:5, k:] = 1
+        head[1, 1, 80] = 1             # head-only structure at global slice k + 80, above the neck slab
+        _, joined = seg_utils.join_head_and_neck_segmentations(cta, cta_affine, head, neck, head_affine)
+        self.assertEqual(joined[1, 1, k + 80], 1)
+        self.assertEqual(joined[1, 1, k + 79], 0)
 
     def test_non_overlapping_slabs_raise(self):
         cta = np.zeros((8, 8, 60), dtype=np.int16)
