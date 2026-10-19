@@ -2,11 +2,13 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+from unittest import mock
 
 import numpy as np
 
 from helpers import ArterialTestCase, slow
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
+from arterial.io.load_and_save_operations import load_vtkpolydata, save_vtkpolydata
 
 
 class TestCenterlineExtractorInit(ArterialTestCase):
@@ -57,6 +59,37 @@ class TestCenterlineExtractorInit(ArterialTestCase):
         self.extractor._load_branch_model()
         self.assertIsNotNone(self.extractor.branch_model)
         self.assertGreater(self.extractor.branch_model.GetNumberOfPoints(), 0)
+
+
+class TestCenterlineExtractorOutputs(ArterialTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.extractor = CenterlineExtractor(self.case_dir, self.mode, self.require_fixture("segmentation.nii.gz"))
+
+    def test_individual_centerlines_reuse_the_existing_surface(self):
+        os.makedirs(self.mode_dir, exist_ok=True)
+        surface = load_vtkpolydata(self.require_fixture("branch_model.vtk"))  # any polydata stands in for the surface
+        save_vtkpolydata(surface, self.extractor.segmentation_path)
+        with mock.patch.object(self.extractor, "perform_preprocessing") as preprocessing, \
+             mock.patch("arterial.centerline_extraction.centerline_extractor.extract_centerline_between_endpoints", return_value=(surface, None)) as extract:
+            self.extractor.extract_centerline_between_endpoints((0, 0, 0), (1, 1, 1), "l-ica", save=False)
+        preprocessing.assert_not_called()
+        self.assertEqual(extract.call_args[0][0].GetNumberOfPoints(), surface.GetNumberOfPoints())
+
+    def test_individual_centerlines_without_a_surface_do_not_write_one(self):
+        with mock.patch.object(self.extractor, "perform_preprocessing") as preprocessing, \
+             mock.patch("arterial.centerline_extraction.centerline_extractor.extract_centerline_between_endpoints", return_value=(None, None)):
+            self.extractor.extract_centerline_between_endpoints((0, 0, 0), (1, 1, 1), "l-ica", save=False)
+        preprocessing.assert_called_once_with(volume_check=False, save=False)
+
+    def test_numbered_outputs_of_an_earlier_run_are_removed(self):
+        directory = os.path.join(self.case_dir, "centerlines")
+        os.makedirs(directory)
+        for name in ["centerlines_0.vtk", "centerlines_7.vtk", "centerlines_notes.vtk", "readme.txt"]:
+            open(os.path.join(directory, name), "w").close()
+        self.extractor._remove_numbered_outputs(directory, "centerlines_")
+        self.assertEqual(sorted(os.listdir(directory)), ["centerlines_notes.vtk", "readme.txt"])
 
 
 class TestCenterlineExtractorPipeline(ArterialTestCase):

@@ -221,6 +221,31 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
             
         final_centerline_segments_array = np.append(final_centerline_segments_array, centerline_segments_array, axis=0)
 
+    final_centerline_segments_array = merge_degree_2_segments(final_centerline_segments_array)
+    # Clean centerline segments
+    final_centerline_segments_array = clean_centerlines(final_centerline_segments_array)
+    # For extracranial analysis, we will remove cerebral vessels detected with high confidence
+    if mode == "extracranial_vessels":
+        final_centerline_segments_array = remove_intracranial_arteries(final_centerline_segments_array)
+
+    return final_centerline_segments_array
+
+def merge_degree_2_segments(final_centerline_segments_array):
+    """
+    Merges pairs of segments that share their startpoint at a node that is not a bifurcation (a degree-2 node),
+    so that they form a single segment. The segment whose far end is free is flipped and prepended to the other.
+
+    Parameters
+    ----------
+    final_centerline_segments_array : numpy array
+        Array containing centerline segments (positions and radii).
+
+    Returns
+    -------
+    final_centerline_segments_array : numpy array
+        Array with the merged segments.
+
+    """
     # We compare the startpoint of each cell with all other cell startpoints
     delete_idx = []
     for idx1 in range(len(final_centerline_segments_array)):
@@ -243,7 +268,12 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
                     # We first check which segment is floating (see if endpoint is shared with another segment)
                     endpoint1 = final_centerline_segments_array[idx1][0][-1]
                     endpoint2 = final_centerline_segments_array[idx2][0][-1]
+                    # Default when neither end connects to another segment
+                    first_cell_id, second_cell_id = idx2, idx1
                     for idx3 in range(len(final_centerline_segments_array)):
+                        # A segment always shares its own endpoint, so only the other segments count
+                        if idx3 in [idx1, idx2]:
+                            continue
                         if np.linalg.norm(endpoint1 - final_centerline_segments_array[idx3][0][0]) < 1e-4 or np.linalg.norm(endpoint1 - final_centerline_segments_array[idx3][0][-1]) < 1e-4:
                             first_cell_id = idx2
                             second_cell_id = idx1
@@ -260,14 +290,8 @@ def compute_centerline_segments_array(centerline_model_list, affine, image_shape
                     # We also keep the alternative index to delete it once the analysis is finished
                     delete_idx.append(second_cell_id)
 
-    # Finally, we delete the additional segments and save the array as a npy file
+    # Finally, we delete the additional segments
     final_centerline_segments_array = np.delete(final_centerline_segments_array, delete_idx, axis = 0)
-    # Clean centerline segments
-    final_centerline_segments_array = clean_centerlines(final_centerline_segments_array)
-    # For extracranial analysis, we will remove cerebral vessels detected with high confidence
-    if mode == "extracranial_vessels":
-        final_centerline_segments_array = remove_intracranial_arteries(final_centerline_segments_array)
-
     return final_centerline_segments_array
 
 def clean_centerlines(centerline_segments_array):
