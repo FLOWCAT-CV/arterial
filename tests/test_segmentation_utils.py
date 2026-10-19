@@ -2,6 +2,7 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+import warnings
 from unittest import mock
 
 import numpy as np
@@ -145,6 +146,16 @@ class TestJoinHeadAndNeck(ArterialTestCase):
         _, joined = seg_utils.join_head_and_neck_segmentations(cta, cta_affine, head, neck, head_affine)
         self.assertEqual(joined[1, 1, k + 80], 1)
         self.assertEqual(joined[1, 1, k + 79], 0)
+
+    def test_empty_overlap_slices_do_not_produce_nan(self):
+        cta = np.zeros((8, 8, 60), dtype=np.int16)
+        head_affine = np.eye(4); head_affine[:3, 3] = [0, 0, 30]
+        head = np.zeros((8, 8, 30), dtype=np.uint8); neck = np.zeros((8, 8, 33), dtype=np.uint8)
+        head[3:5, 3:5, 0] = 1; neck[3:5, 3:5, 30] = 1  # only the first overlap slice has vessels
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            _, joined = seg_utils.join_head_and_neck_segmentations(cta, np.eye(4), head, neck, head_affine)
+        self.assertEqual(int(joined[3:5, 3:5, 30].sum()), 4)
 
     def test_non_overlapping_slabs_raise(self):
         cta = np.zeros((8, 8, 60), dtype=np.int16)
