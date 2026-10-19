@@ -164,14 +164,18 @@ def _apply_mca_mirror_correction(centroids_ras):
     """
     L_TICA, R_TICA, L_EICA, R_EICA, R_MCA, L_MCA = 0, 1, 2, 3, 4, 5
 
-    midplane_x = float(np.mean(centroids_ras[[L_TICA, R_TICA, L_EICA, R_EICA], 0]))
+    bilateral = centroids_ras[[L_TICA, R_TICA, L_EICA, R_EICA], 0]
+    if np.all(np.isnan(bilateral)):
+        return centroids_ras, {}
+    # Missing landmarks are NaN and are left out of the midplane
+    midplane_x = float(np.nanmean(bilateral))
 
     r_dist = float(np.linalg.norm(centroids_ras[R_MCA] - centroids_ras[R_TICA]))
     l_dist = float(np.linalg.norm(centroids_ras[L_MCA] - centroids_ras[L_TICA]))
 
     def _bad(dist, i):
-        return (dist < _TICA_MCA_DIST_MEAN[i] - 2.0 * _TICA_MCA_DIST_STD[i] or
-                dist > _TICA_MCA_DIST_MEAN[i] + 2.0 * _TICA_MCA_DIST_STD[i])
+        # A NaN distance (missing MCA or TICA) counts as bad
+        return not (_TICA_MCA_DIST_MEAN[i] - 2.0 * _TICA_MCA_DIST_STD[i] <= dist <= _TICA_MCA_DIST_MEAN[i] + 2.0 * _TICA_MCA_DIST_STD[i])
 
     r_bad, l_bad = _bad(r_dist, 0), _bad(l_dist, 1)
     correction_log = {}
@@ -184,10 +188,13 @@ def _apply_mca_mirror_correction(centroids_ras):
             mirrored = np.array([2.0 * midplane_x - centroids_ras[good_idx, 0],
                                  centroids_ras[good_idx, 1],
                                  centroids_ras[good_idx, 2]])
+            if np.any(np.isnan(mirrored)):
+                continue
             disp = float(np.linalg.norm(mirrored - centroids_ras[bad_idx]))
-            if disp > _MIRROR_MIN_DISP_MM:
+            # A missing MCA (NaN displacement) is always replaced by the mirrored one
+            if np.isnan(disp) or disp > _MIRROR_MIN_DISP_MM:
                 centroids_ras[bad_idx] = mirrored
-                correction_log[name] = {"displacement_mm": round(disp, 1)}
+                correction_log[name] = {"displacement_mm": None if np.isnan(disp) else round(disp, 1)}
 
     return centroids_ras, correction_log
 
@@ -243,9 +250,9 @@ def postprocess_preds(preds, affine, return_mask=False):
             # Convert from (z, y, x) to (x, y, z) order to match original
             centroids_ijk[label - 1] = [centroid[1], centroid[2], centroid[0]]
         else:
-            # No voxel of this class was predicted: the [0, 0, 0] placeholder is not a real detection
-            print(f"Warning: landmark class {label} was not detected; it gets a placeholder at the volume corner unless a later correction replaces it")
-            centroids_ijk[label - 1] = [0, 0, 0]
+            # No voxel of this class was predicted: NaN marks it as missing (a placeholder would look like a detection)
+            print(f"Warning: landmark class {label} was not detected")
+            centroids_ijk[label - 1] = np.nan
 
     # Convert to mm coordinates with affine from preprocessed volume
     centroids_ras = np.array([ijk_to_ras(centroids_ijk[i], affine) for i in range(6)])
@@ -318,7 +325,6 @@ class _LandmarkRefiner:
         self.original_landmarks = landmarks_dict.copy()
         self.segmentation = (segmentation_array > 0).astype(np.uint8)
         self.affine = affine
-        self.voxel_size = np.abs(np.diag(affine)[:3])
         
         self._centerline = None
         self._centerline_points = None
@@ -352,17 +358,20 @@ class _LandmarkRefiner:
             self._bifurcation_points = self._cluster_points(coords, 3.0) if len(coords) > 0 else np.array([]).reshape(0, 3)
         return self._bifurcation_points
     
+    def _distances_mm(self, points_ijk, coords_ijk):
+        # Voxel offsets through the affine's linear part: correct for anisotropic and oblique voxel grids
+        return np.linalg.norm((np.asarray(points_ijk, dtype=float) - coords_ijk) @ self.affine[:3, :3].T, axis=1)
+
     def _cluster_points(self, points, min_dist_mm):
         if len(points) == 0:
             return np.array([])
-        min_dist_vox = min_dist_mm / np.mean(self.voxel_size)
         clustered = []
         used = np.zeros(len(points), dtype=bool)
         for i, p in enumerate(points):
             if used[i]:
                 continue
-            dists = np.linalg.norm(points - p, axis=1)
-            cluster_mask = dists < min_dist_vox
+            dists = self._distances_mm(points, p)
+            cluster_mask = dists < min_dist_mm
             used[cluster_mask] = True
             clustered.append(np.mean(points[cluster_mask], axis=0))
         return np.array(clustered)
@@ -397,9 +406,9 @@ class _LandmarkRefiner:
         if len(self.centerline_points) == 0:
             return coords_ijk, 0.0
         
-        dists = np.linalg.norm(self.centerline_points - coords_ijk, axis=1)
+        dists = self._distances_mm(self.centerline_points, coords_ijk)
         min_idx = np.argmin(dists)
-        min_dist_mm = dists[min_idx] * np.mean(self.voxel_size)
+        min_dist_mm = dists[min_idx]
         
         if min_dist_mm > search_radius_mm:
             return coords_ijk, 0.0
@@ -410,9 +419,9 @@ class _LandmarkRefiner:
         if len(self.bifurcation_points) == 0:
             return self._snap_to_centerline(coords_ijk, search_radius_mm)
         
-        dists = np.linalg.norm(self.bifurcation_points - coords_ijk, axis=1)
+        dists = self._distances_mm(self.bifurcation_points, coords_ijk)
         min_idx = np.argmin(dists)
-        min_dist_mm = dists[min_idx] * np.mean(self.voxel_size)
+        min_dist_mm = dists[min_idx]
         
         if min_dist_mm > search_radius_mm:
             return self._snap_to_centerline(coords_ijk, search_radius_mm)
