@@ -53,10 +53,12 @@ def add_string_point_array(polydata, strings, name):
     polydata.GetPointData().AddArray(vtk_array)
 
 
-def extract_cross_section(surface, center, normal):
+def extract_cross_section(surface, center, normal, max_distance_mm=1.0):
     """
     Cuts the surface with a plane defined by center and normal, keeps the connected
     region closest to center, and returns the triangulated cross-section polydata.
+    The region is only kept if center lies on it (within max_distance_mm): otherwise
+    the closest region belongs to another vessel or another part of the surface.
 
     Parameters
     ----------
@@ -66,12 +68,14 @@ def extract_cross_section(surface, center, normal):
         Plane origin (typically a centerline point).
     normal : array-like, shape (3,)
         Plane normal (typically the centerline tangent at `center`).
+    max_distance_mm : float, optional
+        Largest distance from `center` to the cross-section for it to be kept. Default is 1.0.
 
     Returns
     -------
     cross_section : vtk.vtkPolyData
         Triangulated cross-section polydata. Empty if the cutting plane does not
-        intersect the surface near `center`.
+        intersect the surface at `center`.
 
     """
     plane = vtk.vtkPlane()
@@ -92,8 +96,18 @@ def extract_cross_section(surface, center, normal):
     triangulator = vtk.vtkContourTriangulator()
     triangulator.SetInputData(connectivity.GetPolyDataOutput())
     triangulator.Update()
+    cross_section = triangulator.GetOutput()
 
-    return triangulator.GetOutput()
+    if cross_section.GetNumberOfCells() > 0:
+        locator = vtk.vtkCellLocator()
+        locator.SetDataSet(cross_section)
+        locator.BuildLocator()
+        closest_point, cell_id, sub_id, distance2 = [0.0, 0.0, 0.0], vtk.reference(0), vtk.reference(0), vtk.reference(0.0)
+        locator.FindClosestPoint(list(center), closest_point, cell_id, sub_id, distance2)
+        if float(distance2) > max_distance_mm ** 2:
+            return vtk.vtkPolyData()
+
+    return cross_section
 
 
 def cross_section_area(cross_section):
