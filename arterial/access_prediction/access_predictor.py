@@ -161,6 +161,7 @@ class AccessPredictor():
                         self.attention_maps_vtk_dict[(access, side)] = nx_graph_to_vtk_polydata(self.attention_maps_dict[(access, side)])
                         self.attention_maps_point_dict[(access, side)] = nx_graph_to_point_dict(self.attention_maps_dict[(access, side)])
                     if save:
+                        os.makedirs(os.path.join(self.access_prediction_dir_path, f"{access}_{side}"), exist_ok=True)
                         print(f"Saving access prediction of {access} {side} supersegment to {os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json')}")
                         save_json(self.predictions_dict[(access, side)], os.path.join(self.access_prediction_dir_path, f'{access}_{side}', 'access_prediction.json'))
                         if return_attention_map:

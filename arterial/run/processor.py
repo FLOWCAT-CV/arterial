@@ -10,7 +10,7 @@ from concurrent.futures.process import BrokenProcessPool
 import torch
 
 from arterial.segmentation.segmenter import VesselSegmenter
-from arterial.segmentation.utils import get_num_threads
+from arterial.segmentation.utils import get_num_threads, MAX_NUM_THREADS
 from arterial.io.load_and_save_operations import save_json, load_json
 from arterial.centerline_extraction.centerline_extractor import CenterlineExtractor
 from arterial.vessel_labelling.vessel_labeller import VesselLabeller
@@ -26,8 +26,13 @@ SUPPORTED_MODES = ("extracranial_vessels", "intracranial_vessels")
 RUN_RECORD_FILENAME = "arterial_run.json"
 SKIP_FLAGS = ("skip_segmentation", "skip_centerline_extraction", "skip_branching", "skip_vessel_labelling",
               "skip_feature_extraction", "skip_access_prediction", "skip_landmark_detection")
-# A case whose worker process dies (e.g. killed when out of RAM) is retried once before it is reported as failed
-MAX_ATTEMPTS_PER_CASE = 2
+
+
+class IncompleteAnalysisError(RuntimeError):
+    """
+    Raised when the analysis of a case finished but a stage that ran did not write its main output.
+
+    """
 # Peak memory of one case at default settings (head-and-neck CTA, 512 x 512 x ~850), used to limit the number of
 # parallel workers: 8 GB reserved by torch plus the CUDA context, and 16 GB of RAM
 GPU_MEMORY_PER_WORKER_GB = 8.5
@@ -429,6 +434,7 @@ def get_run_settings(args):
         "set_threshold_099": getattr(args, "set_threshold_099", False),
         "resampling": getattr(args, "resampling", "torch"),
         "sampling_distance_mm": float(getattr(args, "sampling_distance_mm", 2)),
+        "cta_nifti_path": os.path.realpath(getattr(args, "cta_nifti_path", None) or os.path.join(args.case_dir, "cta.nii.gz")),
     })
     return settings
 
@@ -451,18 +457,20 @@ def get_missing_outputs(processor):
     expected_outputs = []
     if not processor.skip_segmentation:
         expected_outputs.append(processor.vessel_segmenter.segmentation_nifti_path)
-    # Only the segmentation stage writes its outputs in intracranial_vessels mode
+    if not processor.skip_centerline_extraction and not processor.skip_branching:
+        expected_outputs.append(processor.centerline_extractor.branch_model_path)
+    if not processor.skip_landmark_detection:
+        expected_outputs.append(processor.landmark_detector.landmarks_ras_json_path)
+    if not processor.skip_vessel_labelling:
+        expected_outputs.append(processor.vessel_labeller.segments_graph_pred_path)
+    # Feature extraction and access prediction only run in extracranial_vessels mode
     if processor.mode == "extracranial_vessels":
-        if not processor.skip_centerline_extraction and not processor.skip_branching:
-            expected_outputs.append(processor.centerline_extractor.branch_model_path)
-        if not processor.skip_landmark_detection:
-            expected_outputs.append(processor.landmark_detector.landmarks_ras_json_path)
-        if not processor.skip_vessel_labelling:
-            expected_outputs.append(processor.vessel_labeller.segments_graph_pred_path)
         if not processor.skip_feature_extraction:
             expected_outputs.append(processor.feature_extractor.local_graph_path)
         if not processor.skip_access_prediction:
-            expected_outputs.append(processor.access_predictor.access_prediction_dir_path)
+            for access in processor.access_predictor.access:
+                for side in processor.access_predictor.side:
+                    expected_outputs.append(os.path.join(processor.access_predictor.access_prediction_dir_path, f"{access}_{side}", "access_prediction.json"))
     return [path for path in expected_outputs if not os.path.exists(path)]
 
 def save_run_record(args, processor, times, workers=1):
@@ -493,7 +501,7 @@ def save_run_record(args, processor, times, workers=1):
 def is_case_processed(args):
     """
     Checks whether a previous run already completed the same analysis of a case, i.e. whether
-    case_dir/{mode}/arterial_run.json exists and was written with the same settings.
+    case_dir/{mode}/arterial_run.json exists, was written with the same settings, and the outputs are still there.
 
     Parameters
     ----------
@@ -509,7 +517,9 @@ def is_case_processed(args):
     run_record_path = os.path.join(args.case_dir, getattr(args, "mode", "extracranial_vessels"), RUN_RECORD_FILENAME)
     if not os.path.isfile(run_record_path):
         return False
-    return load_json(run_record_path).get("settings") == get_run_settings(args)
+    if load_json(run_record_path).get("settings") != get_run_settings(args):
+        return False
+    return not get_missing_outputs(ArterialProcessor(args))
 
 def get_available_ram_gb():
     """
@@ -548,6 +558,8 @@ def get_max_workers(workers, n_cases):
 
     """
     workers = max(1, min(workers, n_cases))
+    if workers == 1:
+        return 1
     if torch.cuda.is_available():
         free_gpu_gb = torch.cuda.mem_get_info()[0] / 1024 ** 3
         if workers * GPU_MEMORY_PER_WORKER_GB > free_gpu_gb:
@@ -561,9 +573,10 @@ def get_max_workers(workers, n_cases):
         workers = fitting
     return workers
 
-def _process_single_case(args, workers=1):
+def process_single_case(args, workers=1):
     """
-    Runs the analysis of one case and, if it is complete, saves its run record. Top-level function so that worker
+    Runs the analysis of one case and, if it is complete, saves its run record. A run record from an earlier run
+    is removed first, so a case that fails now is not taken as complete. Top-level function so that worker
     processes can run it.
 
     Parameters
@@ -579,13 +592,16 @@ def _process_single_case(args, workers=1):
         Stage times, as returned by ArterialProcessor.perform_analysis.
 
     """
-    if args.num_threads is not None:
+    if getattr(args, "num_threads", None) is not None:
         torch.set_num_threads(args.num_threads)
     processor = ArterialProcessor(args)
+    run_record_path = os.path.join(processor.case_dir, processor.mode, RUN_RECORD_FILENAME)
+    if os.path.isfile(run_record_path):
+        os.remove(run_record_path)
     times = processor.perform_analysis()
     missing_outputs = get_missing_outputs(processor)
     if missing_outputs:
-        raise RuntimeError(f"incomplete analysis, missing {', '.join(missing_outputs)}")
+        raise IncompleteAnalysisError(f"incomplete analysis of {processor.case_dir}, missing {', '.join(missing_outputs)}")
     save_run_record(args, processor, times, workers)
     return times
 
@@ -616,7 +632,11 @@ def process_cases(args):
 
     workers = get_max_workers(getattr(args, "workers", 1), len(case_args))
     total_threads, usable_cores, source = get_num_threads(getattr(args, "num_threads", None))
-    threads_per_worker = max(1, total_threads // workers)
+    if source == "default":
+        # The default cap applies per process: share the usable cores, up to MAX_NUM_THREADS per worker
+        threads_per_worker = max(1, min(MAX_NUM_THREADS, usable_cores // workers))
+    else:
+        threads_per_worker = max(1, total_threads // workers)
     print(f"Using {workers} worker(s) with {threads_per_worker} CPU thread(s) each (usable cores {usable_cores}, source: {source})")
     for single_case_args in case_args:
         single_case_args.num_threads = threads_per_worker
@@ -624,7 +644,7 @@ def process_cases(args):
     if workers == 1:
         for single_case_args in case_args:
             try:
-                results[single_case_args.case_dir] = _process_single_case(single_case_args)
+                results[single_case_args.case_dir] = process_single_case(single_case_args)
             except Exception as e:
                 print(f"Error processing {single_case_args.case_dir}: {e}")
                 results[single_case_args.case_dir] = f"error: {e}"
@@ -632,31 +652,29 @@ def process_cases(args):
         # Limit the BLAS/OpenMP threads of the workers too (read when they import numpy), unless already set
         for variable in ["OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"]:
             os.environ.setdefault(variable, str(threads_per_worker))
-        attempts = {single_case_args.case_dir: 0 for single_case_args in case_args}
-        pending = case_args
-        while pending:
-            retry = []
-            # "spawn" so that every worker initializes CUDA on its own
-            with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as executor:
-                futures = {executor.submit(_process_single_case, single_case_args, workers): single_case_args for single_case_args in pending}
-                for future in as_completed(futures):
-                    case_dir = futures[future].case_dir
-                    try:
-                        results[case_dir] = future.result()
-                    except BrokenProcessPool as e:
-                        # A worker died and took the pool with it: every unfinished case ends up here
-                        attempts[case_dir] += 1
-                        if attempts[case_dir] < MAX_ATTEMPTS_PER_CASE:
-                            retry.append(futures[future])
-                        else:
-                            print(f"Error processing {case_dir}: {e}")
-                            results[case_dir] = f"error: {e}"
-                    except Exception as e:
-                        print(f"Error processing {case_dir}: {e}")
-                        results[case_dir] = f"error: {e}"
-            if retry:
-                print(f"A worker process died, restarting the pool for {len(retry)} unfinished case(s)")
-            pending = retry
+        crashed = []
+        # "spawn" so that every worker initializes CUDA on its own
+        with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as executor:
+            futures = {executor.submit(process_single_case, single_case_args, workers): single_case_args for single_case_args in case_args}
+            for future in as_completed(futures):
+                try:
+                    results[futures[future].case_dir] = future.result()
+                except BrokenProcessPool:
+                    # A worker died and took the pool with it: every unfinished case ends up here, not only the culprit
+                    crashed.append(futures[future])
+                except Exception as e:
+                    print(f"Error processing {futures[future].case_dir}: {e}")
+                    results[futures[future].case_dir] = f"error: {e}"
+        if crashed:
+            print(f"A worker process died, running the {len(crashed)} unfinished case(s) one at a time to isolate it")
+        for single_case_args in crashed:
+            # One case per pool, so a crash can only be attributed to the case that caused it
+            with ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn")) as executor:
+                try:
+                    results[single_case_args.case_dir] = executor.submit(process_single_case, single_case_args, workers).result()
+                except Exception as e:
+                    print(f"Error processing {single_case_args.case_dir}: {e}")
+                    results[single_case_args.case_dir] = f"error: {e}"
 
     n_failed = sum(isinstance(result, str) for result in results.values())
     print(f"Finished {len(results) - n_failed} of {len(results)} cases ({n_failed} failed)")

@@ -146,7 +146,7 @@ python -m unittest discover -s tests -v -p test_feature_geometry.py   # one modu
 python -u -m unittest discover -s tests -v                        # everything (GPU + weights + fixtures)
 ```
 
-- `@slow` (from `tests/helpers.py`) marks anything that runs model inference or VMTK. Full-mode centerline
+- `@slow` (from `tests/helpers.py`) marks anything that runs model inference or VMTK, or is otherwise CPU-heavy. Full-mode centerline
   tests take ~40 min.
 - Subclass `helpers.ArterialTestCase`: it gives each test a fresh temp `case_dir`. Use
   `require_fixture(...)` (skips if the fixture is missing) and `stage_fixture(...)` (copies a fixture in as if

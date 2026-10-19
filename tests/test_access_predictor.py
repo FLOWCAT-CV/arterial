@@ -3,6 +3,7 @@
 
 import os
 import json
+from unittest import mock
 
 from helpers import ArterialTestCase, slow
 from arterial.access_prediction.access_predictor import AccessPredictor
@@ -102,3 +103,23 @@ class TestAccessPredictorPipeline(AccessPredictorTestCase):
                     with open(os.path.join(out, "access_prediction.json")) as handle:
                         saved = json.load(handle)
                     self.assertAlmostEqual(float(saved["mean"]), float(prediction["mean"]), places=6)
+
+    def test_predictions_are_saved_when_preprocessing_was_not(self):
+        self.predictor.preprocess_supersegments(save=False)
+        with mock.patch("arterial.access_prediction.access_predictor.perform_inference", return_value=(0.5, 0.1)):
+            self.predictor.predict_accessibility(return_attention_map=False, save=True)
+        for access in ACCESS:
+            for side in SIDE:
+                with open(os.path.join(self.output_dir(access, side), "access_prediction.json")) as handle:
+                    self.assertEqual(json.load(handle), {"mean": 0.5, "std": 0.1})
+
+    @slow
+    def test_predict_accessibility_without_attention(self):
+        self.predictor.predict_accessibility(return_attention_map=False, save=False)
+        for access in ACCESS:
+            for side in SIDE:
+                with self.subTest(access=access, side=side):
+                    prediction = self.predictor.predictions_dict[(access, side)]
+                    self.assertGreaterEqual(float(prediction["mean"]), 0.0)
+                    self.assertLessEqual(float(prediction["mean"]), 1.0)
+                    self.assertNotIn((access, side), self.predictor.attention_maps_dict)

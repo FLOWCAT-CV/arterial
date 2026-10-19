@@ -162,19 +162,10 @@ def convert_to_orientation(nifti, reference_ornt = ("R", "A", "S")):
         return nifti
     else:
         print("Converting orientation from {} to {}".format(nifti_ornt, reference_ornt))
-        data = nifti.get_fdata()
-        affine = nifti.affine
-        # Get orientation transform from axcodes
-        ornt = nib.orientations.axcodes2ornt(reference_ornt)
-        # Apply orientation transform to array
-        data = nib.orientations.apply_orientation(data, ornt)
-        # Update affine matrix
-        for idx in range(len(nifti_ornt)):
-            if nifti_ornt[idx] != reference_ornt[idx]:
-                affine[idx, 3] = affine[idx, 3] + affine[idx, idx] * (data.shape[idx] - 1)
-                affine[idx, idx] = -affine[idx, idx]
-
-        reoriented_nifti = nib.Nifti1Image(data, affine=affine)
+        # Transform from the current orientation to the reference one (axcodes2ornt alone is relative to RAS)
+        ornt = nib.orientations.ornt_transform(nib.orientations.io_orientation(nifti.affine), nib.orientations.axcodes2ornt(reference_ornt))
+        # Reorients data and affine together, without modifying the input image
+        reoriented_nifti = nifti.as_reoriented(ornt)
 
         return reoriented_nifti
 

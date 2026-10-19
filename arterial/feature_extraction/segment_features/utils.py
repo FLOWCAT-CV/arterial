@@ -526,7 +526,7 @@ def get_single_segment(local_graph, identifier, identifier_type = "vessel_type",
                         # Add node to source nodes
                         source_nodes = [node]
                         # Add hierarchy value to graph node
-                        graph.nodes[start_node]["hierarchy {}".format(access)] = hierarchy
+                        graph.nodes[node]["hierarchy {}".format(access)] = hierarchy
                         # Update hierarchy index
                         hierarchy += 1
                         break

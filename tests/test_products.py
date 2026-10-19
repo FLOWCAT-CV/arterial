@@ -14,9 +14,10 @@ import shutil
 
 import numpy as np
 import nibabel as nib
+import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 
-from helpers import ArterialTestCase, fixture, slow
+from helpers import ArterialTestCase, fixture, slow, ras_bounding_box
 from arterial.io.load_and_save_operations import load_pickle, load_json, load_vtkpolydata
 from arterial.centerline_extraction.postprocessing.branch_and_clipped_model_extraction import unify_branch_models
 from arterial.feature_extraction.feature_extractor import FeatureExtractor
@@ -38,6 +39,12 @@ class ProductsTestCase(ArterialTestCase):
             self.skipTest("derived fixtures missing; run tests/make_derived_fixtures.py")
         shutil.copytree(DERIVED, self.mode_dir)
         self.cta_nifti_path = self.require_fixture("cta.nii.gz")
+        # The products must come from the input CTA; otherwise every test here runs on misplaced anatomy
+        lower, upper = ras_bounding_box(nib.load(self.cta_nifti_path))
+        bounds = np.array(load_vtkpolydata(self.product("branch_model.vtk")).GetBounds()).reshape(3, 2)
+        if np.any(bounds[:, 0] < lower - 5) or np.any(bounds[:, 1] > upper + 5):
+            self.fail("derived fixtures do not match tests/test_data/input_test_data/cta.nii.gz; "
+                      "regenerate them with `python tests/make_derived_fixtures.py --force`")
 
     def product(self, *parts):
         return os.path.join(self.mode_dir, *parts)
@@ -51,8 +58,12 @@ class TestBranchModels(ProductsTestCase):
 
     def test_unify_several_branch_models(self):
         paths = sorted(glob.glob(self.product("branch_models", "branch_model_*.vtk")))
-        self.assertGreaterEqual(len(paths), 2, "the fixture case should yield several islands")
+        self.assertGreaterEqual(len(paths), 1)
         models = [load_vtkpolydata(p) for p in paths]
+        if len(models) == 1:
+            # The fixture case may yield a single island; unify it with a copy to exercise the merge
+            copy = vtk.vtkPolyData(); copy.DeepCopy(models[0])
+            models.append(copy)
         unified = unify_branch_models(models, radius_array_name="MaximumInscribedSphereRadius")
         self.assertEqual(unified.GetNumberOfPoints(), sum(m.GetNumberOfPoints() for m in models))
         self.assertEqual(unified.GetNumberOfCells(), sum(m.GetNumberOfCells() for m in models))
@@ -96,6 +107,10 @@ class TestVesselGeometryExport(ProductsTestCase):
         radius_ce = vtk_to_numpy(out.GetPointData().GetArray("Radius CE"))
         self.assertTrue(np.all(np.isfinite(radius_ce)))
         self.assertTrue(np.all((radius_ce > 0.3) & (radius_ce < 10.0)), f"implausible ICA radii: {radius_ce.min()} .. {radius_ce.max()}")
+        # Cross-sections that miss the surface fall back to the inscribed-sphere radius: most must be real
+        radius_mis = vtk_to_numpy(out.GetPointData().GetArray("MaximumInscribedSphereRadius"))
+        self.assertGreater(np.mean(radius_ce != radius_mis), 0.9, "most cross-sections fell back to the inscribed-sphere radius")
+        self.assertTrue(0.7 < np.median(radius_ce / radius_mis) < 1.5)
         distance = vtk_to_numpy(out.GetPointData().GetArray("Distance from origin"))
         self.assertTrue(np.all(np.diff(distance) >= 0))
 
@@ -111,6 +126,7 @@ class TestVesselGeometryExport(ProductsTestCase):
                     self.assertEqual(out.GetPointData().GetArray(name).GetNumberOfTuples(), n, name)
                 bulb = vtk_to_numpy(out.GetPointData().GetArray("BulbMask"))
                 self.assertTrue(set(np.unique(bulb).tolist()) <= {0, 1})
+                self.assertGreater(bulb.sum(), 0, "the carotid bulb of the fixture case should be found")
         landmark = extractor._resolve_bulb_landmark("LCA")
         self.assertIsNotNone(landmark)
         self.assertEqual(len(landmark), 3)
@@ -126,6 +142,10 @@ class TestVesselGeometryExport(ProductsTestCase):
         intracranial = vtk_to_numpy(out.GetPointData().GetArray("Intracranial"))
         self.assertEqual(len(intracranial), centerline.GetNumberOfPoints())
         self.assertTrue(set(np.unique(intracranial).tolist()) <= {0, 1})
+        # The ICA starts in the neck and enters the skull once
+        self.assertEqual(intracranial[0], 0)
+        self.assertEqual(intracranial[-1], 1)
+        self.assertTrue(np.all(np.diff(intracranial) >= 0), "the ICA should cross into the skull once")
 
 
 class TestIndividualCenterlines(ProductsTestCase):
@@ -138,7 +158,7 @@ class TestIndividualCenterlines(ProductsTestCase):
         self.assertGreater(graph.number_of_nodes(), 5)
         self.assertEqual(graph.number_of_edges(), graph.number_of_nodes() - 1, "an individual centerline is a chain")
         self.assertIn("pos", graph.nodes[next(iter(graph))])
-        self.assertIsInstance(centerline_sanity_check(model, np.asarray(cta.dataobj), cta.affine), (bool, np.bool_))
+        self.assertTrue(centerline_sanity_check(model, np.asarray(cta.dataobj), cta.affine))
 
     @slow
     def test_featurize_individual_centerline(self):
@@ -159,4 +179,7 @@ class TestLandmarkRefinement(ProductsTestCase):
         for name in landmarks:
             displacement = np.linalg.norm(np.asarray(refined[name], float) - np.asarray(landmarks[name], float))
             self.assertLessEqual(displacement, 5.0 + 1e-6, f"{name} moved {displacement:.1f} mm")
-        self.assertIsInstance(stats, dict)
+        # Refined landmarks stay inside the segmented volume
+        lower, upper = ras_bounding_box(segmentation)
+        for name in refined:
+            self.assertTrue(np.all(np.asarray(refined[name], float) >= lower) and np.all(np.asarray(refined[name], float) <= upper), name)

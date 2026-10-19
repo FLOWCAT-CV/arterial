@@ -135,6 +135,8 @@ class VesselSegmenter():
         if self.cta_array is None or self.cta_affine is None: self._load_cta_nifti_from_file()
 
         print(f"Using {self.num_threads} CPU threads (usable cores {self.usable_cores}, cap {MAX_NUM_THREADS}, source: {self.num_threads_source}), {self.resampling} resampling")
+        # Restored after the segmentation, so the caller's torch setting is not changed
+        previous_num_threads = torch.get_num_threads()
         torch.set_num_threads(self.num_threads)
 
         if self.mode == "extracranial_vessels":
@@ -171,6 +173,7 @@ class VesselSegmenter():
         
         # The models stay loaded for the next case; release the rest of the GPU memory for the next stages
         if torch.cuda.is_available(): torch.cuda.empty_cache()
+        torch.set_num_threads(previous_num_threads)
 
         if save:
             print(f"Saving segmentation to {self.segmentation_nifti_path}")

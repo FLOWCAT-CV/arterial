@@ -41,7 +41,7 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
 
     # Initialize output tensor
     pred_list = []
-    if not return_attention_map: # Assumes model does not return attention maps (model output is only prediction)
+    if not return_attention_map: # The attention weights returned by the model are discarded
         with torch.no_grad():
             for fold in range(5):
                 # Load the trained model for inference
@@ -70,7 +70,8 @@ def perform_inference(preprocessed_supersegment_dict, lpi_corner_coordinates, re
                 # Load model to device
                 model.eval()
                 # Perform inference (probabilities for each fold)
-                out = model(preprocessed_supersegment)
+                # The model returns the prediction and the attention weights
+                out, _ = model(preprocessed_supersegment)
                 pred_list.append(out[0][1].item())
 
         # Get mean and std of the predictions

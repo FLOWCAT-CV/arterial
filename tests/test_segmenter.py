@@ -2,8 +2,10 @@
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 import os
+from unittest import mock
 
 import numpy as np
+import torch
 import nibabel as nib
 
 from helpers import ArterialTestCase, slow
@@ -43,6 +45,22 @@ class TestVesselSegmenterInit(ArterialTestCase):
         segmenter = VesselSegmenter(self.case_dir, self.mode, os.path.join(self.case_dir, "nope.nii.gz"))
         with self.assertRaises(FileNotFoundError):
             segmenter._load_cta_nifti_from_file()
+
+
+class TestVesselSegmenterThreads(ArterialTestCase):
+
+    def test_segmentation_restores_the_callers_torch_threads(self):
+        segmenter = VesselSegmenter(self.case_dir, fast_segmentation=True, num_threads=1)
+        segmenter.cta_array, segmenter.cta_affine = np.zeros((4, 4, 4)), np.eye(4)
+        result = (nib.Nifti1Image(np.zeros((4, 4, 4), np.uint8), np.eye(4)), np.zeros((4, 4, 4), np.uint8), None)
+        previous = torch.get_num_threads()
+        try:
+            torch.set_num_threads(3)
+            with mock.patch("arterial.segmentation.segmenter.perform_single_inference_nnunet", return_value=result):
+                segmenter.segment_vessels_from_cta(save=False)
+            self.assertEqual(torch.get_num_threads(), 3)
+        finally:
+            torch.set_num_threads(previous)
 
 
 class TestVesselSegmenterInference(ArterialTestCase):

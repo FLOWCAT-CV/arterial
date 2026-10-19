@@ -261,6 +261,9 @@ arterial -cd /path/to/case_dir -ss
 arterial -cd /path/to/cases/* -w 2
 ```
 
+The command exits with status 0 when every case was analysed completely and 1 otherwise, so batch scripts and job
+schedulers can detect failures.
+
 ### Python API
 
 ```python
