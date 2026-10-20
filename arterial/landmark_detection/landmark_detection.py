@@ -101,7 +101,12 @@ def infer_landmarks_from_array(cta_array, cta_affine, mode="extracranial_vessels
     else:
         landmarks_labels = ["l-tica", "r-tica", "l-eica", "r-eica", "r-mca", "l-mca"]
     
-    landmarks_ras_mm_dict = {label: tuple(landmarks_ras_mm[i]) for i, label in enumerate(landmarks_labels)}
+    # Landmarks that were not detected (NaN) are left out, so that no stage uses a made-up position
+    missing_labels = [label for i, label in enumerate(landmarks_labels) if np.any(np.isnan(landmarks_ras_mm[i]))]
+    if missing_labels:
+        print(f"Warning: landmarks not detected and left out: {', '.join(missing_labels)}")
+    landmarks_ras_mm_dict = {label: tuple(landmarks_ras_mm[i]) for i, label in enumerate(landmarks_labels) if label not in missing_labels}
+    landmarks_labels = [label for label in landmarks_labels if label not in missing_labels]
 
     # Refine landmarks using segmentation if requested
     if refine_with_segmentation:

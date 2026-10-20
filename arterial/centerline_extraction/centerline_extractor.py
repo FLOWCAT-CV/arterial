@@ -118,6 +118,7 @@ class CenterlineExtractor():
             save_vtkpolydata(self.segmentation_model, self.segmentation_path)
             print(f"Saving segmentation model as STL to {self.segmentation_path_stl}")
             save_vtkpolydata_as_stl(self.segmentation_model, self.segmentation_path_stl)
+            self._remove_numbered_outputs(self.segmentations_dir_path, "segmentation_")
             for idx, segmentation_model in enumerate(self.segmentation_model_list):
                 print(f"Saving segmentation model {idx} to {os.path.join(self.segmentations_dir_path, f'segmentation_{idx}.vtk')}")
                 save_vtkpolydata(segmentation_model, os.path.join(self.segmentations_dir_path, f"segmentation_{idx}.vtk"))
@@ -182,6 +183,9 @@ class CenterlineExtractor():
             self.tidy_up_segmentation_upon_centerline_extraction_failure(idx - number_of_removed_segmentations)
 
         if save:
+            self._remove_numbered_outputs(self.centerlines_dir_path, "centerlines_")
+            self._remove_numbered_outputs(self.networks_dir_path, "network_")
+            self._remove_numbered_outputs(self.endpoints_dir_path, "endpoints_")
             for idx, centerline_model in enumerate(self.centerline_model_list):
                 print(f"Saving centerline model {idx} to {os.path.join(self.centerlines_dir_path, f'centerlines_{idx}.vtk')}")
                 save_vtkpolydata(centerline_model, os.path.join(self.centerlines_dir_path, f"centerlines_{idx}.vtk"))
@@ -210,7 +214,9 @@ class CenterlineExtractor():
         if len(self.centerline_model_list) == 0: 
             self._load_centerline_model_list()
         
-        if save: os.makedirs(self.branch_models_dir_path, exist_ok=True)
+        if save:
+            os.makedirs(self.branch_models_dir_path, exist_ok=True)
+            self._remove_numbered_outputs(self.branch_models_dir_path, "branch_model_")
 
         for idx, centerline_model in enumerate(self.centerline_model_list):
             print(f"Extracting branch model from centerline model {idx}...")
@@ -321,7 +327,11 @@ class CenterlineExtractor():
 
         """
         if self.segmentation_model is None:
-            self.perform_preprocessing(volume_check=False)
+            # Reuse the surface of an earlier centerline extraction, so its files are not overwritten
+            if os.path.isfile(self.segmentation_path):
+                self._load_segmentation()
+            else:
+                self.perform_preprocessing(volume_check=False, save=False)
         if self.segmentation_array is None or self.segmentation_affine is None:
             self._load_segmentation_nifti_from_file()
 
@@ -335,6 +345,13 @@ class CenterlineExtractor():
         if save:
             print(f"Saving individual centerline to {os.path.join(self.individual_centerlines_dir_path, f'individual_centerline_{centerline_id}.vtk')}")
             save_vtkpolydata(individual_centerline, os.path.join(self.individual_centerlines_dir_path, f"individual_centerline_{centerline_id}.vtk"))
+
+    def _remove_numbered_outputs(self, directory, prefix):
+        # Per-island files of an earlier run with more islands would otherwise be loaded with the new ones
+        if os.path.isdir(directory):
+            for name in os.listdir(directory):
+                if name.startswith(prefix) and name[len(prefix):].split(".")[0].isdigit():
+                    os.remove(os.path.join(directory, name))
 
     def _load_segmentation_nifti_from_file(self):
         if not os.path.isfile(self.segmentation_nifti_path): 

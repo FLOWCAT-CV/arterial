@@ -88,7 +88,7 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
             if rica_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_rica:
                 max_hierarchy_rica = rica_segment.nodes[node]["hierarchy femoral"]
                 
-        for hierarchy in range(max_hierarchy_rica):
+        for hierarchy in range(max_hierarchy_rica + 1):
             for node in rica_segment:
                 if rica_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in rcca_segment:
                     rcca_segment.add_node(node)
@@ -127,7 +127,8 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
                     rica_nodes.append(node)
 
             # Remove nodes from the RCCA segment
-            rcca_segment = segments_vessel_type_dict["RCCA"].subgraph(rcca_nodes)
+            # A copy, not a view: views of the same graph share .graph, so the ICA features would overwrite these
+            rcca_segment = segments_vessel_type_dict["RCCA"].subgraph(rcca_nodes).copy()
             # Remove nodes from the RICA segment
             rica_segment = segments_vessel_type_dict["RCCA"].subgraph(rica_nodes)
             # Change vessel type name of the RICA segment
@@ -158,7 +159,7 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
             if lica_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_lica:
                 max_hierarchy_lica = lica_segment.nodes[node]["hierarchy femoral"]
                 
-        for hierarchy in range(max_hierarchy_lica):
+        for hierarchy in range(max_hierarchy_lica + 1):
             for node in lica_segment:
                 if lica_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in lcca_segment:
                     lcca_segment.add_node(node)
@@ -195,7 +196,8 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
                 else:
                     lica_nodes.append(node)
             # Remove nodes from the LCCA segment
-            lcca_segment = segments_vessel_type_dict["LCCA"].subgraph(lcca_nodes)
+            # A copy, not a view: views of the same graph share .graph, so the ICA features would overwrite these
+            lcca_segment = segments_vessel_type_dict["LCCA"].subgraph(lcca_nodes).copy()
             # Remove nodes from the LICA segment
             lica_segment = segments_vessel_type_dict["LCCA"].subgraph(lica_nodes)
             # Change vessel type name of the LICA segment
@@ -232,7 +234,7 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
             if rica_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_rica:
                 max_hierarchy_rica = rica_segment.nodes[node]["hierarchy femoral"]
 
-        for hierarchy in range(max_hierarchy_rcca):
+        for hierarchy in range(max_hierarchy_rcca + 1):
             for node in rcca_segment:
                 if rcca_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
                     bt_segment.add_node(node)
@@ -243,14 +245,14 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
                     previous_node = node
                     break
 
-        for hierarchy in range(max_hierarchy_rica):
+        for hierarchy in range(max_hierarchy_rica + 1):
             for node in rica_segment:
                 if rica_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
                     bt_segment.add_node(node)
                     bt_segment.add_edge(previous_node, node)
                     for key in rica_segment.nodes[node].keys():
                         bt_segment.nodes[node][key] = rica_segment.nodes[node][key]
-                    bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + max_hierarchy_rcca + 1
+                    bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + max_hierarchy_rcca + 2  # after the last CCA node, at max_hierarchy_bt + max_hierarchy_rcca + 1
                     previous_node = node
                     break
                     
@@ -296,7 +298,7 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
                 if lica_segment.nodes[node]["hierarchy femoral"] > max_hierarchy_lica:
                     max_hierarchy_lica = lica_segment.nodes[node]["hierarchy femoral"]
 
-            for hierarchy in range(max_hierarchy_lcca):
+            for hierarchy in range(max_hierarchy_lcca + 1):
                 for node in lcca_segment:
                     if lcca_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
                         bt_segment.add_node(node)
@@ -307,14 +309,14 @@ def get_and_featurize_single_segments_vessel_types(local_graph):
                         previous_node = node
                         break
 
-            for hierarchy in range(max_hierarchy_lica):
+            for hierarchy in range(max_hierarchy_lica + 1):
                 for node in lica_segment:
                     if lica_segment.nodes[node]["hierarchy femoral"] == hierarchy and node not in bt_segment:
                         bt_segment.add_node(node)
                         bt_segment.add_edge(previous_node, node)
                         for key in lica_segment.nodes[node].keys():
                             bt_segment.nodes[node][key] = lica_segment.nodes[node][key]
-                        bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + max_hierarchy_lcca + 1
+                        bt_segment.nodes[node]["hierarchy femoral"] += max_hierarchy_bt + max_hierarchy_lcca + 2  # after the last CCA node, at max_hierarchy_bt + max_hierarchy_lcca + 1
                         previous_node = node
                         break
                         
@@ -877,7 +879,7 @@ def extract_segment_features(segment, use_blanking=True):
     segment.graph["features"]["cumulative_curvature"] = cumulative_curvature(segment, proximal_node_no_blanking)
     segment.graph["features"]["tortuosity_index_5_cm"] = tortuosity_index_first_5_cm(segment, proximal_node)
     segment.graph["features"]["min_polar_angle"] = min_polar_angle(segment)
-    segment.graph["features"]["accumulated_polar_angle_differential"] = accumulated_polar_angle_differential(segment, proximal_node)
+    segment.graph["features"]["accumulated_polar_angle_differential"] = accumulated_polar_angle_differential(segment, proximal_node, distal_node)
     polar, azimuthal = direction_angles(segment, proximal_node, distal_node)
     segment.graph["features"]["polar_angle"] = polar
     segment.graph["features"]["azimuthal_angle"] = azimuthal
@@ -1281,30 +1283,16 @@ def bending_length(segment, proximal_node, distal_node):
         Bending length of a segment.
 
     """
-    # Initialize list and endnodes
     bending_lengths = []
-    # Assign node positions
     proximal_node_pos = segment.nodes[proximal_node]["pos"]
     distal_node_pos = segment.nodes[distal_node]["pos"]
+    # Follow the segment from the proximal to the distal node: with blanking, the proximal node lies inside the
+    # segment, and walking to the first unvisited neighbour can go into the blanked end instead
+    for node in nx.shortest_path(segment, proximal_node, distal_node)[1:]:
+        node_pos = segment.nodes[node]["pos"]
+        if (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos)) > 1e-4:
+            bending_lengths.append(np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(max(0, 1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2)))
 
-    nodes_visited = [proximal_node]
-    node = proximal_node
-    done = False
-    while not done:
-        done = True
-        for neighbor in segment.neighbors(node):
-            if neighbor not in nodes_visited:
-                node_pos = segment.nodes[neighbor]["pos"]
-                # Compute distance from reference axis
-                if (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos)) > 1e-4:
-                    bending_lengths.append(np.linalg.norm(node_pos - proximal_node_pos) * np.sqrt(max(0, 1 - (np.dot(distal_node_pos - proximal_node_pos, node_pos - proximal_node_pos) / (np.linalg.norm(distal_node_pos - proximal_node_pos) * np.linalg.norm(node_pos - proximal_node_pos))) ** 2)))
-                # If a warning is raised, print the values that are causing it
-                nodes_visited.append(node)
-                node = neighbor
-                done = False
-                break
-
-    # Return maxium bending length
     if len(bending_lengths) > 0:
         return np.amax(bending_lengths)
     else:
@@ -1369,38 +1357,28 @@ def min_polar_angle(segment):
 
     return theta
 
-def accumulated_polar_angle_differential(segment, proximal_node):
+def accumulated_polar_angle_differential(segment, proximal_node, distal_node):
     """
-    Computes the accumulated polar angle differential along a segment.
+    Computes the accumulated polar angle differential along a segment, from the proximal to the distal node.
 
     Parameters
     ----------
     segment : networkx.Graph
         Graph of the individual segment.
-    
+    proximal_node : int
+        Proximal node of the segment.
+    distal_node : int
+        Distal node of the segment.
+
     Returns
     -------
     theta : float
         Accumulated polar angle along a segment.
-    """
-    nodes_visited = [proximal_node]
-    node = proximal_node
-    previous_polar_angle = segment.nodes[node]["features femoral"]["direction polar"]
-    accumulate_polar_angle_differential = 0
-    done = False
-    while not done:
-        done = True
-        for neighbor in segment.neighbors(node):
-            if neighbor not in nodes_visited:
-                # Compute distance from reference axis
-                accumulate_polar_angle_differential += np.abs(previous_polar_angle - segment.nodes[neighbor]["features femoral"]["direction polar"])
-                nodes_visited.append(node)
-                node = neighbor
-                previous_polar_angle = segment.nodes[node]["features femoral"]["direction polar"]
-                done = False
-                break
 
-    return accumulate_polar_angle_differential
+    """
+    # Along the path to the distal node (see bending_length for why not the first unvisited neighbour)
+    polar_angles = [segment.nodes[node]["features femoral"]["direction polar"] for node in nx.shortest_path(segment, proximal_node, distal_node)]
+    return float(np.sum(np.abs(np.diff(polar_angles))))
 
 def direction_angles(segment, proximal_node, distal_node):
     """

@@ -387,6 +387,9 @@ def join_head_and_neck_segmentations(cta_array, cta_affine, segmentation_head_ar
             Dice coefficient.
 
         """
+        # Two empty slices agree perfectly (0 / 0 would be NaN, which np.argmax would pick before any real overlap)
+        if a.sum() + b.sum() == 0:
+            return 1.0
         return 2 * np.logical_and(a, b).sum() / (a.sum() + b.sum())
     cta_shape = cta_array.shape
     

@@ -211,8 +211,10 @@ class CenterlineComputationLogic(object):
 
         endpoints_vtk = robust_endpoint_relocation(endpoints_vtk, segmentation_array, segmentation_affine, window_size=15, larger_window_for_aa_startpoint=False)
 
-        source_point = endpoints[0]
-        target_points = endpoints[1:]
+        endpoints_used = keep_or_relocate_endpoints(endpoints, endpoints_vtk, segmentation_array, segmentation_affine)
+
+        source_point = endpoints_used[0]
+        target_points = endpoints_used[1:]
 
         # Create the source_id_list and target_id_list for the actual centerline computation
         source_id_list = vtk.vtkIdList()
@@ -615,26 +617,9 @@ def build_endpoints_json(endpoint_list, segmentation_affine, endpoint_labels=Non
         The JSON-serializable dict with the endpoints.
 
     """
-    # For some reason, in order to visualize the endpoints in Slicer correctly and in the right orientation, 
-    # we need to invert the coordinate system for the first two axes. I believe this may have something to do
-    # with how nibabel reads the orientation of the nifti file compared to sitk
-    coordinate_system = ''.join(str(axis) for axis in nib.orientations.aff2axcodes(segmentation_affine))
-    if "R" in coordinate_system:
-        sign_r = -1
-        coordinate_system = coordinate_system.replace("R", "L")
-    else:
-        sign_r = 1
-        coordinate_system = coordinate_system.replace("L", "R")
-    if "A" in coordinate_system:
-        sign_a = -1
-        coordinate_system = coordinate_system.replace("A", "P")
-    else:
-        sign_a = 1
-        coordinate_system = coordinate_system.replace("P", "A")
-    if "S" in coordinate_system:
-        sign_s = 1
-    else:
-        sign_s = -1
+    # The positions are nibabel world coordinates, which are always RAS whatever the voxel orientation,
+    # so they are labelled RAS (the voxel axcodes are not a valid Slicer coordinate system in general)
+    coordinate_system = "RAS"
 
     endpoints_json = {
         "@schema": "https://raw.githubusercontent.com/slicer/slicer/master/Modules/Loadable/Markups/Resources/Schema/markups-schema-v1.0.3.json#",
@@ -706,7 +691,7 @@ def build_endpoints_json(endpoint_list, segmentation_affine, endpoint_labels=Non
                 "description": "",
                 "associatedNodeID": "",
                 "position": list(endpoint),
-                "orientation": [float(sign_r), -0.0, -0.0, -0.0, float(sign_a), -0.0, 0.0, 0.0, float(sign_s)],
+                "orientation": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
                 "selected": True,
                 "locked": False,
                 "visibility": True,
@@ -788,6 +773,35 @@ def volume_sanity_check(segmentation_array, segmentation_affine, mode="extracran
         if segmentation_volume < 1e3: # Arbitrary
             raise ValueError("Segmentation volume is too small: {:.2f} mm3".format(segmentation_volume))
 
+def keep_or_relocate_endpoints(endpoints, relocated_vtk_points, segmentation_array, segmentation_affine):
+    """
+    Keeps the endpoints that lie inside the segmentation and replaces the others by their relocated position.
+
+    Parameters
+    ----------
+    endpoints : list of array-like
+        Endpoints in RAS coordinates.
+    relocated_vtk_points : vtkPoints
+        The same endpoints after robust_endpoint_relocation, in the same order.
+    segmentation_array : numpy.array
+        Binary segmentation array.
+    segmentation_affine : numpy.array
+        Affine matrix of the segmentation (voxel to RAS).
+
+    Returns
+    -------
+    endpoints_used : list of tuple
+        Endpoints to compute the centerline with.
+
+    """
+    affine_inv = np.linalg.inv(segmentation_affine)
+    endpoints_used = []
+    for idx, point in enumerate(endpoints):
+        ijk = np.round(affine_inv @ np.append(point, 1.0))[:3].astype(int)
+        inside = np.all(ijk >= 0) and np.all(ijk < segmentation_array.shape) and segmentation_array[tuple(ijk)] > 0
+        endpoints_used.append(tuple(point) if inside else relocated_vtk_points.GetPoint(idx))
+    return endpoints_used
+
 def robust_endpoint_relocation(endpoint_vtk_points, segmentation_array, segmentation_affine, window_size = 5, larger_window_for_aa_startpoint=False):
     """
     Relocates automatically detected endpoints to the center of mass of the closest component
@@ -861,8 +875,10 @@ def robust_endpoint_relocation(endpoint_vtk_points, segmentation_array, segmenta
                         # Invert the mask to compute the distance transform
                         inverted_label_mask = label_mask_unique_label == 0
                         distances[idx_unique_label, :] = ndimage.distance_transform_edt(inverted_label_mask, return_distances=True, return_indices=False)
-                    # Now collect the distances at the center of the region of interest
-                    distances = distances[:, distances.shape[1] // 2, distances.shape[2] // 2, distances.shape[3] // 2]
+                    # Now collect the distances at the endpoint, which is not the centre of the region of interest
+                    # when the region is clipped at the volume boundary
+                    reference = np.clip([i - i_min, j - j_min, k - k_min], 0, np.array(label_mask.shape) - 1)
+                    distances = distances[:, reference[0], reference[1], reference[2]]
                     # Select the nearest label (that with the lowest value in the distance map)
                     nearest_label = unique_labels[np.argmin(distances)]
                     properties = measure.regionprops((label_mask == nearest_label).astype(int))

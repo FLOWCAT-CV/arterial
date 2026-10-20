@@ -158,10 +158,8 @@ class TestCrossSections(ArterialTestCase):
         np.testing.assert_allclose(vtk_to_numpy(out.GetPointData().GetArray("Radius CE")), 1.7)
         np.testing.assert_allclose(vtk_to_numpy(out.GetPointData().GetArray("Ovality")), 1.0)
 
-    @unittest.expectedFailure
     def test_point_outside_the_surface_falls_back_to_the_inscribed_sphere(self):
-        # Known weakness: the closest region anywhere on the cutting plane is accepted, so a centerline point
-        # 10 mm outside the vessel still gets the vessel's radius instead of falling back
+        # The closest region on the cutting plane belongs to a vessel 10 mm away: it must not be used
         surface = cylinder(radius=2.0)
         outside = with_frenet(polyline([[12, 0, z] for z in np.linspace(-5, 5, 6)]))
         geo.add_point_array(outside, np.full(6, 1.7), "MaximumInscribedSphereRadius")

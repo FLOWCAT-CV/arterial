@@ -94,9 +94,11 @@ def preprocess_segmentation_for_centerline_extraction(segmentation_array, segmen
     # For fast segmentation processing, we remove the upper 10% of the segmentation bonding box voxels. This typically simplifies endpoint extraction 
     # and centerline tracing 
     if fast_segmentation:
-        _, max_is, _, _, _, _ = get_bounding_box_limits_3d(segmentation_array)
+        min_is, max_is, _, _, _, _ = get_bounding_box_limits_3d(segmentation_array)
+        # 90% of the way up the bounding box, not 90% of its top index (that cuts more when the box starts above slice 0)
+        cut_is = int(np.round(min_is + 0.9 * (max_is - min_is)))
         for idx, segmentation_array_ in enumerate(segmentation_array_list):
-            segmentation_array_list[idx][int(np.round(max_is * 0.9)):, :, :] = 0
+            segmentation_array_list[idx][cut_is:, :, :] = 0
     
     print("Number of islands found:", len(segmentation_array_list))
     segmentation_model_list = []

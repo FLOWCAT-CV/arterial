@@ -176,6 +176,20 @@ class TestSegmentFeatures(unittest.TestCase):
         bowed = segment_graph([(0, 0, 0), (1, 2, 0), (2, 0, 0)])
         self.assertAlmostEqual(segment_utils.bending_length(bowed, 0, 2), 2.0)
 
+    def test_bending_length_and_polar_differential_follow_the_segment_from_a_blanked_start(self):
+        # A bowed segment whose first three nodes are blanked: the walk must go distally from node 3, not back to 2
+        angles = np.linspace(0, np.pi, 20)
+        positions = [(10 * np.cos(a), 10 * np.sin(a), 0.0) for a in angles]
+        graph = segment_graph(positions, blanking=[1, 1, 1] + [0] * 17)
+        for idx in graph:
+            graph.nodes[idx]["features femoral"]["direction polar"] = 0.1 * idx
+        proximal, distal = segment_utils.find_proximal_node(graph), segment_utils.find_distal_node(graph)
+        self.assertEqual((proximal, distal), (3, 19))
+        axis = np.asarray(positions[19]) - np.asarray(positions[3])
+        expected = max(np.linalg.norm(np.cross(np.asarray(positions[i]) - np.asarray(positions[3]), axis)) / np.linalg.norm(axis) for i in range(4, 20))
+        self.assertAlmostEqual(segment_utils.bending_length(graph, proximal, distal), expected)
+        self.assertAlmostEqual(segment_utils.accumulated_polar_angle_differential(graph, proximal, distal), 0.1 * 16)
+
     def test_partial_segment_and_curvature_sums(self):
         positions = [(float(i), 0, 0) for i in range(12)]
         graph = segment_graph(positions, curvature=[0.5] * 12)

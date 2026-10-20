@@ -54,6 +54,23 @@ class TestMirrorCorrection(unittest.TestCase):
         self.assertEqual(log, {})
 
 
+    def test_missing_mca_is_replaced_by_the_mirrored_one(self):
+        centroids = self.healthy()
+        centroids[5] = np.nan  # l-mca not detected
+        corrected, log = lm_utils._apply_mca_mirror_correction(centroids.copy())
+        np.testing.assert_allclose(corrected[5], centroids[4] * [-1, 1, 1])
+        self.assertEqual(log, {"l-mca": {"displacement_mm": None}})
+
+    def test_missing_tica_is_left_out_of_the_midplane(self):
+        centroids = self.healthy()
+        centroids[1] = np.nan  # r-tica not detected: the r-mca distance is unknown and the l-mca is healthy
+        corrected, log = lm_utils._apply_mca_mirror_correction(centroids.copy())
+        self.assertTrue(np.all(np.isnan(corrected[1])), "a missing landmark must stay missing")
+        midplane = np.mean(centroids[[0, 2, 3], 0])
+        np.testing.assert_allclose(corrected[4], [2 * midplane - centroids[5, 0], 0, 0])
+        self.assertIn("r-mca", log)
+
+
 class TestPostprocessPreds(unittest.TestCase):
 
     def test_centroids_and_mask_from_synthetic_logits(self):
@@ -73,13 +90,20 @@ class TestPostprocessPreds(unittest.TestCase):
         self.assertEqual(int(mask[4, 4, 4]), 1)
         self.assertEqual(int(mask[20, 21, 4]), 5)
 
-    def test_missing_landmark_class_is_reported(self):
-        preds = torch.full((1, 7, 8, 8, 8), -5.0)
-        preds[0, 1:6, 3:5, 3:5, 3:5] = 5.0  # class 6 is never predicted
+    def test_missing_landmark_class_is_reported_and_not_placed_at_the_corner(self):
+        depth, height, width = 20, 24, 28
+        preds = torch.full((1, 7, depth, height, width), -5.0)
+        centres = {1: (4, 4, 4), 2: (4, 20, 4), 3: (4, 4, 12), 4: (4, 20, 12), 5: (4, 20, 21)}  # class 6 (l-mca) is never predicted
+        for label, (d, h, w) in centres.items():
+            preds[0, label, d - 1:d + 2, h - 1:h + 2, w - 1:w + 2] = 5.0
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            lm_utils.postprocess_preds(preds, np.eye(4))
+            centroids, _ = lm_utils.postprocess_preds(preds, np.eye(4))
         self.assertIn("landmark class 6 was not detected", output.getvalue())
+        self.assertFalse(np.allclose(centroids[5], 0), "a missed landmark must not become the volume corner")
+        # The healthy r-mca is mirrored across the midplane instead
+        midplane = np.mean(centroids[:4, 0])
+        np.testing.assert_allclose(centroids[5], [2 * midplane - centroids[4, 0], centroids[4, 1], centroids[4, 2]], atol=1e-4)
 
     def test_no_mask_when_not_requested(self):
         preds = torch.full((1, 7, 8, 8, 8), -5.0)
@@ -96,3 +120,23 @@ class TestModel(unittest.TestCase):
         with torch.no_grad():
             out = model(torch.randn(1, 2, 16, 16, 16))
         self.assertEqual(tuple(out.shape), (1, 7, 16, 16, 16))
+
+
+class TestRefinement(unittest.TestCase):
+
+    def test_nearest_centerline_point_is_measured_in_millimetres(self):
+        # 0.5 x 0.5 x 2 mm voxels: 3 voxels away in z is 6 mm, 4 voxels away in x is 2 mm
+        affine = np.diag([0.5, 0.5, 2.0, 1.0])
+        refiner = lm_utils._LandmarkRefiner({}, np.zeros((10, 10, 10), np.uint8), affine)
+        refiner._centerline_points = np.array([[5, 5, 8], [9, 5, 5]])
+        refined, distance = refiner._snap_to_centerline(np.array([5.0, 5.0, 5.0]), search_radius_mm=5.0)
+        np.testing.assert_array_equal(refined, [9, 5, 5])
+        self.assertAlmostEqual(distance, 2.0)
+
+    def test_points_beyond_the_search_radius_in_millimetres_are_not_snapped(self):
+        affine = np.diag([0.5, 0.5, 2.0, 1.0])
+        refiner = lm_utils._LandmarkRefiner({}, np.zeros((10, 10, 10), np.uint8), affine)
+        refiner._centerline_points = np.array([[5, 5, 8]])  # 6 mm away
+        refined, distance = refiner._snap_to_centerline(np.array([5.0, 5.0, 5.0]), search_radius_mm=5.0)
+        np.testing.assert_array_equal(refined, [5.0, 5.0, 5.0])
+        self.assertEqual(distance, 0.0)
