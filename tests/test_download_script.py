@@ -20,7 +20,7 @@ from helpers import ArterialTestCase
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(REPO_ROOT, "download_models.sh")
-ARCHIVE = "arterial-models-v1.tar.gz"
+ARCHIVE = "arterial-models-v2.tar.gz"
 
 REQUIRED_FILES = [
     "access_prediction/dataset.json",
@@ -34,9 +34,11 @@ REQUIRED_FILES = [
     "segmentation/totalsegmentator_mandible/NOTICE",
     "vessel_labelling/extracranial_vessels/dataset.json",
     "vessel_labelling/extracranial_vessels/model_weights.pth",
+    "vessel_labelling/extracranial_vessels_resgat/dataset.json",
+    "vessel_labelling/extracranial_vessels_resgat/model_weights.pth",
 ]
 EXTRA_CHECKPOINTS = [f"access_prediction/fold_{i}/model_weights.pth" for i in range(1, 5)] + \
-    [f"vessel_labelling/extracranial_vessels/fold_{i}/model_weights.pth" for i in range(5)] + \
+    [f"vessel_labelling/{d}/fold_{i}/model_weights.pth" for d in ("extracranial_vessels", "extracranial_vessels_resgat") for i in range(5)] + \
     ["segmentation/extracranial_vessels/nnUNetTrainer__nnUNetPlans__3d_lowres/fold_0/checkpoint_final.pth",
      "segmentation/extracranial_vessels/nnUNetTrainer__nnUNetPlans__3d_lowres/fold_all/checkpoint_final.pth",
      "segmentation/intracranial_vessels/nnUNetTrainer__nnUNetPlans__3d_fullres/fold_0/checkpoint_final.pth",
@@ -124,7 +126,7 @@ class TestDownloadScript(ArterialTestCase):
             result = self.run_script(site)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Checksum OK.", result.stdout)
-        self.assertIn("checkpoints found: 18 (expected 18)", result.stdout)
+        self.assertIn("checkpoints found: 24 (expected 24)", result.stdout)
         for name in REQUIRED_FILES:
             self.assertFileExists(os.path.join(self.dest, name))
         self.assertFileMissing(os.path.join(self.home, ".bashrc"))
@@ -162,12 +164,12 @@ class TestDownloadScript(ArterialTestCase):
         with FakeZenodo({ARCHIVE: archive, ARCHIVE + ".sha256": sha}) as site:
             result = self.run_script(site)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("checkpoints found: 18 (expected 18)", result.stdout)
+        self.assertIn("checkpoints found: 24 (expected 24)", result.stdout)
         leftovers = [os.path.join(root, f) for root, _, fs in os.walk(self.dest) for f in fs if f.startswith("._")]
         self.assertEqual(leftovers, [])
 
     def test_incomplete_archive_fails_verification(self):
-        archive = build_archive(REQUIRED_FILES)  # 4 checkpoints instead of 18
+        archive = build_archive(REQUIRED_FILES)  # 5 checkpoints instead of 24
         sha = (hashlib.sha256(archive).hexdigest() + "  " + ARCHIVE + "\n").encode()
         with FakeZenodo({ARCHIVE: archive, ARCHIVE + ".sha256": sha}) as site:
             result = self.run_script(site)
@@ -185,7 +187,7 @@ class TestDownloadScript(ArterialTestCase):
         helptext = subprocess.run(["bash", SCRIPT, "--help"], capture_output=True, text=True, env=env, timeout=60)
         self.assertEqual(helptext.returncode, 0)
         self.assertIn("--site", helptext.stdout)
-        self.assertIn("22694951", helptext.stdout)
+        self.assertIn("23488527", helptext.stdout)
 
     def test_persist_writes_one_marked_block_and_is_idempotent(self):
         rc = os.path.join(self.home, ".bashrc")

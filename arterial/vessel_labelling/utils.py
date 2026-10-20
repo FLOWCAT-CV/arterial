@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from torch_geometric.data import Data, InMemoryDataset
+from torch_geometric.transforms import RadiusGraph, ToUndirected
 
 from arterial import model_registry
 from arterial.io.load_and_save_operations import load_json
@@ -43,10 +44,21 @@ class EVCDatasetInference(InMemoryDataset):
         List of processed file names, by default None. If None, all files in processed_dir are used.
     pre_transform : object, optional
         Pre-transform object, by default None. It should input a Data object and output a Data object.
+    model_dir : str, optional
+        Weights directory inside models/vessel_labelling holding dataset.json, by default "extracranial_vessels".
+    position_mode : str, optional
+        None (normalised positions, original weights) or "root_centred": the 9 position features
+        (15-23) are replaced by (raw position - root) / position_scale_mm, with the root from find_root.
+        By default None.
+    position_scale_mm : float, optional
+        Scale of the root-centred positions in mm, by default 100.0.
 
     """
-    def __init__(self, raw_graph, pre_transform = None):
-        dataset_path = model_registry.model_path("vessel_labelling", "extracranial_vessels", "dataset.json")
+    def __init__(self, raw_graph, pre_transform = None, model_dir = "extracranial_vessels", position_mode = None, position_scale_mm = 100.0):
+        if position_mode not in (None, "root_centred"):
+            raise ValueError(f"Unknown position_mode {position_mode}.")
+        self.position_mode, self.position_scale_mm = position_mode, position_scale_mm
+        dataset_path = model_registry.model_path("vessel_labelling", model_dir, "dataset.json")
         if os.path.exists(dataset_path):
             self.dataset_description = load_json(dataset_path)
         else:
@@ -78,8 +90,13 @@ class EVCDatasetInference(InMemoryDataset):
             for n0, n1 in graph_nx.edges:
                 edge_index.append(np.array([n0, n1]))
             data.pos = torch.tensor(np.array(pos), dtype=torch.float32)
-            data.x = self.normalize_edge_features(torch.tensor(np.array(x), dtype=torch.float32))
-            data.edge_index = torch.transpose(torch.tensor(np.array(edge_index), dtype=torch.int64), 1, 0)
+            x_raw = torch.tensor(np.array(x), dtype=torch.float32)
+            data.x = self.normalize_edge_features(x_raw.clone())
+            if self.position_mode == "root_centred":
+                # Proximal / distal bifurcation and mean positions, relative to the aortic arch root
+                data.x[:, 15:24] = (x_raw[:, 15:24] - torch.tensor(find_root(raw_graph), dtype=torch.float32).repeat(3)) / self.position_scale_mm
+            # reshape keeps graphs without topological edges (a single segment) as an empty (2, 0) edge_index
+            data.edge_index = torch.transpose(torch.tensor(np.array(edge_index, dtype=np.int64).reshape(-1, 2), dtype=torch.int64), 1, 0)
             data.num_nodes = len(graph_nx.nodes)
             data.num_edges = len(graph_nx.edges)
             data.cell_ids = torch.tensor(np.array(cell_ids), dtype=torch.int64)
@@ -145,6 +162,25 @@ class EVCDatasetInference(InMemoryDataset):
     def __getitem__(self, idx):
         return self.data_list[idx]
 
+def find_root(graph):
+    """
+    Finds the root of a segments graph without labels: the endpoint (degree-1 node) with the
+    largest radius, i.e. the proximal aortic arch. Same definition as in training (EVC repository).
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph in original form, where edges encode vessels and nodes have "pos" and "radius".
+
+    Returns
+    -------
+    root : numpy.ndarray
+        Position of the root, shape (3,).
+
+    """
+    leaves = [n for n in graph.nodes if graph.degree(n) == 1] or list(graph.nodes)
+    return np.asarray(graph.nodes[max(leaves, key = lambda n: graph.nodes[n]["radius"])]["pos"], float)
+
 def node_transform(graph):
     """
     Applies node transform to networkx graph.
@@ -202,6 +238,39 @@ def node_transform(graph):
         transformed_graph.add_edge(edge[0], edge[1])
 
     return transformed_graph
+
+EDGE_MODES = ["radius_only", "topological"]
+
+def get_edge_transforms(edge_mode = "radius_only"):
+    """
+    Returns the transforms that build the edge_index of a node-form graph.
+
+    Node-form graphs come out of node_transform with topological edges (segments sharing a
+    bifurcation), stored in one direction only. The edge mode must match the one the model
+    was trained with.
+
+    Parameters
+    ----------
+    edge_mode : string, optional
+        One of:
+            - "radius_only": RadiusGraph(r=0.5) replaces the topological edges. Since node
+              positions are in mm and segments are rarely closer than 0.5 mm, almost no edges
+              remain. Edge mode of the legacy weights.
+            - "topological": topological edges made undirected. Edge mode of the default weights.
+        The default is "radius_only".
+
+    Returns
+    -------
+    edge_transforms : list
+        List of torch_geometric transforms.
+
+    """
+    if edge_mode == "radius_only":
+        return [RadiusGraph(r = 0.5, max_num_neighbors = 10)]
+    elif edge_mode == "topological":
+        return [ToUndirected()]
+    else:
+        raise ValueError(f"Unknown edge_mode {edge_mode}. Choose one of {EDGE_MODES}.")
 
 def make_graph_plot(graph, label=None, subplot=None, show=False, output_path=None):
     """

@@ -28,12 +28,12 @@ The vessel labelling module transforms centerline segments into a graph represen
 - **Nodes** represent bifurcation points
 - **Edges** represent vessel segments
 
-A **GATv2** (Graph Attention Network v2) model performs node classification on a transformed version of the graph, assigning anatomical labels to each vessel segment.
+A **ResGAT** (GATv2 graph attention network with a residual connection per layer) performs node classification on a transformed version of the graph, assigning anatomical labels to each vessel segment. Each segment is labelled from its own features and from the segments it is connected to. Performance and the training data are described in the [report](../reports/vessel_labelling_resgat.md).
 
 | Feature | Description |
 |---------|-------------|
 | **14 vessel classes** | Covers major head-and-neck arteries |
-| **Graph Neural Network** | GATv2 architecture for relational learning |
+| **Graph Neural Network** | ResGAT, 8 layers, on the vessel connectivity |
 | **5-fold ensemble** | Improved robustness through model averaging |
 | **24 geometric features** | Rich segment-level feature representation |
 
@@ -80,32 +80,44 @@ Nodes = Vessel segments (with features)
 Edges = Connectivity between adjacent vessels
 ```
 
+### Edge Construction
+
+`node_transform` connects two segments when they share a bifurcation, and the edges are made undirected
+before inference (`get_edge_transforms("topological")` in `arterial/vessel_labelling/utils.py`). Segments
+that meet at one bifurcation form a clique, so sibling vessels (e.g. ICA and ECA) share their neighbourhood.
+The residual connection keeps each segment's own features apart from its neighbours', so siblings can be
+told apart.
+
+Each checkpoint (`model_weights.pth`) records how it was trained, and `load_vessel_labelling_model`
+(in `arterial/vessel_labelling/inference.py`) builds the model and inputs accordingly. All five folds of
+an ensemble must agree:
+
+| Key | Default model | Legacy model |
+|-----|---------------|--------------|
+| `model_class` | `ResGAT` (BatchNorm) | `GAT` (GATv2) |
+| `edge_mode` | `topological` | `radius_only`: `RadiusGraph(r=0.5)`, which leaves almost no edges, so each segment is labelled from its own features |
+| `position_mode` | `root_centred` | none (normalised positions) |
+
 ### Model Architecture
 
 ```
-Input Graph (Node Form)
+Input Graph (Node Form, 24 features per segment)
         │
         ▼
-┌───────────────────┐
-│  GATv2 Layer 1    │  ─── Attention-based message passing
-│  (hidden: 128)    │
-└─────────┬─────────┘
-          │
-          ▼
-┌───────────────────┐
-│  GATv2 Layer 2    │
-│  (hidden: 128)    │
-└─────────┬─────────┘
-          │
-          ▼
-┌───────────────────┐
-│  GATv2 Layer N    │
-│  (out: 14 classes)│
-└─────────┬─────────┘
-          │
-          ▼
-   Class Predictions
-   (per vessel segment)
+┌──────────────────────────────┐
+│  GATv2 conv + linear residual│  ─── Attention over neighbouring segments
+│  BatchNorm, LeakyReLU (64)   │       plus the segment's own features
+└──────────────┬───────────────┘
+               │   × 7 hidden layers
+               ▼
+┌──────────────────────────────┐
+│  GATv2 conv + linear residual│
+│  (out: 14 classes)           │
+└──────────────┬───────────────┘
+               │
+               ▼
+        Class Predictions
+        (per vessel segment)
 ```
 
 ### Ensemble Inference
@@ -254,12 +266,13 @@ labeller.predict_vessel_types(ensemble=True, save=True)
 │    Feature Normalization    │
 │  • Z-score for continuous   │
 │  • Min-max for discrete     │
-│  • Mean-centering for pos   │
+│  • Positions relative to    │
+│    the aortic arch          │
 └──────────────┬──────────────┘
                │
                ▼
 ┌─────────────────────────────┐
-│    GATv2 Inference          │
+│    ResGAT Inference         │
 │  • 5-fold ensemble          │
 │  • Softmax averaging        │
 │  • Argmax prediction        │
@@ -354,6 +367,10 @@ The model uses 24 geometric features per vessel segment:
 | `distal bifurcation position r/a/s` | End point coordinates |
 | `pos r/a/s` | Segment center coordinates |
 
+For the default model the nine position features are expressed relative to the proximal aortic arch
+(`find_root`: the graph endpoint with the largest radius), in units of 100 mm, so they do not depend on where
+the field of view starts. All other features are normalised with the statistics in `dataset.json`.
+
 ---
 
 ## Configuration Options
@@ -378,6 +395,7 @@ The model uses 24 geometric features per vessel segment:
 |-----------|------|---------|-------------|
 | `ensemble` | bool | `True` | Use 5-fold ensemble (recommended) |
 | `save` | bool | `True` | Save predicted graph and visualization |
+| `model_version` | str | `"default"` | `"default"` (ResGAT) or `"legacy"` (the original GATv2 labeller, kept for reproducing earlier results) |
 
 ---
 
@@ -415,6 +433,8 @@ Dataset and visualization utilities:
 |----------------|-------------|
 | `EVCDatasetInference` | PyTorch Geometric dataset for inference |
 | `node_transform()` | Convert edge-form to node-form graph |
+| `get_edge_transforms()` | Edge construction of a model (`topological` or `radius_only`) |
+| `find_root()` | Proximal aortic arch, origin of the root-centred positions |
 | `make_graph_plot()` | Generate matplotlib visualization |
 
 ### `preprocessing/preprocessing.py`
@@ -442,11 +462,12 @@ and live under `<models directory>/vessel_labelling/`:
 
 ```
 <models directory>/vessel_labelling/
-└── extracranial_vessels/
-    ├── dataset.json           # Edge labels and normalisation statistics
-    ├── model_weights.pth      # Single model (ensemble=False)
-    └── fold_{0..4}/
-        └── model_weights.pth  # Five folds for the ensemble (ensemble=True)
+├── extracranial_vessels_resgat/   # Default model (ResGAT)
+│   ├── dataset.json               # Edge labels and normalisation statistics
+│   ├── model_weights.pth          # Single model (ensemble=False): the fold with the best validation score
+│   └── fold_{0..4}/
+│       └── model_weights.pth      # Five folds for the ensemble (ensemble=True)
+└── extracranial_vessels/          # Legacy model (model_version="legacy"), same layout
 ```
 
 Only extracranial vessel labelling is available.

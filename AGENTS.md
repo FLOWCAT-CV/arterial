@@ -33,7 +33,7 @@ tests/                       unittest suite (not a package); fixtures in tests/t
 tutorials/scripts/           runnable example entry points
 tutorials/notebooks/         executed walkthrough notebooks, one per stage, plus arterial_nb.py helpers
 workflows/                   self-contained research pipelines built on the package (scripts + config + README)
-download_models.sh           fetches and verifies the weights from Zenodo (record 22694951)
+download_models.sh           fetches and verifies the weights from Zenodo (record 23488527)
 ```
 
 Each stage follows the same pattern: a class (`<Stage>er`) in `<stage>/<stage>er.py` with thin public
@@ -79,7 +79,7 @@ but is not part of the pipeline). `--cl_dice_nnunet` flips `use_vanilla_nnunet`.
 
 ## Model weights
 
-- `bash download_models.sh` fetches Zenodo record `22694951` (DOI `10.5281/zenodo.22694951`; no account or
+- `bash download_models.sh` fetches Zenodo record `23488527` (DOI `10.5281/zenodo.23488527`; no account or
   token). The archive is ~1.1 GB; the script checks the published SHA256 when available, verifies the 18
   checkpoints and required files, and persists `ARTERIAL_MODELS_DIR` in the shell startup file
   (`--no-persist` to avoid that).

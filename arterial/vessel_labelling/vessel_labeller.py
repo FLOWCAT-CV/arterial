@@ -79,7 +79,7 @@ class VesselLabeller():
             print(f"Saving segments graph plot to {self.segments_graph_plot_path}")
             make_graph_plot(self.segments_graph, label="cell_id", output_path=self.segments_graph_plot_path)
 
-    def predict_vessel_types(self, ensemble=True, save=True):
+    def predict_vessel_types(self, ensemble=True, save=True, model_version="default"):
         """
         This method calls perform_inference to perform inference using a trained GATv2 model
         model over the simple graph generated in preprocessing. Inference with an ensemble of models
@@ -91,6 +91,8 @@ class VesselLabeller():
             Whether to use an ensemble of models. The default is True.
         save : bool, optional  
             Whether to save the predicted graph. The default is True.
+        model_version : string, optional
+            Extracranial model version: "default" (ResGAT) or "legacy" (original GATv2). The default is "default".
 
         Returns
         -------
@@ -106,7 +108,7 @@ class VesselLabeller():
         self.segments_graph_sanity_check()
             
         print("Predicting vessel types...")
-        self.segments_graph_pred = perform_inference(self.segments_graph, self.mode, ensemble)
+        self.segments_graph_pred = perform_inference(self.segments_graph, self.mode, ensemble, model_version)
 
         if save:
             print(f"Saving predicted segments graph to {self.segments_graph_pred_path}")
