@@ -383,7 +383,7 @@ case_dir/
             └── attention_map.pickle / .png / .vtk, attention_map_points.json
 ```
 
-The vessel geometry export (`tutorials/scripts/export_vessel_geometry.py`) adds one VTK file per named vessel and, when the intracranial transition is requested, `cranium_distance_transform.npy`.
+The vessel geometry export (`tutorials/scripts/export_vessel_geometry.py`) adds one VTK file per named vessel and, when the intracranial transition is requested, `cranium_distance_transform_mm.npy`.
 
 ---
 

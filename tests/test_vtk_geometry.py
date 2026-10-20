@@ -7,6 +7,7 @@ vtk_centerline_geometry on synthetic polylines and surfaces with known geometry.
 
 import math
 import unittest
+from unittest import mock
 import os
 
 import numpy as np
@@ -18,6 +19,7 @@ from helpers import ArterialTestCase
 from arterial.io.load_and_save_operations import load_vtkpolydata, save_vtkpolydata
 from arterial.feature_extraction.vtk_centerline_geometry import utils as geo
 from arterial.feature_extraction.vtk_centerline_geometry import feature_extraction as geo_fe
+from arterial.feature_extraction.vtk_centerline_geometry import carotid_analysis as carotid
 
 
 def polyline(coordinates):
@@ -206,3 +208,19 @@ class TestCurvature(ArterialTestCase):
         self.assertEqual(int(np.argmax(ids)), 100)
         with self.assertRaises(ValueError):
             geo_fe.perform_curve_id_extraction(polyline([[0, 0, 0], [0, 0, 1]]))
+
+
+class TestCarotidHelpers(unittest.TestCase):
+
+    def test_cranium_distance_is_in_millimetres(self):
+        cta = np.zeros((10, 10, 20))
+        bone = np.zeros((10, 10, 10), dtype=bool); bone[5, 5, 0] = True  # one bone voxel at the bottom of the upper half
+        with mock.patch.object(carotid, "compute_cranium_mask", return_value=bone):
+            distance = carotid._compute_cranium_distance_transform(cta, np.diag([0.5, 0.5, 2.0, 1.0]), dt_clip_mm=50)
+        self.assertAlmostEqual(distance[5, 5, 14], 8.0)  # 4 voxels of 2 mm above the bone
+        self.assertAlmostEqual(distance[9, 5, 10], 2.0)  # 4 voxels of 0.5 mm beside it
+
+    def test_bulb_span_is_extended_distally(self):
+        diff = np.zeros(12); diff[4:7] = 1.0  # bulb on nodes 4-6; the centerline runs CCA (index 0) to ICA
+        mask = carotid._classify_bulb(diff, 0.5, 2)
+        self.assertEqual(np.flatnonzero(mask).tolist(), [4, 5, 6, 7, 8])

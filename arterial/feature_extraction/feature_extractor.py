@@ -106,7 +106,7 @@ class FeatureExtractor():
         # Cached cranium distance transform for the intracranial-transition detection
         # in `add_carotid_analysis` / `add_intracranial_transition`. Lazily populated.
         self._cranium_distance_transform = None
-        self._cranium_distance_transform_path = os.path.join(self.case_dir, self.mode, "cranium_distance_transform.npy")
+        self._cranium_distance_transform_path = os.path.join(self.case_dir, self.mode, "cranium_distance_transform_mm.npy")
 
     def build_local_graph(self, resample=True, save=True):
         """
@@ -551,8 +551,8 @@ class FeatureExtractor():
             is 0.3, applied on both sides; this differs from the
             ``(0.5, 0.2)`` default of ``perform_carotid_analysis``.
         bulb_expand_nodes : int, optional
-            Symmetric expansion of the bulb span, in nodes per side. The
-            default is 1.
+            Distal extension of the bulb span (toward the ICA), in nodes.
+            The default is 1.
         detect_intracranial : bool, optional
             If True, additionally runs the intracranial-transition detection
             and adds ``Intracranial`` and ``DistanceTransformValueSmoothed``
@@ -635,7 +635,7 @@ class FeatureExtractor():
         and adds the resulting point-data arrays. Thin wrapper around
         ``perform_intracranial_transition_detection`` that owns the cranium-DT
         caching (in-memory on ``self._cranium_distance_transform`` and on
-        disk under ``{case_dir}/{mode}/cranium_distance_transform.npy``) so
+        disk under ``{case_dir}/{mode}/cranium_distance_transform_mm.npy``) so
         repeated calls in the same session — and across sessions — don't
         recompute the EDT.
 
@@ -705,7 +705,7 @@ class FeatureExtractor():
         from arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis import (
             _compute_cranium_distance_transform,
         )
-        distance_transform = _compute_cranium_distance_transform(self.cta_array, dt_clip_mm)
+        distance_transform = _compute_cranium_distance_transform(self.cta_array, self.cta_affine, dt_clip_mm)
         self._cranium_distance_transform = distance_transform
         os.makedirs(os.path.dirname(self._cranium_distance_transform_path), exist_ok=True)
         print(f"Saving cranium distance transform to {self._cranium_distance_transform_path}")
