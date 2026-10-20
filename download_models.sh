@@ -14,10 +14,10 @@
 set -euo pipefail
 
 # Published Zenodo record of the weights. Override with --record <id> or ZENODO_RECORD.
-ZENODO_RECORD="${ZENODO_RECORD:-22694951}"
+ZENODO_RECORD="${ZENODO_RECORD:-23488527}"
 # Point at https://sandbox.zenodo.org to test against a sandbox record.
 ZENODO_SITE="${ZENODO_SITE:-https://zenodo.org}"
-ARCHIVE="arterial-models-v1.tar.gz"
+ARCHIVE="arterial-models-v2.tar.gz"
 PERSIST=1
 
 say()  { printf '%s\n' "$*"; }
@@ -147,14 +147,16 @@ for f in \
     "segmentation/totalsegmentator_mandible/LICENSE" \
     "segmentation/totalsegmentator_mandible/NOTICE" \
     "vessel_labelling/extracranial_vessels/dataset.json" \
-    "vessel_labelling/extracranial_vessels/model_weights.pth" ; do
+    "vessel_labelling/extracranial_vessels/model_weights.pth" \
+    "vessel_labelling/extracranial_vessels_resgat/dataset.json" \
+    "vessel_labelling/extracranial_vessels_resgat/model_weights.pth" ; do
     [ -f "${DEST}/${f}" ] || { say "  missing: $f"; missing=$((missing + 1)); }
 done
 
 n_pth=$(find "$DEST" -name "*.pth" -type f ! -name '._*' | wc -l | tr -d ' ')
-say "  checkpoints found: ${n_pth} (expected 18)"
+say "  checkpoints found: ${n_pth} (expected 24)"
 
-if [ "$missing" -ne 0 ] || [ "$n_pth" -ne 18 ]; then
+if [ "$missing" -ne 0 ] || [ "$n_pth" -ne 24 ]; then
     fail "Verification failed. Delete ${DEST} and run this script again."
 fi
 

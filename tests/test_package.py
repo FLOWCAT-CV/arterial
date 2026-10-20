@@ -48,6 +48,7 @@ class TestModelRegistry(unittest.TestCase):
             self.skipTest(f"models not installed at {models_dir}")
         for parts in [("landmark_detection", "six_landmarks_2ch.pth"), ("access_prediction", "dataset.json"),
                       ("vessel_labelling", "extracranial_vessels", "model_weights.pth"),
+                      ("vessel_labelling", "extracranial_vessels_resgat", "model_weights.pth"),
                       ("segmentation", "totalsegmentator_mandible", "LICENSE"),
                       ("segmentation", "totalsegmentator_mandible", "NOTICE")]:
             with self.subTest(path="/".join(parts)):

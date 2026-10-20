@@ -26,7 +26,7 @@ were downloaded with the weights in the first place. When building a new archive
 they are present before uploading:
 
 ```bash
-tar tzf arterial-models-v1.tar.gz | grep -E 'totalsegmentator_mandible/(LICENSE|NOTICE)'
+tar tzf arterial-models-v2.tar.gz | grep -E 'totalsegmentator_mandible/(LICENSE|NOTICE)'
 ```
 
 The record description (`README.md`) is not part of the nnU-Net layout, so add it to the Zenodo record as a

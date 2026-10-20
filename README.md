@@ -5,7 +5,7 @@
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: PolyForm NC 1.0.0](<https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg>)](LICENSE)
 [![Paper](<https://img.shields.io/badge/paper-CMIG%202023-blue.svg>)](https://doi.org/10.1016/j.compmedimag.2022.102170)
-[![Weights](https://img.shields.io/badge/weights-Zenodo-blue.svg)](https://doi.org/10.5281/zenodo.22694951)
+[![Weights](https://img.shields.io/badge/weights-Zenodo-blue.svg)](https://doi.org/10.5281/zenodo.23488527)
 
 ---
 
@@ -157,7 +157,7 @@ The trained weights are **not** stored in this repository. They are archived on 
 and downloaded by a bundled script. No account, no token and no licence gate: the weights come down
 as a single archive, verified against the published checksum.
 
-> 📦 **[Zenodo record](https://zenodo.org/records/22694951)** — DOI `10.5281/zenodo.22694951`
+> 📦 **[Zenodo record](https://zenodo.org/records/23488527)** — DOI `10.5281/zenodo.23488527`
 
 Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 `segmentation/totalsegmentator_mandible/`, which is redistributed from
@@ -170,7 +170,7 @@ Everything in the archive is an Arterial model under CC BY-NC 4.0 except
 bash download_models.sh
 ```
 
-The script defaults to record `22694951`; pass `--record <id>` for another version. That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
+The script defaults to record `23488527`; pass `--record <id>` for another version. That downloads about 1.1 GB into `$arterial_dir/models`, checks its SHA256 against the published
 one, extracts it, and verifies that every expected checkpoint — and the two Apache-2.0 files —
 arrived.
 
@@ -197,7 +197,7 @@ before running the script, and keep it set so Arterial can find them afterwards:
 
 ```bash
 export ARTERIAL_MODELS_DIR="/data/arterial-models"   # add to ~/.bashrc or ~/.zshrc
-bash download_models.sh --record 22694951
+bash download_models.sh --record 23488527
 ```
 
 `ARTERIAL_MODELS_DIR` always takes precedence over the default location.
@@ -209,12 +209,12 @@ copy the directory across, and point `ARTERIAL_MODELS_DIR` at it:
 
 ```bash
 # on a connected machine
-curl -L -o arterial-models-v1.tar.gz \
-  "https://zenodo.org/records/22694951/files/arterial-models-v1.tar.gz?download=1"
+curl -L -o arterial-models-v2.tar.gz \
+  "https://zenodo.org/records/23488527/files/arterial-models-v2.tar.gz?download=1"
 
 # on the target machine
 mkdir -p /data/arterial-models
-tar xzf arterial-models-v1.tar.gz -C /data/arterial-models
+tar xzf arterial-models-v2.tar.gz -C /data/arterial-models
 export ARTERIAL_MODELS_DIR=/data/arterial-models
 ```
 
