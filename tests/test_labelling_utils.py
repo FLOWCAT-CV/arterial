@@ -1,10 +1,12 @@
 #    Copyright 2022-2026 Vall d'Hebron Research Institute (VHIR) and Universitat de Barcelona (UB), Barcelona, Spain.
 #    SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+import os
 import unittest
 
 import numpy as np
 import networkx as nx
+import torch
 
 from arterial.vessel_labelling.utils import node_transform
 from arterial.vessel_labelling.preprocessing.preprocessing import build_nx_graph_from_segments_array
@@ -58,3 +60,21 @@ class TestGraphFromSegments(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(features)), f"non-finite features: {graph[0][1]['features_dict']}")
         self.assertEqual(graph[0][1]["features_dict"]["direction r"], 0.0)
         self.assertEqual(graph[0][1]["features_dict"]["proximal/distal radius ratio"], 0.0)
+
+
+class TestEdgeFeatureNormalization(unittest.TestCase):
+
+    def test_zero_direction_vectors_do_not_become_nan(self):
+        from arterial import model_registry
+        from arterial.vessel_labelling.utils import EVCDatasetInference
+        try:
+            if not os.path.isfile(model_registry.model_path("vessel_labelling", "extracranial_vessels", "dataset.json")):
+                self.skipTest("vessel labelling dataset.json not installed")
+        except EnvironmentError:
+            self.skipTest("model weights not installed")
+        array = np.empty((3, 2), dtype=object)
+        array[0, 0] = straight((0, 0, 0), (10, 0, 0)); array[0, 1] = np.ones(11)
+        array[1, 0] = straight((10, 0, 0), (10, 10, 0)); array[1, 1] = np.ones(11)
+        array[2, 0] = np.array([[10, 0, 0], [12, 1, 0], [11, 2, 0], [10, 0, 0]], dtype=float); array[2, 1] = np.ones(4)  # closed loop
+        data = EVCDatasetInference(build_nx_graph_from_segments_array(array))[0]
+        self.assertTrue(bool(torch.all(torch.isfinite(data.x))))
