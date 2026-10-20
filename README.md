@@ -36,6 +36,7 @@ The framework processes a single CTA image and outputs a complete vascular analy
 
 ## Updates
 
+- **2026-10-20:** Vessel labelling uses a new model, a ResGAT graph network, that makes 45% fewer errors on held-out test graphs (accuracy 0.965 vs 0.936, macro-F1 0.952 vs 0.918). The previous labeller is still available with `model_version="legacy"`. See the [report](docs/reports/vessel_labelling_resgat.md).
 - **2026-10-18:** Segmentation is 1.6× faster, with near-identical masks (median Dice 0.998). nnU-Net's resampling now runs on the GPU by default (`--resampling torch`). Without a CUDA GPU it falls back to the previous CPU resampling, which `--resampling scipy` also selects. Several cases can run in parallel on one GPU with `--workers`. See the [report](docs/reports/segmentation_speedup.md).
 
 ---
@@ -225,7 +226,7 @@ export ARTERIAL_MODELS_DIR=/data/arterial-models
 ├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
 ├── segmentation/          extracranial_vessels/, intracranial_vessels/,
 │                          totalsegmentator_mandible/  (+ LICENSE, NOTICE — Apache-2.0)
-└── vessel_labelling/      extracranial_vessels/
+└── vessel_labelling/      extracranial_vessels_resgat/ (default), extracranial_vessels/ (legacy)
 ```
 
 All of these are Arterial models under CC BY-NC 4.0 except `segmentation/totalsegmentator_mandible/`,

@@ -133,7 +133,7 @@ export ARTERIAL_MODELS_DIR=/data/arterial-models
 ├── landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
 ├── segmentation/          extracranial_vessels/, intracranial_vessels/,
 │                          totalsegmentator_mandible/  (+ LICENSE, NOTICE — Apache-2.0)
-└── vessel_labelling/      extracranial_vessels/
+└── vessel_labelling/      extracranial_vessels_resgat/ (default), extracranial_vessels/ (legacy)
 ```
 
 Everything here is an Arterial model under CC BY-NC 4.0 except

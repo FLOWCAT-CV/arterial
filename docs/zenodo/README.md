@@ -17,7 +17,7 @@ live in the [GitHub repository](https://github.com/FLOWCAT-CV/arterial).
 | `segmentation/intracranial_vessels/` | Vessel segmentation within the cranial cavity | nnU-Net v2 | CC BY-NC 4.0 |
 | `segmentation/totalsegmentator_mandible/` | Craniofacial structures, used for head/neck splitting | nnU-Net v2 | **Apache-2.0** (third party) |
 | `landmark_detection/` | Anatomical landmark detection at vascular bifurcations | 3D U-Net | CC BY-NC 4.0 |
-| `vessel_labelling/` | Anatomical naming of centerline segments (e.g. LCCA) | Graph neural network | CC BY-NC 4.0 |
+| `vessel_labelling/` | Anatomical naming of centerline segments (e.g. LCCA): `extracranial_vessels_resgat/` (default) and `extracranial_vessels/` (legacy) | Graph neural network (ResGAT; legacy GATv2) | CC BY-NC 4.0 |
 | `access_prediction/` | Catheter accessibility prediction from pathway graphs | ArterialGNet (multi-scale GNN) | CC BY-NC 4.0 |
 
 The segmentation weights account for essentially all of the ~1.1 GB; the graph models are a few MB each.
@@ -39,13 +39,13 @@ expects, and checks the result:
 bash download_models.sh --record 22694951
 ```
 
-Otherwise, download `arterial-models-v1.tar.gz` and `arterial-models-v1.tar.gz.sha256` from this
+Otherwise, download `arterial-models-v2.tar.gz` and `arterial-models-v2.tar.gz.sha256` from this
 record, then verify and extract:
 
 ```bash
-shasum -a 256 -c arterial-models-v1.tar.gz.sha256      # sha256sum -c on Linux
+shasum -a 256 -c arterial-models-v2.tar.gz.sha256      # sha256sum -c on Linux
 mkdir -p arterial-models
-tar xzf arterial-models-v1.tar.gz -C arterial-models
+tar xzf arterial-models-v2.tar.gz -C arterial-models
 ```
 
 ### Telling Arterial where the weights are
@@ -64,7 +64,7 @@ access_prediction/     dataset.json, fold_{0..4}/model_weights.pth
 landmark_detection/    six_landmarks_2ch.pth, six_landmarks_11_7.pth
 segmentation/          extracranial_vessels/, intracranial_vessels/,
                        totalsegmentator_mandible/  (+ LICENSE, NOTICE - Apache-2.0)
-vessel_labelling/      extracranial_vessels/
+vessel_labelling/      extracranial_vessels_resgat/, extracranial_vessels/
 ```
 
 The `segmentation/` subdirectories follow the nnU-Net v2 trained-model folder convention
