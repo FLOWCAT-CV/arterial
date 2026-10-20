@@ -41,6 +41,18 @@ Errors by vessel type (ensemble):
 - The common carotids and the right subclavian were already near-perfect and are unchanged.
 - BA goes from 1 to 2 errors (26 segments).
 
+### Label efficiency
+
+Both models were retrained on nested subsets of each fold's training graphs (5, 10, 25 and 50%; validation and test
+unchanged; 2 random subsets at ≤ 25%).
+
+![Learning curve](../figures/vessel_labelling/learning_curve.png)
+
+- With half the training data (179 graphs per fold), ResGAT already beats the legacy model trained on all of it: 78 vs 119 errors.
+- With a quarter of the data (90 graphs) it about matches it: 115 vs 119 errors.
+- The gap is consistent from 90 graphs per fold upwards.
+- Below that, results are noisy (one seed; the two models tie at 36 graphs).
+
 ## The bug, and the fix
 
 ![Segment graph](../figures/vessel_labelling/graph_edges.png)
