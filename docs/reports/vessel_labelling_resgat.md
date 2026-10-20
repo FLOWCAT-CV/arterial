@@ -45,10 +45,12 @@ Errors by vessel type (ensemble):
 
 ![Segment graph](../figures/vessel_labelling/graph_edges.png)
 
+*A head-and-neck case processed by Arterial, coronal view (patient right on the left). (a) Centerlines coloured by the ResGAT labels. (b) The segment graph the ResGAT uses: one node per segment, connected when two segments share a bifurcation. (c) What the legacy model received after `RadiusGraph(r = 0.5)`: no connections at all; nodes coloured by the legacy labels.*
+
 **The bug.** The labeller works on the segment graph: one node per vessel segment, connected to the segments it shares
 a bifurcation with (panel b).
 - The legacy model rebuilt these connections with `RadiusGraph(r = 0.5)` on the segment positions. Segments are almost
-  never within 0.5 mm of each other, so about 99% of the connections were deleted (panel c).
+  never within 0.5 mm of each other, so about 99% of the connections were deleted: in the case above, all 94 (panel c).
 - The graph network therefore labelled each segment from its own 24 features alone.
 - A gradient-boosted tree on the same features, with no graph at all, makes about as many errors: 112.
 
