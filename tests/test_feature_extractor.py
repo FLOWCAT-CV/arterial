@@ -56,16 +56,16 @@ class TestCraniumDistanceTransformCache(FeatureExtractorTestCase):
 
     def test_cache_respects_the_clip_distance(self):
         computed = []
-        def compute(cta_array, dt_clip_mm):
+        def compute(cta_array, cta_affine, dt_clip_mm):
             computed.append(dt_clip_mm)
             return np.clip(np.arange(cta_array.size, dtype=float).reshape(cta_array.shape), 0, dt_clip_mm)
-        self.extractor.cta_array = np.zeros((4, 5, 6))
+        self.extractor.cta_array, self.extractor.cta_affine = np.zeros((4, 5, 6)), np.eye(4)
         with mock.patch("arterial.feature_extraction.vtk_centerline_geometry.carotid_analysis._compute_cranium_distance_transform", side_effect=compute):
             self.assertEqual(self.extractor._get_or_compute_cranium_distance_transform(50).max(), 50)
             self.assertEqual(self.extractor._get_or_compute_cranium_distance_transform(20).max(), 20)  # from the cache
             self.assertEqual(self.extractor._get_or_compute_cranium_distance_transform(80).max(), 80)  # needs a new one
             fresh = FeatureExtractor(self.case_dir, self.mode, self.sampling_distance_mm, self.cta_nifti_path)
-            fresh.cta_array = self.extractor.cta_array
+            fresh.cta_array, fresh.cta_affine = self.extractor.cta_array, self.extractor.cta_affine
             self.assertEqual(fresh._get_or_compute_cranium_distance_transform(30).max(), 30)  # from the file on disk
         self.assertEqual(computed, [50, 80])
 

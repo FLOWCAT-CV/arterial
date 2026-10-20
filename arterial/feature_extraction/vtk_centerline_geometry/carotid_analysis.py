@@ -61,9 +61,9 @@ def perform_carotid_analysis(
        gentle distal taper). The bulb is then defined as the full span
        between the first and last threshold-positive node (interior dips
        below threshold are kept as bulb — the bulb is treated as a single
-       connected segment). The span is then symmetrically extended by
-       ``bulb_expand_nodes`` on each side via a 1-D binary dilation
-       (clamped to the array boundaries).
+       connected segment). The span is then extended distally (toward the
+       ICA) by ``bulb_expand_nodes``, since the distal end of the bulb is
+       the one of interest (clamped to the array boundaries).
 
     Returns a deep copy of the input polydata with five new point-data arrays
     added (see below). Trimmed-out points (leading/trailing blanking) carry
@@ -113,7 +113,7 @@ def perform_carotid_analysis(
         between the first and last threshold-positive node. The default
         is ``(0.5, 0.2)``.
     bulb_expand_nodes : int, optional
-        Symmetric expansion of the bulb span, in nodes per side. The
+        Distal extension of the bulb span (toward the ICA), in nodes. The
         default is 1.
 
     Returns
@@ -389,13 +389,14 @@ def _build_per_node_threshold(bulb_threshold_mm, s, s_center):
     return np.where(s < s_center, thr_proximal, thr_distal)
 
 
-def _classify_bulb(diff, threshold_mm, expand_nodes_each_side):
+def _classify_bulb(diff, threshold_mm, expand_nodes_distal):
     """
     Returns the bulb classification mask. Threshold-positive nodes
     (``|diff| > threshold_mm``) are first bridged into a single span — every
     node between the first and last positive is labelled bulb, regardless of
-    whether it itself crosses the threshold — then the span is symmetrically
-    extended by ``expand_nodes_each_side`` nodes on each side.
+    whether it itself crosses the threshold — then the span is extended by
+    ``expand_nodes_distal`` nodes toward higher indices (distally, toward the
+    ICA, as the centerline runs CCA → ICA).
 
     Bridging makes detection robust to localised dips inside the bulb (e.g.
     plaque or smoothing artefacts that briefly bring ``|diff|`` back under
@@ -411,9 +412,9 @@ def _classify_bulb(diff, threshold_mm, expand_nodes_each_side):
         Bulb-classification threshold (mm). Either a scalar applied
         uniformly, or a per-node array (e.g. for a side-dependent
         threshold). Compared via numpy broadcasting against ``|diff|``.
-    expand_nodes_each_side : int
-        Number of nodes by which the bridged bulb span is extended on each
-        side. ``0`` disables expansion.
+    expand_nodes_distal : int
+        Number of nodes by which the bridged bulb span is extended distally.
+        ``0`` disables expansion.
 
     Returns
     -------
@@ -427,14 +428,12 @@ def _classify_bulb(diff, threshold_mm, expand_nodes_each_side):
         first = int(np.argmax(threshold_mask))
         last = int(threshold_mask.size - 1 - np.argmax(threshold_mask[::-1]))
         mask[first : last + 1] = True
-    if expand_nodes_each_side <= 0 or not mask.any():
+    if expand_nodes_distal <= 0 or not mask.any():
         return mask
     expanded = mask.copy()
-    for _ in range(int(expand_nodes_each_side)):
-        left = np.concatenate(([False], expanded[:-1]))
-        right = np.concatenate((expanded[1:], [False]))
-        # expanded = expanded | left | right
-        expanded = expanded | right
+    for _ in range(int(expand_nodes_distal)):
+        # Each node takes the value of its proximal neighbour, so the span grows by one node distally
+        expanded = expanded | np.concatenate(([False], expanded[:-1]))
     return expanded
 
 
@@ -544,7 +543,7 @@ def perform_intracranial_transition_detection(
     out.DeepCopy(centerline)
 
     if distance_transform is None:
-        distance_transform = _compute_cranium_distance_transform(cta_array, dt_clip_mm)
+        distance_transform = _compute_cranium_distance_transform(cta_array, cta_affine, dt_clip_mm)
 
     dt_values = _sample_dt_along_centerline(out, cta_affine, distance_transform)
     dt_smoothed = gaussian_filter(dt_values, sigma=smoothing_sigma)
@@ -570,14 +569,16 @@ def perform_intracranial_transition_detection(
     return out, transition_world, transition_ijk, distance_transform
 
 
-def _compute_cranium_distance_transform(cta_array, dt_clip_mm):
+def _compute_cranium_distance_transform(cta_array, cta_affine, dt_clip_mm):
     """
     Computes the cranium-distance-transform field used by intracranial-
     transition detection.
 
     Builds a binary cranium mask via :func:`compute_cranium_mask` (LoG +
     largest-connected-component on the upper half of the CTA), takes the
-    Euclidean distance transform of its complement, embeds the result back
+    Euclidean distance transform of its complement in mm (using the voxel
+    spacing of ``cta_affine``, so the result does not depend on the voxel
+    size), embeds the result back
     into a full-CTA-shaped grid (lower half filled with ``dt_clip_mm``), and
     clips to ``[0, dt_clip_mm]``.
 
@@ -585,6 +586,8 @@ def _compute_cranium_distance_transform(cta_array, dt_clip_mm):
     ----------
     cta_array : numpy.ndarray
         3D numpy array with the CTA image.
+    cta_affine : numpy.ndarray
+        4x4 affine of the CTA (voxel to RAS mm).
     dt_clip_mm : float
         Distance-transform clipping value (mm).
 
@@ -596,7 +599,7 @@ def _compute_cranium_distance_transform(cta_array, dt_clip_mm):
     """
     half_s_coordinate = cta_array.shape[2] // 2
     cranium_mask = compute_cranium_mask(cta_array)
-    upper_half_dt = distance_transform_edt(1 - cranium_mask)
+    upper_half_dt = distance_transform_edt(1 - cranium_mask, sampling=np.linalg.norm(cta_affine[:3, :3], axis=0))
     distance_transform = np.full_like(cta_array, np.max(upper_half_dt), dtype=np.float64)
     distance_transform[:, :, half_s_coordinate:] = upper_half_dt
     distance_transform = np.clip(distance_transform, 0, dt_clip_mm)
@@ -680,10 +683,10 @@ def _find_first_local_minimum_idx(dt_smoothed, dt_max_mm, dt_tolerance_mm):
 
     qualifying = local_minima_idx[dt_smoothed[local_minima_idx] < dt_max_mm]
     if qualifying.size == 0:
-        # No minimum within the DT-max gate; fall back to the first detected
-        # local minimum so the caller still gets a transition rather than
-        # silently dropping the result.
-        return int(local_minima_idx[0])
+        # The centerline never comes within dt_max_mm of the cranium, so it does not enter it:
+        # no transition, every node stays extracranial
+        print(f"Warning: no distance-to-cranium minimum below {dt_max_mm} mm; the whole centerline is labelled extracranial")
+        return None
 
     min_dt_value = np.min(dt_smoothed[qualifying])
     near_absolute = qualifying[

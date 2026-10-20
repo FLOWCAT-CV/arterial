@@ -49,7 +49,7 @@ def featurize_node(local_graph, node, access, cta_array, cta_affine, lpi_corner_
     # Radius features
     local_graph.nodes[node][f"features {access}"]["radius"] = local_graph.nodes[node]["radius"]
     # Segment length
-    local_graph.nodes[node][f"features {access}"]["segment length"] = sum([np.linalg.norm(local_points[idx - 1] - local_points[idx]) for idx in range(1, len(local_points))]) / len(local_points)
+    local_graph.nodes[node][f"features {access}"]["segment length"] = sum([np.linalg.norm(local_points[idx - 1] - local_points[idx]) for idx in range(1, len(local_points))]) / max(1, len(local_points) - 1)
     # Curvature and torsion (perhaps we could use the data from )
     if len(local_points) == 3:
         curvature, torsion = compute_curvature_and_torsion(local_points, 1)

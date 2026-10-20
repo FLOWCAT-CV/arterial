@@ -221,7 +221,7 @@ def main() -> None:
              "the Intracranial and DistanceTransformValueSmoothed point-data arrays. "
              "Off by default because the underlying cranium distance transform "
              "is expensive (~30 s on a typical head-and-neck CTA); the result "
-             "is cached on disk under {case_dir}/{mode}/cranium_distance_transform.npy "
+             "is cached on disk under {case_dir}/{mode}/cranium_distance_transform_mm.npy "
              "so subsequent runs reuse it.")
 
     args = parser.parse_args()

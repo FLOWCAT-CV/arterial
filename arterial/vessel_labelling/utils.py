@@ -97,7 +97,8 @@ class EVCDatasetInference(InMemoryDataset):
         def mean_centering_normalization(edge_features, mean):
             return edge_features - mean
         def ensure_normalized_vectors(edge_features):
-            return edge_features / torch.norm(edge_features, dim=1, keepdim=True)
+            # Zero vectors (e.g. a closed loop has no chord direction) stay zero instead of becoming 0 / 0 = NaN
+            return edge_features / torch.clamp(torch.norm(edge_features, dim=1, keepdim=True), min=1e-6)
         
         if self.dataset_description is None:
             print("No dataset description file found. This will be an issue for normalization of edge features.")
