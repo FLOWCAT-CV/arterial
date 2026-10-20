@@ -683,10 +683,10 @@ def _find_first_local_minimum_idx(dt_smoothed, dt_max_mm, dt_tolerance_mm):
 
     qualifying = local_minima_idx[dt_smoothed[local_minima_idx] < dt_max_mm]
     if qualifying.size == 0:
-        # No minimum within the DT-max gate; fall back to the first detected
-        # local minimum so the caller still gets a transition rather than
-        # silently dropping the result.
-        return int(local_minima_idx[0])
+        # The centerline never comes within dt_max_mm of the cranium, so it does not enter it:
+        # no transition, every node stays extracranial
+        print(f"Warning: no distance-to-cranium minimum below {dt_max_mm} mm; the whole centerline is labelled extracranial")
+        return None
 
     min_dt_value = np.min(dt_smoothed[qualifying])
     near_absolute = qualifying[

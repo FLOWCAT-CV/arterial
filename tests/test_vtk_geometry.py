@@ -224,3 +224,9 @@ class TestCarotidHelpers(unittest.TestCase):
         diff = np.zeros(12); diff[4:7] = 1.0  # bulb on nodes 4-6; the centerline runs CCA (index 0) to ICA
         mask = carotid._classify_bulb(diff, 0.5, 2)
         self.assertEqual(np.flatnonzero(mask).tolist(), [4, 5, 6, 7, 8])
+
+    def test_no_intracranial_transition_when_the_centerline_stays_far_from_the_cranium(self):
+        far = 40 - 5 * np.cos(np.linspace(0, 4 * np.pi, 60))  # dips, but never closer than 35 mm
+        self.assertIsNone(carotid._find_first_local_minimum_idx(far, dt_max_mm=20, dt_tolerance_mm=5))
+        near = far - 30  # the same dips, now within 10 mm
+        self.assertIsNotNone(carotid._find_first_local_minimum_idx(near, dt_max_mm=20, dt_tolerance_mm=5))
